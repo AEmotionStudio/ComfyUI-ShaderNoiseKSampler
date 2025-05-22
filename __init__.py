@@ -8,10 +8,6 @@ from .shader_noise_ksampler import (
 # Import DirectShaderNoiseKSampler
 from .direct_shader_ksampler import DirectShaderNoiseKSampler
 
-# Import the stripped version of ShaderNoiseKSampler
-# Commented out due to missing file
-# from .shader_noise_ksampler_stripped import ShaderNoiseKSamplerStripped
-
 # Next import tensor class
 from .shader_to_tensor import ShaderToTensor
 
