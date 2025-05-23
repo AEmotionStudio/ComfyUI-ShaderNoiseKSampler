@@ -247,7 +247,7 @@ ComfyUI-ShaderNoiseKSampler is born from dedicated personal research and investi
 
 ### 🗺️ Roadmap: The Next Evolution
 
-The journey into mathematically guided latent space exploration is just beginning. Here's a glimpse of what's on the horizon:
+The journey into guided latent space exploration is just beginning. Here's a glimpse of what's on the horizon:
 
 | Area                                            | Focus                                                                                                                                                                                                                                                           | Technologies Involved (Examples)          |
 | :---------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------- |
