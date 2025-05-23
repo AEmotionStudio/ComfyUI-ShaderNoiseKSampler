@@ -240,7 +240,7 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
   > [!WARNING]
     **Potential for Visual Instability**: Certain parameter explorations, particularly with high intensity or complex interactions, may result in visually disruptive outputs such as flashing images or harsh artifacts. Users are advised to iterate with caution.
 
-## 🌱 Research & Development Nature
+## 🌱 Grassroots Research & Development Nature
 
 ComfyUI-ShaderNoiseKSampler is born from dedicated personal research and investigation. While it introduces exciting ways to navigate latent space, please consider it an active exploration. This means there's a vast potential for further improvements, new discoveries, and community-driven enhancements as the project evolves. Your understanding of its current research-driven phase is appreciated!
 
