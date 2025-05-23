@@ -12,8 +12,6 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that replaces st
 ![ShaderNoiseKSampler Showcase PNG](images/shader_noise_ksampler.png)
 > [!TIP]
 > Perfect for artists and researchers looking to explore the latent space with more intention, sculpt image features with mathematical precision, and achieve unique visual styles through deliberate exploration rather than random discovery. (Using a fixed seed is key to this deliberate exploration, allowing you to systematically investigate the variations around a chosen starting point.)
-
-![ShaderNoiseKSampler Showcase PNG](images/shader_noise_ksampler.png)
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_display.webp)
 
 ## 🧭 Navigating the Seed Universe
