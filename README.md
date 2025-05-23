@@ -125,7 +125,7 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
 6.  **Generate**: Queue your prompt and witness the shader-guided generation!
 
 > [!TIP]
-> Start with a low `shader_strength` (e.g., 0.1-0.3) and a single `sequential_stage` to understand the impact of different noise types and parameters. Remember to use a fixed `seed` for this exploration. Gradually increase complexity as you become more familiar with how each parameter navigates the latent space.
+> Start with a low `shader_strength` (e.g., 0.1-0.3) and a single `sequential_stage` to understand the impact of different noise types and parameters. Remember to use a fixed `seed` for neighborhood exploration. Gradually increase complexity as you become more familiar with how each parameter navigates the latent space.
 
 ## 🧠 Latent Space Navigation
 
