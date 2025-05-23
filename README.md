@@ -219,15 +219,15 @@ The `ShaderNoiseKSampler` also aims to be compatible with a variety of models. C
 The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matrix" covers these extensively.
 
 -   **Shader Noise Types**: Start your exploration with three powerful, freely available noise archetypes: `Domain Warp` for intricate, flowing distortions, `Tensor Field` for structured and directional patterns, and `Curl Noise` for smooth, fluid dynamics. Each offers a **unique visual lens** 🔭 for navigating latent space. ✨ **Additional advanced noise types** are available to supporters on [Ko-fi](https://ko-fi.com/aemotionstudio).
-    *   <div align="center">
+      <div align="center">
         **Domain Warp**<br>
         ![Domain Warp Noise Preview](images/domain_warp_preview.webp)
         </div>
-    *   <div align="center">
+       <div align="center">
         **Tensor Field**<br>
         ![Tensor Field Noise Preview](images/tensor_field_preview.webp)
         </div>
-    *   <div align="center">
+       <div align="center">
         **Curl Noise**<br>
         ![Curl Noise Preview](images/curl_noise_preview.webp)
         </div>
