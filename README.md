@@ -43,10 +43,12 @@ The core innovation is treating latent space as a territory to be explored rathe
 
 **Regular KSampler Seed Travel vs Regular Shader Noise KSampler Seed Travel**
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_compare.webp)
-**(Same settings are used in both samplers)
+*(Same settings are used in both samplers)*
+
 **Shader Noise Neighboorhood Seed Travel**
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_seed_1.webp)
-**(Same settings are used in both samplers)
+*(Same settings are used in both samplers)*
+
 **Shader Noise KSampler Palettes**
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_palettes.webp)
 
