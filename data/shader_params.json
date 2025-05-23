@@ -1,5 +1,5 @@
 {
-  "shaderType": "curl_noise",
+  "shaderType": "domain_warp",
   "shaderScale": 1,
   "shaderOctaves": 1,
   "shaderWarpStrength": 0.5,
