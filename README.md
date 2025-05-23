@@ -17,9 +17,13 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that replaces st
 
 > [!IMPORTANT]
 >The Shader Noise KSampler contains a shader display and requires saving, while the Shader Noise KSampler (Direct) *does not* contain a shader display and *does not* require saving. The shader display will help you better understand the parameter controls visually, while the (Direct) version is better for ideation and enables finer control over input values. 
+**Shader Noise KSampler**
 
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_save.webp)
 **(Only parameters with 🔄 require saving if changed)**
+
+**Shader Noise KSampler (Direct)**
+
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_direct.webp)
 **(No saving required but does not have a shader display for visualizing the shader noise patterns)**
 
@@ -37,6 +41,11 @@ The shader noise is your map and the shader parameters (like Noise Scale, Octave
 - **🔄 Phase Shift: The Perspective Shifter** - Reveals different "facets" of the same core elements
 
 The core innovation is treating latent space as a territory to be explored rather than a lottery to be played - turning the act of AI image generation into a journey of deliberate artistic discovery guided by the elegant language of mathematical patterns.
+
+**Normal Seed Travel vs Shader Noise Seed Travel**
+
+![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_seed_1.webp)
+![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_seed_2.webp)
 
 ## 🔮 The Innovation: Controllable Noise
 
