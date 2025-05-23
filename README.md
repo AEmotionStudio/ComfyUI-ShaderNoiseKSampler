@@ -51,6 +51,7 @@ The core innovation is treating latent space as a territory to be explored rathe
 
 **Shader Noise KSampler Palettes**
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_palettes.webp)
+*(Each shader noise palette offers a unique lens into latent space)*
 
 ## 🔮 The Innovation: Controllable Noise
 
