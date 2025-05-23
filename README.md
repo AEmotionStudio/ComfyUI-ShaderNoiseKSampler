@@ -234,7 +234,7 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 
 -   **Parameter Queuing with Non-Direct KSampler**: The standard (non-direct) `ShaderNoiseKSampler` node does not support queuing of differing parameter sets for consecutive runs i.e. you can't save over older parameters because their read at runtime. For rapid iteration and experimentation with varied parameters without needing to save each configuration, the `(direct) ShaderNoiseSampler` variant is recommended.
 
--   > [!WARNING]
+  > [!WARNING]
     > **Potential for Visual Instability**: Certain parameter explorations, particularly with high intensity or complex interactions, may result in visually disruptive outputs such as flashing images or harsh artifacts. Users are advised to iterate with caution.
 
 ## 🌱 Research & Development Nature
