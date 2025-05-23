@@ -17,7 +17,7 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that replaces st
 ![ShaderNoiseKSampler Showcase PNG](images/shader_noise_ksampler.png)
 
 > [!IMPORTANT]
->The Shader Noise KSampler contains a shader display and requires saving, while the Shader Noise Ksampler (Direct) *does not* contain a shader display and *does not* require saving. The shader display will help you better understand the parameter controls visually, while the (Direct) version is better for ideation and enables finer control over input values. 
+>The Shader Noise KSampler contains a shader display and requires saving, while the Shader Noise KSampler (Direct) *does not* contain a shader display and *does not* require saving. The shader display will help you better understand the parameter controls visually, while the (Direct) version is better for ideation and enables finer control over input values. 
 
 ## 🧭 Navigating the Seed Universe
 
@@ -236,7 +236,7 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 
 -   **Optimal Use Cases**: The `ShaderNoiseKSampler` currently demonstrates its strongest capabilities in text-to-video and text-to-image generation. Performance with image-to-video or video-to-video workflows may not be as pronounced.
 
--   **Parameter Queuing with Non-Direct KSampler**: The standard (non-direct) `ShaderNoiseKSampler` node does not support queuing of differing parameter sets for consecutive runs i.e. you can't save over older parameters because their read at runtime. For rapid iteration and experimentation with varied parameters without needing to save each configuration, the `(direct) ShaderNoiseSampler` variant is recommended.
+-   **Parameter Queuing with Non-Direct KSampler**: The standard (non-direct) `ShaderNoiseKSampler` node does not support queuing of differing parameter sets for consecutive runs i.e. you can't save over older parameters because their read at runtime. For rapid iteration and experimentation with varied parameters without needing to save each configuration, the `ShaderNoiseSampler (direct)` variant is recommended.
 
   > [!WARNING]
     **Potential for Visual Instability**: Certain parameter explorations, particularly with high intensity or complex interactions, may result in visually disruptive outputs such as flashing images or harsh artifacts. Users are advised to iterate with caution.
