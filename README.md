@@ -42,9 +42,13 @@ The shader noise is your map and the shader parameters (like Noise Scale, Octave
 The core innovation is treating latent space as a territory to be explored rather than a lottery to be played - turning the act of AI image generation into a journey of deliberate artistic discovery guided by the elegant language of mathematical patterns.
 
 **Normal Seed Travel vs Shader Noise Seed Travel**
-
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_seed_1.webp)
-![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_seed_2.webp)
+
+**Regular KSampler vs Shader Noise KSampler**
+![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_compare.webp)
+
+**Shader Noise KSampler Palettes**
+![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_palettes.webp)
 
 ## 🔮 The Innovation: Controllable Noise
 
