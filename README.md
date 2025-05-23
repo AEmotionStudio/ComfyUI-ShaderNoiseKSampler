@@ -148,7 +148,7 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 
 | Option                       | Description & Navigational Significance                                                                     | Default (Example) |
 |------------------------------|-------------------------------------------------------------------------------------------------------------|-------------------|
-| **`seed`**                   | Master seed for reproducibility. This is your "town" in the latent space universe.                          | `8888`            |
+| **`seed`**                   | Master seed for reproducibility. This is your "town" in the latent space universe. Use fixed seed for exploration.                          | `8888`            |
 | **`steps`**                  | Number of sampling iterations.                                                                             | `20`              |
 | **`cfg`**                    | Classifier-Free Guidance scale.                                                                            | `7.0`             |
 | **`sampler_name`**           | E.g., `euler_ancestral`, `dpm_2_ancestral`.                                                                          | `euler_ancestral` |
@@ -256,7 +256,7 @@ The journey into mathematically guided latent space exploration is just beginnin
 | **🧭 Precision Navigation Tools**               | Create more granular and predictable tools for manipulating latent pathways. Research direct correlations between mathematical noise constructs and emergent visual features for greater artistic intent.                                                    | Mathematical Modelling, Latent Space Analysis |
 | **🔮 Cross-Modal Exploration**                  | Investigate applying structured noise principles to modalities beyond 2D images, such as 3D and audio, opening new avenues for creative exploration.                                                                                                | Signal Processing, Generative Models for Audio/3D |
 
-Stay tuned to unlock new ways to interact with and understand the vast potential of generative models through the lens of controlled, mathematical noise.
+Embark on a journey down the unseen path, exploring uncharted territories within generative models. This work is dedicated to forging new, genuine approaches to advance our understanding of latent space and unlock the vast possibilities held within.
 
 ## 🤝 Contributing
 
