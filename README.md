@@ -18,6 +18,8 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that replaces st
 > [!IMPORTANT]
 >The Shader Noise KSampler contains a shader display and requires saving, while the Shader Noise KSampler (Direct) *does not* contain a shader display and *does not* require saving. The shader display will help you better understand the parameter controls visually, while the (Direct) version is better for ideation and enables finer control over input values. 
 
+![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_save.webp)
+
 ## 🧭 Navigating the Seed Universe
 
 Think of standard image generation, where you try different seeds, as driving from one town to another. Each new seed takes you to a completely different town.
@@ -77,9 +79,9 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 -   **🎛️ Granular Control**:
     -   Global `shader_strength` and per-stage strength tuning.
     -   Adjust `noise_scale`, `octaves`, `warp_strength`, `phase_shift`, and more for each stage.
--   **💾 Parameter Management**: Save your shader parameter configurations.
+-   **💾 Parameter Management**: Save your shader parameter configurations. Not necessary with (direct) node version.
 -   **📊 "Show Shader Matrix" Button**: Access comprehensive, interactive documentation and visualizations directly within ComfyUI (Alt+M shortcut).
--   **🤝 Compatibility**: Works with various models including SD 1.5, SDXL, WAN2.1, Hunyuan, and more (see Model Compatibility section).
+-   **🤝 Compatibility**: Works with various models including SD 1.5, SDXL, Flux, WAN2.1, Hunyuan, and more (see Model Compatibility section).
 -   **🧠 Latent Space Cartography**: Create a map of the territory surrounding your seed, developing an intuitive understanding of how to navigate to specific effects.
 -   **🔄 Persistent Identities in Variation**: Observe how similar elements persist across parameter adjustments, revealing how the model encodes concepts and their relationships.
 -   **💎 Discovery of "Hidden Gems"**: Find interesting variations that exist in the spaces "between" seeds that random sampling might statistically miss.
