@@ -220,20 +220,17 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 
 -   **Shader Noise Types**: Start your exploration with three powerful, freely available noise archetypes: `Domain Warp` for intricate, flowing distortions, `Tensor Field` for structured and directional patterns, and `Curl Noise` for smooth, fluid dynamics. Each offers a **unique visual lens** 🔭 for navigating latent space. ✨ **Additional advanced noise types** are available to supporters on [Ko-fi](https://ko-fi.com/aemotionstudio).
 
-<div align="center">
-**Domain Warp**<br>
+**Domain Warp**
+
 ![Domain Warp Noise Preview](images/domain_warp_preview.webp)
-</div>
 
-<div align="center">
-**Tensor Field**<br>
+**Tensor Field**
+
 ![Tensor Field Noise Preview](images/tensor_field_preview.webp)
-</div>
 
-<div align="center">
-**Curl Noise**<br>
+**Curl Noise**
+
 ![Curl Noise Preview](images/curl_noise_preview.webp)
-</div>
 
 -   **Blend Modes**: Determine how the crafted shader noise interacts with the underlying base noise. `Multiply` can create depth, `Add` can introduce highlights, and `Overlay` can enhance contrast.
 -   **Noise Transformations**: Apply mathematical functions like `absolute` (creates ridges), `sin` (creates bands), or `sqrt` (compresses highlights) to the raw shader noise before blending, dramatically altering its characteristics.
