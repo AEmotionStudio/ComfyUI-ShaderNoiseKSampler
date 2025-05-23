@@ -19,6 +19,9 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that replaces st
 >The Shader Noise KSampler contains a shader display and requires saving, while the Shader Noise KSampler (Direct) *does not* contain a shader display and *does not* require saving. The shader display will help you better understand the parameter controls visually, while the (Direct) version is better for ideation and enables finer control over input values. 
 
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_save.webp)
+**(Only parameters with 🔄 require saving if changed)**
+![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_direct.webp)
+**(No saving required but does not have a shader display)**
 
 ## 🧭 Navigating the Seed Universe
 
