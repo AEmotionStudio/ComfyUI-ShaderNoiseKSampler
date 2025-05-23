@@ -5,7 +5,6 @@
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
 
-**Transform AI image generation from random sampling into deliberate navigation through mathematical topologies.**
 
 ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that replaces standard noise generation with a multi-stage shader-based system. Unlike traditional sampling that teleports randomly between different seeds, this tool provides a structured vehicle for exploring the neighborhood around a chosen seed, using mathematical patterns to navigate along coherent paths through latent space.
 
