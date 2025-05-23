@@ -10,7 +10,7 @@
 ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that replaces standard noise generation with a multi-stage shader-based system. Unlike traditional sampling that teleports randomly between different seeds, this tool provides a structured vehicle for exploring the neighborhood around a chosen seed, using mathematical patterns to navigate along coherent paths through latent space.
 
 > [!TIP]
-> Perfect for artists and researchers looking to explore the latent space with more intention, sculpt image features with mathematical precision, and achieve unique visual styles through deliberate exploration rather than random discovery.
+> Perfect for artists and researchers looking to explore the latent space with more intention, sculpt image features with mathematical precision, and achieve unique visual styles through deliberate exploration rather than random discovery. (Using a fixed seed is key to this deliberate exploration, allowing you to systematically investigate the variations around a chosen starting point.)
 
 ![ShaderNoiseKSampler Showcase PNG](images/shader_noise_ksampler.png)
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_display.webp)
@@ -44,6 +44,8 @@ This controlled noise approach bridges the gap between the deterministic world o
 
 ## 📖 The Shader Matrix: In-Depth Documentation
 
+![ShaderNoiseKSampler Shader Matrix](images/shader_noise_ksampler_matrix.webp)
+
 A core feature of this project is the **"📊 Show Shader Matrix"** button available on the `ShaderNoiseKSampler` (and related) nodes. Clicking this button opens an extensive, self-contained modal dialog—The Shader Matrix—which provides:
 
 -   Detailed explanations of all shader noise types, mathematical foundations, and parameters.
@@ -54,9 +56,6 @@ A core feature of this project is the **"📊 Show Shader Matrix"** button avail
 This README provides an overview, but the Shader Matrix is your ultimate guide for deep dives!
 
 ## ✨ Features
-
-![ShaderNoiseKSampler Node PNG](images/shader_noise_sampler_node.png)
-*(Suggestion: Replace with a screenshot of the ShaderNoiseKSampler node interface.)*
 
 -   **🚀 Advanced KSampler Replacement**: Integrates directly into your workflow as a KSampler.
 -   **🔬 Multi-Stage Shader Application**:
@@ -110,6 +109,7 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
     -   `latent_image`: The input latent (e.g., from an Empty Latent Image node).
 3.  **Basic Sampling Parameters**:
     -   Set `seed`, `steps`, `cfg`, `sampler_name`, `scheduler`, and `denoise` as you would for a standard KSampler.
+    -   It is recommended to use a fixed `seed` number when you want to explore the neighborhood around that specific seed. This allows the shader noise parameters to navigate the latent space coherently from a consistent starting point.
 4.  **Configure Shader Noise**: This is where the exploration begins!
     -   **Stages**: Define `sequential_stages` and `injection_stages`.
     -   **Global Controls**: Set `shader_strength` (0.0 to disable shaders), `blend_mode`, and `noise_transform`.
@@ -124,7 +124,7 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
 6.  **Generate**: Queue your prompt and witness the shader-guided generation!
 
 > [!TIP]
-> Start with a low `shader_strength` (e.g., 0.1-0.3) and a single `sequential_stage` to understand the impact of different noise types and parameters. Gradually increase complexity as you become more familiar with how each parameter navigates the latent space.
+> Start with a low `shader_strength` (e.g., 0.1-0.3) and a single `sequential_stage` to understand the impact of different noise types and parameters. Remember to use a fixed `seed` for this exploration. Gradually increase complexity as you become more familiar with how each parameter navigates the latent space.
 
 ## 🧠 Latent Space Navigation
 
