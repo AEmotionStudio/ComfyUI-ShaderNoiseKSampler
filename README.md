@@ -41,6 +41,8 @@ The shader noise is your map and the shader parameters (like Noise Scale, Octave
 
 The core innovation is treating latent space as a territory to be explored rather than a lottery to be played - turning the act of AI image generation into a journey of deliberate artistic discovery guided by the elegant language of mathematical patterns.
 
+![ShaderNoiseKSampler Shader Vehicle](images/I_dont_care_what_you_think_this_shit_rips.webp)
+
 **Regular KSampler Seed Travel vs Regular Shader Noise KSampler Seed Travel**
 ![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_compare.webp)
 *(Same settings are used in both samplers)*
@@ -108,7 +110,7 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 
 ComfyUI-ShaderNoiseKSampler now includes an `AdvancedImageComparer` node, a versatile utility for visually comparing two images or batches of images directly within your workflow. This node is invaluable for evaluating the subtle (or significant) differences produced by varying parameters, seeds, or even different models.
 
-![Advanced Image Comparer Showcase](images/advanced_image_comparer_showcase.webp) *(You might want to add a showcase image here)*
+![Advanced Image Comparer Showcase](images/advanced_image_comparer_showcase.webp) *
 
 ### Features:
 
