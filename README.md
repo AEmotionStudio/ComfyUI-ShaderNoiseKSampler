@@ -104,6 +104,43 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 -   **🔄 Persistent Identities in Variation**: Observe how similar elements persist across parameter adjustments, revealing how the model encodes concepts and their relationships.
 -   **💎 Discovery of "Hidden Gems"**: Find interesting variations that exist in the spaces "between" seeds that random sampling might statistically miss.
 
+## 🖼️ Advanced Image Comparer
+
+ComfyUI-ShaderNoiseKSampler now includes an `AdvancedImageComparer` node, a versatile utility for visually comparing two images or batches of images directly within your workflow. This node is invaluable for evaluating the subtle (or significant) differences produced by varying parameters, seeds, or even different models.
+
+![Advanced Image Comparer Showcase](images/advanced_image_comparer_showcase.webp) *(You might want to add a showcase image here)*
+
+### Features:
+
+-   **Multiple Comparison Modes**: Choose the best way to visualize differences:
+    -   **Slider**: Overlay images and use a slider to reveal one or the other.
+    -   **Click**: Toggle between the two images with a click.
+    -   **Side-by-Side**: Display images next to each other.
+    -   **Stacked**: Display images one above the other.
+    -   **Grid**: View multiple image pairs in a grid layout, ideal for batch comparisons.
+    -   **Carousel**: Cycle through image pairs one by one.
+    -   **Batch**: Display multiple pairs in a paginated list.
+    -   **Onion Skin**: Overlay images with adjustable opacity for the top image.
+-   **Batch Processing**: Efficiently compare multiple sets of images (Image A1 vs Image B1, Image A2 vs Image B2, etc.).
+-   **Interactive Controls**: Easily navigate through image pairs in Carousel and Batch modes.
+-   **Customizable Layout**: Adjust the node size and select your preferred layout mode via a dropdown menu.
+-   **Distinctive UI**: Features a unique golden eyeball design in the node's title bar for easy identification.
+
+### Usage:
+
+1.  **Add Node**: Add the `Advanced Image Comparer` node (found in the `utils` category) to your ComfyUI graph.
+2.  **Connect Inputs**:
+    -   `image_a`: Connect the first image or batch of images.
+    -   `image_b`: Connect the second image or batch of images.
+3.  **Select Mode**: Use the "Layout Mode" dropdown on the node to choose your preferred comparison view.
+4.  **Interact**:
+    -   **Slider Mode**: Hover your mouse over the image and move it left or right.
+    -   **Click Mode**: Click on the image to toggle between A and B.
+    -   **Carousel/Batch Modes**: Use the provided UI controls (buttons, pair selector) to navigate.
+    -   **Onion Skin Mode**: Adjust the "Opacity B" slider to control the transparency of the second image.
+
+This tool is designed to enhance your A/B testing and iterative refinement process, making it easier to observe the impact of your creative choices.
+
 ## 📥 Installation
 
 ### Option 1: Using ComfyUI Manager

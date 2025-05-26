@@ -8,6 +8,9 @@ from .shader_noise_ksampler import (
 # Import DirectShaderNoiseKSampler
 from .direct_shader_ksampler import DirectShaderNoiseKSampler
 
+# Import AdvancedImageComparer
+from .advanced_comparer import AdvancedImageComparer
+
 # Next import tensor class
 from .shader_to_tensor import ShaderToTensor
 
@@ -53,20 +56,31 @@ print(f"Temporal coherent noise integration complete - has temporal_coherent_noi
 NODE_CLASS_MAPPINGS = {
     "ShaderNoiseKSampler": ShaderNoiseKSampler,
     "ShaderNoiseKSamplerDirect": DirectShaderNoiseKSampler,
+    "AdvancedImageComparer": AdvancedImageComparer,
 }
 
 # Display name mappings
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ShaderNoiseKSampler": "Shader Noise KSampler",
     "ShaderNoiseKSamplerDirect": "Shader Noise KSampler (Direct)",
+    "AdvancedImageComparer": "Advanced Image Comparer",
 }
 
 # Add web directory for UI components
 WEB_DIRECTORY = "./web"
 
 # List of JS files to be loaded
-__js_files__ = ["gradient_title.js", "shader_renderer.js", "shader_params_save_button.js", "shader_info_button.js", "noise_visualizer.js"]
+__js_files__ = [
+    "gradient_title.js", 
+    "shader_renderer.js",
+    "matrix_button.js", 
+    "shader_params_save_button.js", 
+    "noise_visualizer.js",
+    "advanced_image_comparer.js"
+]
 
+# Debug print to confirm files are loaded
+print(f"=== LOADING JS FILES: {__js_files__} ===")
 
 # List of exported elements
-__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY", "__js_files__", "__css_files__", "SHADER_GENERATORS"]
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY", "__js_files__", "SHADER_GENERATORS"]
