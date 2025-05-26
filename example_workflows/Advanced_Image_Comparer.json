@@ -1,0 +1,841 @@
+{
+  "id": "7d6f48f6-21ff-47df-8046-501d61c9f41a",
+  "revision": 0,
+  "last_node_id": 219,
+  "last_link_id": 971,
+  "nodes": [
+    {
+      "id": 216,
+      "type": "SaveImage",
+      "pos": [
+        1187.8895263671875,
+        173.4528045654297
+      ],
+      "size": [
+        270,
+        270
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 961
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.35"
+      },
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 193,
+      "type": "VAEDecode",
+      "pos": [
+        1187.8895263671875,
+        790
+      ],
+      "size": [
+        210,
+        46
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 906
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 907
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            962,
+            971
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 217,
+      "type": "SaveImage",
+      "pos": [
+        1187.8895263671875,
+        903.1550903320312
+      ],
+      "size": [
+        270,
+        270
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 962
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.35"
+      },
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 182,
+      "type": "EmptyLatentImage",
+      "pos": [
+        297.84503173828125,
+        530
+      ],
+      "size": [
+        315,
+        106
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            904,
+            966
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.29",
+        "Node name for S&R": "EmptyLatentImage"
+      },
+      "widgets_values": [
+        768,
+        768,
+        4
+      ]
+    },
+    {
+      "id": 6,
+      "type": "CLIPTextEncode",
+      "pos": [
+        190,
+        36.429988861083984
+      ],
+      "size": [
+        422.84503173828125,
+        164.31304931640625
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            545,
+            587,
+            741,
+            902,
+            964
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "beautiful scenery, 1woman, solo, in nature, contemplative, awe-inspiring, cinematic, lone human geologist with protective gear studying massive geothermal vents on volcanic alien moon, jets of superheated plasma creating rainbow arcs against star-field backdrop, molten rivers flowing like liquid mercury between obsidian formations,"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "CLIPTextEncode",
+      "pos": [
+        187.5670166015625,
+        290
+      ],
+      "size": [
+        425.27801513671875,
+        180.6060791015625
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            546,
+            588,
+            742,
+            903,
+            965
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "text, watermark"
+      ]
+    },
+    {
+      "id": 140,
+      "type": "VAEDecode",
+      "pos": [
+        1187.8895263671875,
+        36.429988861083984
+      ],
+      "size": [
+        210,
+        46
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 967
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 746
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            961,
+            970
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        -180,
+        36.429988861083984
+      ],
+      "size": [
+        315,
+        98
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            544,
+            586,
+            953,
+            969
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            3,
+            5
+          ]
+        },
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 2,
+          "links": [
+            746,
+            907
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.18",
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "artUniverse_sdxlV30.safetensors"
+      ]
+    },
+    {
+      "id": 218,
+      "type": "ShaderNoiseKSamplerDirect",
+      "pos": [
+        806.4420166015625,
+        36.429988861083984
+      ],
+      "size": [
+        299.8499755859375,
+        666
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 969
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 964
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 965
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 966
+        },
+        {
+          "name": "custom_sigmas",
+          "shape": 7,
+          "type": "SIGMAS",
+          "link": null
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 968
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            967
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-shadernoiseksampler",
+        "ver": "4ea4be7c4cf8f342f7992350ee70608cf5ff5fcf",
+        "Node name for S&R": "ShaderNoiseKSamplerDirect"
+      },
+      "widgets_values": [
+        8888,
+        "fixed",
+        20,
+        7,
+        "euler_ancestral",
+        "beta",
+        1,
+        1,
+        0,
+        0.3,
+        "multiply",
+        "none",
+        false,
+        "domain_warp",
+        "none",
+        "none",
+        1,
+        1,
+        0.5,
+        1,
+        0.5000000000000002,
+        0.8
+      ]
+    },
+    {
+      "id": 192,
+      "type": "ShaderNoiseKSamplerDirect",
+      "pos": [
+        806.4420166015625,
+        790.1626586914062
+      ],
+      "size": [
+        299.8499755859375,
+        666
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 953
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 902
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 903
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 904
+        },
+        {
+          "name": "custom_sigmas",
+          "shape": 7,
+          "type": "SIGMAS",
+          "link": null
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 913
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            906
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-shadernoiseksampler",
+        "ver": "4ea4be7c4cf8f342f7992350ee70608cf5ff5fcf",
+        "Node name for S&R": "ShaderNoiseKSamplerDirect"
+      },
+      "widgets_values": [
+        8888,
+        "fixed",
+        20,
+        7,
+        "euler_ancestral",
+        "beta",
+        1,
+        1,
+        0,
+        0.3,
+        "multiply",
+        "none",
+        false,
+        "domain_warp",
+        "none",
+        "none",
+        1,
+        1,
+        0.5,
+        1,
+        0.5002000000000002,
+        0.8
+      ]
+    },
+    {
+      "id": 196,
+      "type": "PrimitiveNode",
+      "pos": [
+        402.84503173828125,
+        680
+      ],
+      "size": [
+        210,
+        82
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "links": [
+            913,
+            968
+          ]
+        }
+      ],
+      "properties": {
+        "Run widget replace on values": false
+      },
+      "widgets_values": [
+        8888,
+        "fixed"
+      ]
+    },
+    {
+      "id": 219,
+      "type": "AdvancedImageComparer",
+      "pos": [
+        1555.392822265625,
+        21.75641632080078
+      ],
+      "size": [
+        732.9744873046875,
+        822
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_a",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 970
+        },
+        {
+          "name": "image_b",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 971
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfyui-shadernoiseksampler",
+        "ver": "e4d0895f1a5a9f66deaa0244f00fd4e2280d00af",
+        "Node name for S&R": "AdvancedImageComparer",
+        "comparer_mode": "Slider",
+        "onionSkinOpacity": 0
+      },
+      "widgets_values": [
+        "Slider",
+        "1",
+        null,
+        null,
+        null,
+        "1 / 4",
+        null,
+        null,
+        "Page 1 / 2",
+        0,
+        {
+          "images": [
+            {
+              "name": "A1",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.a._temp_rhxna_00001_.png&type=temp&subfolder=&rand=0.4860506380476164",
+              "img": {},
+              "index": 0
+            },
+            {
+              "name": "A2",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.a._temp_rhxna_00002_.png&type=temp&subfolder=&rand=0.9304504442183313",
+              "img": {},
+              "index": 1
+            },
+            {
+              "name": "A3",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.a._temp_rhxna_00003_.png&type=temp&subfolder=&rand=0.729069678963161",
+              "img": {},
+              "index": 2
+            },
+            {
+              "name": "A4",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.a._temp_rhxna_00004_.png&type=temp&subfolder=&rand=0.8791870009127462",
+              "img": {},
+              "index": 3
+            },
+            {
+              "name": "B1",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.b._temp_rhxna_00001_.png&type=temp&subfolder=&rand=0.9160725131153197",
+              "img": {},
+              "index": 0
+            },
+            {
+              "name": "B2",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.b._temp_rhxna_00002_.png&type=temp&subfolder=&rand=0.9005259894209489",
+              "img": {},
+              "index": 1
+            },
+            {
+              "name": "B3",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.b._temp_rhxna_00003_.png&type=temp&subfolder=&rand=0.6981725186927129",
+              "img": {},
+              "index": 2
+            },
+            {
+              "name": "B4",
+              "selected": true,
+              "url": "/api/view?filename=advanced.compare.b._temp_rhxna_00004_.png&type=temp&subfolder=&rand=0.3062137245573221",
+              "img": {},
+              "index": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links": [
+    [
+      3,
+      4,
+      1,
+      6,
+      0,
+      "CLIP"
+    ],
+    [
+      5,
+      4,
+      1,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      746,
+      4,
+      2,
+      140,
+      1,
+      "VAE"
+    ],
+    [
+      902,
+      6,
+      0,
+      192,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      903,
+      7,
+      0,
+      192,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      904,
+      182,
+      0,
+      192,
+      3,
+      "LATENT"
+    ],
+    [
+      906,
+      192,
+      0,
+      193,
+      0,
+      "LATENT"
+    ],
+    [
+      907,
+      4,
+      2,
+      193,
+      1,
+      "VAE"
+    ],
+    [
+      913,
+      196,
+      0,
+      192,
+      5,
+      "INT"
+    ],
+    [
+      953,
+      4,
+      0,
+      192,
+      0,
+      "MODEL"
+    ],
+    [
+      961,
+      140,
+      0,
+      216,
+      0,
+      "IMAGE"
+    ],
+    [
+      962,
+      193,
+      0,
+      217,
+      0,
+      "IMAGE"
+    ],
+    [
+      964,
+      6,
+      0,
+      218,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      965,
+      7,
+      0,
+      218,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      966,
+      182,
+      0,
+      218,
+      3,
+      "LATENT"
+    ],
+    [
+      967,
+      218,
+      0,
+      140,
+      0,
+      "LATENT"
+    ],
+    [
+      968,
+      196,
+      0,
+      218,
+      5,
+      "INT"
+    ],
+    [
+      969,
+      4,
+      0,
+      218,
+      0,
+      "MODEL"
+    ],
+    [
+      970,
+      140,
+      0,
+      219,
+      0,
+      "IMAGE"
+    ],
+    [
+      971,
+      193,
+      0,
+      219,
+      1,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5209868481924403,
+      "offset": [
+        666.2081210387263,
+        192.5125663137911
+      ]
+    },
+    "frontendVersion": "1.21.0",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}
