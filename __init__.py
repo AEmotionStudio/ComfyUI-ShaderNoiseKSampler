@@ -11,6 +11,9 @@ from .direct_shader_ksampler import DirectShaderNoiseKSampler
 # Import AdvancedImageComparer
 from .advanced_comparer import AdvancedImageComparer
 
+# Import VideoComparer
+from .video_comparer import VideoComparer
+
 # Next import tensor class
 from .shader_to_tensor import ShaderToTensor
 
@@ -18,45 +21,38 @@ from .shader_to_tensor import ShaderToTensor
 from .shaders.domain_warp import add_domain_warp_to_tensor, generate_domain_warp_tensor
 
 # Apply domain warp integration
-print("=== INTEGRATING DOMAIN WARP TO SHADER SYSTEM ===")
 add_domain_warp_to_tensor(ShaderToTensor)
 register_shader_generator("domain_warp", generate_domain_warp_tensor)
-print(f"Domain warp integration complete - has domain_warp: {'domain_warp' in dir(ShaderToTensor)}")
 
 # Import and integrate tensor field
 from .shaders.tensor_field import add_tensor_field_to_tensor, generate_tensor_field_tensor
 
 # Apply tensor field integration
-print("=== INTEGRATING TENSOR FIELD TO SHADER SYSTEM ===")
 add_tensor_field_to_tensor(ShaderToTensor)
 register_shader_generator("tensor_field", generate_tensor_field_tensor)
-print(f"Tensor field integration complete - has tensor_field: {'tensor_field' in dir(ShaderToTensor)}")
 
 # Import and integrate Curl Noise
 from .shaders.curl_noise import add_curl_noise_to_tensor, generate_curl_noise_tensor
 
 # Apply Curl Noise integration
-print("=== INTEGRATING CURL NOISE TO SHADER SYSTEM ===")
 add_curl_noise_to_tensor(ShaderToTensor)
 register_shader_generator("curl", generate_curl_noise_tensor)
 register_shader_generator("curl_noise", generate_curl_noise_tensor)
-print(f"Curl noise integration complete - has curl_noise: {'curl_noise' in dir(ShaderToTensor)}")
 
 # Import and integrate temporal coherent noise
 from .shaders.temporal_coherent_noise import integrate_temporal_coherent_noise, generate_temporal_coherent_noise_tensor
 
 # Apply temporal coherent noise integration
-print("=== INTEGRATING TEMPORAL COHERENT NOISE TO SHADER SYSTEM ===")
 integrate_temporal_coherent_noise()
 register_shader_generator("temporal_coherent", generate_temporal_coherent_noise_tensor)
 register_shader_generator("temporal_coherent_noise", generate_temporal_coherent_noise_tensor)
-print(f"Temporal coherent noise integration complete - has temporal_coherent_noise: {'temporal_coherent_noise' in dir(ShaderToTensor)}")
 
 # Node class mappings
 NODE_CLASS_MAPPINGS = {
     "ShaderNoiseKSampler": ShaderNoiseKSampler,
     "ShaderNoiseKSamplerDirect": DirectShaderNoiseKSampler,
     "AdvancedImageComparer": AdvancedImageComparer,
+    "Video Comparer": VideoComparer,
 }
 
 # Display name mappings
@@ -64,23 +60,22 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ShaderNoiseKSampler": "Shader Noise KSampler",
     "ShaderNoiseKSamplerDirect": "Shader Noise KSampler (Direct)",
     "AdvancedImageComparer": "Advanced Image Comparer",
+    "Video Comparer": "Video Comparer",
 }
 
 # Add web directory for UI components
 WEB_DIRECTORY = "./web"
 
-# List of JS files to be loaded
+# List of JS files to be loaded - ORDER IS CRITICAL
 __js_files__ = [
     "gradient_title.js", 
     "shader_renderer.js",
     "matrix_button.js", 
     "shader_params_save_button.js", 
     "noise_visualizer.js",
-    "advanced_image_comparer.js"
+    "advanced_comparer.js",           
+    "video_comparer.js"               
 ]
-
-# Debug print to confirm files are loaded
-print(f"=== LOADING JS FILES: {__js_files__} ===")
 
 # List of exported elements
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY", "__js_files__", "SHADER_GENERATORS"]

@@ -292,7 +292,6 @@ function drawGradientTitle(node, ctx) {
 
 class AdvancedImageComparerWidget {
     constructor(name, node) {
-        console.log("[AdvancedImageComparer] Widget constructor called with name:", name, "node:", node);
         this.name = name;
         this.type = "custom";
         this.node = node;
@@ -316,21 +315,14 @@ class AdvancedImageComparerWidget {
         this.currentBatchPage = 0;
         this.pairsPerPage = 3; // Show 3 pairs per page in batch mode
         this.maxBatchPages = 0;
-        
-        console.log("[AdvancedImageComparer] Widget constructor complete");
     }
 
     set value(v) {
-        console.log("[AdvancedImageComparer] Widget value setter called with:", v);
-        
         // Process the images from the execution result
         const images = v.images || [];
-        console.log("[AdvancedImageComparer] Raw images array:", images);
         
         const imagesA = images.filter(img => img.is_image_a);
         const imagesB = images.filter(img => img.is_image_b);
-        
-        console.log("[AdvancedImageComparer] Filtered images - A:", imagesA.length, "B:", imagesB.length);
         
         // Store all images for batch processing
         this.imagesA = imagesA.map((img, index) => ({
@@ -357,8 +349,6 @@ class AdvancedImageComparerWidget {
         this.maxBatchPages = Math.ceil(this.maxPairs / this.pairsPerPage);
         this.currentBatchPage = 0;
         
-        console.log("[AdvancedImageComparer] Batch setup - A:", this.imagesA.length, "B:", this.imagesB.length, "Max pairs:", this.maxPairs);
-        
         // Set the value and update selected pair
         this._value = { images: [...this.imagesA, ...this.imagesB] };
         this.updateSelectedPair();
@@ -377,16 +367,12 @@ class AdvancedImageComparerWidget {
     }
 
     loadAllImages() {
-        console.log("[AdvancedImageComparer] Loading all images for batch processing");
-        
         const allImages = [...this.imagesA, ...this.imagesB];
         
         allImages.forEach(imageData => {
             if (!imageData.img && imageData.url) {
-                console.log("[AdvancedImageComparer] Loading image:", imageData.name, "URL:", imageData.url);
                 imageData.img = new Image();
                 imageData.img.onload = () => {
-                    console.log("[AdvancedImageComparer] Image loaded:", imageData.name, "Size:", imageData.img.naturalWidth, "x", imageData.img.naturalHeight);
                     this.node.setDirtyCanvas(true, false);
                 };
                 imageData.img.onerror = (error) => {
@@ -398,17 +384,13 @@ class AdvancedImageComparerWidget {
     }
 
     setSelected(selected) {
-        console.log("[AdvancedImageComparer] setSelected called with:", selected);
-        
         this.selected = selected;
         this.imgs = [];
         
         for (const sel of selected) {
             if (!sel.img && sel.url) {
-                console.log("[AdvancedImageComparer] Creating new image for:", sel.name, "URL:", sel.url);
                 sel.img = new Image();
                 sel.img.onload = () => {
-                    console.log("[AdvancedImageComparer] Image loaded successfully:", sel.name, "Size:", sel.img.naturalWidth, "x", sel.img.naturalHeight);
                     this.node.setDirtyCanvas(true, false);
                 };
                 sel.img.onerror = (error) => {
@@ -418,16 +400,11 @@ class AdvancedImageComparerWidget {
             }
             if (sel.img) {
                 this.imgs.push(sel.img);
-                console.log("[AdvancedImageComparer] Added image to imgs array:", sel.name);
             }
         }
-        
-        console.log("[AdvancedImageComparer] Final imgs array length:", this.imgs.length);
     }
 
     draw(ctx, node, width, y, height) {
-        console.log("[AdvancedImageComparer] Draw called - mode:", node.properties?.comparer_mode, "selected count:", this.selected.length);
-        
         this.y = y;
         this.last_y = y;
         
@@ -484,46 +461,39 @@ class AdvancedImageComparerWidget {
 
     drawClickMode(ctx, y, width, availableHeight) {
         const imageIndex = this.node.isPointerDown ? 1 : 0;
-        console.log("[AdvancedImageComparer] Click mode - drawing image index:", imageIndex);
         this.drawImage(ctx, this.selected[imageIndex], y, width, availableHeight);
     }
 
     drawSideBySideMode(ctx, y, width, availableHeight) {
-                console.log("[AdvancedImageComparer] Side-by-Side mode");
-                if (this.selected[0]) {
-                    this.drawImageSideBySide(ctx, this.selected[0], y, width, availableHeight, 0);
-                }
-                if (this.selected[1]) {
-                    this.drawImageSideBySide(ctx, this.selected[1], y, width, availableHeight, 1);
-                }
+        if (this.selected[0]) {
+            this.drawImageSideBySide(ctx, this.selected[0], y, width, availableHeight, 0);
+        }
+        if (this.selected[1]) {
+            this.drawImageSideBySide(ctx, this.selected[1], y, width, availableHeight, 1);
+        }
     }
                 
     drawStackedMode(ctx, y, width, availableHeight) {
-                console.log("[AdvancedImageComparer] Stacked mode");
-                if (this.selected[0]) {
-                    this.drawImageStacked(ctx, this.selected[0], y, width, availableHeight, 0);
-                }
-                if (this.selected[1]) {
-                    this.drawImageStacked(ctx, this.selected[1], y, width, availableHeight, 1);
-                }
+        if (this.selected[0]) {
+            this.drawImageStacked(ctx, this.selected[0], y, width, availableHeight, 0);
+        }
+        if (this.selected[1]) {
+            this.drawImageStacked(ctx, this.selected[1], y, width, availableHeight, 1);
+        }
     }
                 
     drawSliderMode(ctx, y, width, availableHeight) {
-                if (this.selected[0]) {
-                    console.log("[AdvancedImageComparer] Slider mode - drawing base image A");
-                    this.drawImage(ctx, this.selected[0], y, width, availableHeight);
-                }
-                
+        if (this.selected[0]) {
+            this.drawImage(ctx, this.selected[0], y, width, availableHeight);
+        }
+        
         if (this.selected[1] && this.node.isPointerOver) {
             const cropX = this.node.pointerOverPos[0];
-                    console.log("[AdvancedImageComparer] Slider mode - drawing overlay image B with cropX:", cropX);
-                    this.drawImage(ctx, this.selected[1], y, width, availableHeight, cropX);
-                }
+            this.drawImage(ctx, this.selected[1], y, width, availableHeight, cropX);
+        }
     }
 
     drawGridMode(ctx, y, width, availableHeight) {
-        console.log("[AdvancedImageComparer] Grid mode");
-        
         // Calculate grid layout
         const pairs = Math.min(this.maxPairs, 64); // Show max 64 pairs in grid
         const cols = Math.ceil(Math.sqrt(pairs * 2)); // 2 images per pair
@@ -554,15 +524,8 @@ class AdvancedImageComparerWidget {
     }
 
     drawCarouselMode(ctx, y, width, availableHeight) {
-        console.log("[AdvancedImageComparer] Carousel mode - pair:", this.currentPairIndex + 1, "of", this.maxPairs);
-        console.log("[AdvancedImageComparer] Available images A:", this.imagesA.length, "B:", this.imagesB.length);
-        
         const imageA = this.imagesA[this.currentPairIndex];
         const imageB = this.imagesB[this.currentPairIndex];
-        
-        console.log("[AdvancedImageComparer] Current pair images - A:", !!imageA, "B:", !!imageB);
-        if (imageA) console.log("[AdvancedImageComparer] Image A loaded:", !!imageA.img);
-        if (imageB) console.log("[AdvancedImageComparer] Image B loaded:", !!imageB.img);
         
         // Draw current pair side by side (use full available height since controls are now widgets)
         if (imageA && imageA.img) {
@@ -574,8 +537,6 @@ class AdvancedImageComparerWidget {
     }
 
     drawBatchMode(ctx, y, width, availableHeight) {
-        console.log("[AdvancedImageComparer] Batch mode - showing page", this.currentBatchPage + 1, "of", this.maxBatchPages);
-        
         const pairHeight = (availableHeight - 40) / this.pairsPerPage; // Reserve space for controls
         const startPairIndex = this.currentBatchPage * this.pairsPerPage;
         const endPairIndex = Math.min(startPairIndex + this.pairsPerPage, this.maxPairs);
@@ -801,28 +762,19 @@ class AdvancedImageComparerWidget {
     }
 
     drawImage(ctx, imageData, y, nodeWidth, availableHeight, cropX) {
-        console.log("[AdvancedImageComparer] drawImage called for:", imageData?.name, "cropX:", cropX);
-        
         if (!imageData) {
-            console.log("[AdvancedImageComparer] No imageData provided");
             return;
         }
         
         if (!imageData.img) {
-            console.log("[AdvancedImageComparer] No img object in imageData");
             return;
         }
         
         if (!imageData.img.naturalWidth || !imageData.img.naturalHeight) {
-            console.log("[AdvancedImageComparer] Image not loaded yet or invalid dimensions:", imageData.img.naturalWidth, "x", imageData.img.naturalHeight);
             return;
         }
 
-        console.log("[AdvancedImageComparer] Drawing image:", imageData.name, "Size:", imageData.img.naturalWidth, "x", imageData.img.naturalHeight);
-
         const image = imageData.img;
-        
-        console.log("[AdvancedImageComparer] Canvas dimensions - nodeWidth:", nodeWidth, "available height:", availableHeight);
         
         const imageAspect = image.naturalWidth / image.naturalHeight;
         const widgetAspect = nodeWidth / availableHeight;
@@ -884,38 +836,27 @@ class AdvancedImageComparerWidget {
 
     // Navigation methods for carousel mode
     nextPair() {
-        console.log("[AdvancedImageComparer] nextPair called - current:", this.currentPairIndex, "max:", this.maxPairs);
         if (this.currentPairIndex < this.maxPairs - 1) {
             this.currentPairIndex++;
-            console.log("[AdvancedImageComparer] Advanced to pair:", this.currentPairIndex);
             this.updateSelectedPair();
             this.node.setDirtyCanvas(true, false);
-        } else {
-            console.log("[AdvancedImageComparer] Already at last pair");
         }
     }
 
     previousPair() {
-        console.log("[AdvancedImageComparer] previousPair called - current:", this.currentPairIndex);
         if (this.currentPairIndex > 0) {
             this.currentPairIndex--;
-            console.log("[AdvancedImageComparer] Moved back to pair:", this.currentPairIndex);
             this.updateSelectedPair();
             this.node.setDirtyCanvas(true, false);
-        } else {
-            console.log("[AdvancedImageComparer] Already at first pair");
         }
     }
 
     toggleAutoPlay() {
-        console.log("[AdvancedImageComparer] toggleAutoPlay called - current state:", this.autoPlayEnabled);
         this.autoPlayEnabled = !this.autoPlayEnabled;
         
         if (this.autoPlayEnabled) {
-            console.log("[AdvancedImageComparer] Starting auto-play");
             this.startAutoPlay();
         } else {
-            console.log("[AdvancedImageComparer] Stopping auto-play");
             this.stopAutoPlay();
         }
         
@@ -941,8 +882,6 @@ class AdvancedImageComparerWidget {
 
     // Update the selected pair for modes that show individual pairs
     updateSelectedPair() {
-        console.log("[AdvancedImageComparer] updateSelectedPair called - currentPairIndex:", this.currentPairIndex);
-        
         const mode = this.node.properties?.comparer_mode || "Slider";
         
         // For modes that show individual pairs, update the selected images
@@ -956,7 +895,6 @@ class AdvancedImageComparerWidget {
                 processedImages.push(this.imagesB[this.currentPairIndex]);
             }
             
-            console.log("[AdvancedImageComparer] Setting selected images for pair", this.currentPairIndex, ":", processedImages.length, "images");
             this.setSelected(processedImages);
         }
         
@@ -969,14 +907,11 @@ class AdvancedImageComparerWidget {
         }
         
         this.animationFrame = setInterval(() => {
-            console.log("[AdvancedImageComparer] Auto-play tick - current pair:", this.currentPairIndex);
             if (this.currentPairIndex >= this.maxPairs - 1) {
                 // Loop back to the beginning
                 this.currentPairIndex = 0;
-                console.log("[AdvancedImageComparer] Auto-play looped back to start");
             } else {
                 this.currentPairIndex++;
-                console.log("[AdvancedImageComparer] Auto-play advanced to pair:", this.currentPairIndex);
             }
             this.updateSelectedPair();
             this.node.setDirtyCanvas(true, false);
@@ -992,32 +927,22 @@ class AdvancedImageComparerWidget {
 
     // Batch pagination methods
     nextBatchPage() {
-        console.log("[AdvancedImageComparer] nextBatchPage called - current:", this.currentBatchPage, "max:", this.maxBatchPages);
         if (this.currentBatchPage < this.maxBatchPages - 1) {
             this.currentBatchPage++;
-            console.log("[AdvancedImageComparer] Advanced to batch page:", this.currentBatchPage);
             this.updateNodeControls();
             this.node.setDirtyCanvas(true, false);
-        } else {
-            console.log("[AdvancedImageComparer] Already at last batch page");
         }
     }
 
     previousBatchPage() {
-        console.log("[AdvancedImageComparer] previousBatchPage called - current:", this.currentBatchPage);
         if (this.currentBatchPage > 0) {
             this.currentBatchPage--;
-            console.log("[AdvancedImageComparer] Moved back to batch page:", this.currentBatchPage);
             this.updateNodeControls();
             this.node.setDirtyCanvas(true, false);
-        } else {
-            console.log("[AdvancedImageComparer] Already at first batch page");
         }
     }
 
     drawImageSideBySide(ctx, imageData, y, nodeWidth, availableHeight, imageIndex) {
-        console.log("[AdvancedImageComparer] drawImageSideBySide called for:", imageData?.name, "index:", imageIndex);
-        
         if (!imageData || !imageData.img || !imageData.img.naturalWidth || !imageData.img.naturalHeight) {
             return;
         }
@@ -1081,8 +1006,6 @@ class AdvancedImageComparerWidget {
     }
 
     drawImageStacked(ctx, imageData, y, nodeWidth, availableHeight, imageIndex) {
-        console.log("[AdvancedImageComparer] drawImageStacked called for:", imageData?.name, "index:", imageIndex);
-        
         if (!imageData || !imageData.img || !imageData.img.naturalWidth || !imageData.img.naturalHeight) {
             return;
         }
@@ -1146,16 +1069,13 @@ class AdvancedImageComparerWidget {
     }
 
     drawOnionSkinMode(ctx, y, width, availableHeight) {
-        console.log("[AdvancedImageComparer] Onion Skin mode");
         const opacity = this.node.properties?.onionSkinOpacity || 0.5; // Default to 50% opacity
 
         if (this.selected[0]) {
-            console.log("[AdvancedImageComparer] Onion Skin - drawing base image A");
             this.drawImage(ctx, this.selected[0], y, width, availableHeight);
         }
 
         if (this.selected[1]) {
-            console.log("[AdvancedImageComparer] Onion Skin - drawing overlay image B with opacity:", opacity);
             ctx.save();
             ctx.globalAlpha = opacity;
             this.drawImage(ctx, this.selected[1], y, width, availableHeight);
@@ -1166,41 +1086,41 @@ class AdvancedImageComparerWidget {
     computeSize(width) {
         const mode = this.node?.properties?.comparer_mode || "Slider";
         
-        // Base height calculation - make images much larger
-        let height = Math.max(300, width * 0.75);
+        // Base height calculation - reduced minimum sizes for better sizing flexibility
+        let height = Math.max(150, width * 0.5); // Reduced from 300 and 0.75
         
         // Adjust height based on layout mode
         switch (mode) {
             case "Stacked":
                 // Stacked mode needs more height to show both images vertically
-                height = Math.max(500, width * 1.2);
+                height = Math.max(200, width * 0.8); // Reduced from 500 and 1.2
                 break;
             case "Side-by-Side":
-                // Side-by-side can use standard height but larger than before
-                height = Math.max(300, width * 0.6);
+                // Side-by-side can use standard height but smaller than before
+                height = Math.max(120, width * 0.4); // Reduced from 300 and 0.6
                 break;
             case "Grid":
                 // Grid mode needs more height to show multiple pairs
                 const pairs = Math.min(this.maxPairs || 1, 64);
                 const cols = Math.ceil(Math.sqrt(pairs * 2));
                 const rows = Math.ceil((pairs * 2) / cols);
-                height = Math.max(400, (width / cols) * rows + 80); // Extra space for controls
+                height = Math.max(180, (width / cols) * rows + 60); // Reduced from 400 and 80
                 break;
             case "Carousel":
                 // Carousel mode uses standard height plus controls
-                height = Math.max(350, width * 0.6 + 80);
+                height = Math.max(150, width * 0.4 + 60); // Reduced from 350, 0.6, and 80
                 break;
             case "Batch":
                 // Batch mode shows multiple pairs vertically
                 const visiblePairs = Math.min(this.maxPairs || 1, 3);
-                height = Math.max(500, visiblePairs * (width * 0.4) + 80);
+                height = Math.max(200, visiblePairs * (width * 0.3) + 60); // Reduced from 500, 0.4, and 80
                 break;
             case "Onion Skin":
-                height = Math.max(300, width * 0.75);
+                height = Math.max(150, width * 0.5); // Reduced from 300 and 0.75
                 break;
             default:
-                // Slider and Click modes use standard height but larger
-                height = Math.max(300, width * 0.75);
+                // Slider and Click modes use standard height but smaller
+                height = Math.max(150, width * 0.5); // Reduced from 300 and 0.75
                 break;
         }
         
@@ -1220,10 +1140,6 @@ class AdvancedImageComparerWidget {
         }
         
         if (event.type === "pointerdown") {
-            console.log("[AdvancedImageComparer] Mouse click at:", pos, "mode:", mode, "maxPairs:", this.maxPairs);
-            
-
-            
             // Handle clicks on grid cells for selection
             if (mode === "Grid" && this.maxPairs > 1) {
                 const pairs = Math.min(this.maxPairs, 64);
@@ -1233,20 +1149,15 @@ class AdvancedImageComparerWidget {
                 const widgetHeight = node.size[1] - this.y - 10;
                 const cellHeight = (widgetHeight - 40) / rows; // Reserve space for controls
                 
-                console.log("[AdvancedImageComparer] Grid click check - cellWidth:", cellWidth, "cellHeight:", cellHeight);
-                
                 const col = Math.floor(pos[0] / cellWidth);
                 const row = Math.floor(pos[1] / cellHeight);
                 const cellIndex = row * cols + col;
-                
-                console.log("[AdvancedImageComparer] Grid click - col:", col, "row:", row, "cellIndex:", cellIndex);
                 
                 // Determine which image was clicked
                 let imageIndex = Math.floor(cellIndex / 2);
                 let isImageB = cellIndex % 2 === 1;
                 
                 if (imageIndex < this.maxPairs) {
-                    console.log("[AdvancedImageComparer] Switching to carousel mode for pair:", imageIndex);
                     // Switch to carousel mode to focus on this pair
                     this.currentPairIndex = imageIndex;
                     node.properties.comparer_mode = "Carousel";
@@ -1270,17 +1181,11 @@ class AdvancedImageComparerWidget {
 app.registerExtension({
     name: "AdvancedImageComparer",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
-        console.log("[AdvancedImageComparer] beforeRegisterNodeDef called for:", nodeData.name);
-        
+        // Only process if this is our target node
         if (nodeData.name !== "AdvancedImageComparer") {
-            console.log("[AdvancedImageComparer] Skipping node:", nodeData.name);
             return;
         }
         
-        console.log("[AdvancedImageComparer] Registering AdvancedImageComparer node");
-        console.log("[AdvancedImageComparer] NodeData:", nodeData);
-        console.log("[AdvancedImageComparer] NodeType:", nodeType);
-
         // Add properties
         nodeType.prototype.properties = nodeType.prototype.properties || {};
         nodeType.prototype.properties.comparer_mode = "Slider";
@@ -1290,10 +1195,6 @@ app.registerExtension({
             type: "combo",
             values: ["Slider", "Click", "Side-by-Side", "Stacked", "Grid", "Carousel", "Batch", "Onion Skin"],
         };
-
-        // Debug: Log the original nodeType methods
-        console.log("[AdvancedImageComparer] Original nodeType methods:", Object.getOwnPropertyNames(nodeType.prototype));
-        console.log("[AdvancedImageComparer] Has onExecuted:", typeof nodeType.prototype.onExecuted);
 
         // Store the original onDrawForeground function if it exists
         const origOnDrawForeground = nodeType.prototype.onDrawForeground;
@@ -1326,9 +1227,6 @@ app.registerExtension({
         // Initialize state variables
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function() {
-            console.log("[AdvancedImageComparer] Node created, initializing...");
-            console.log("[AdvancedImageComparer] Node properties before init:", this.properties);
-            
             if (onNodeCreated) {
                 onNodeCreated.apply(this, arguments);
             }
@@ -1337,7 +1235,6 @@ app.registerExtension({
             this.properties = this.properties || {};
             if (!this.properties.comparer_mode) {
                 this.properties.comparer_mode = "Slider";
-                console.log("[AdvancedImageComparer] Set default comparer_mode to Slider");
             }
             
             this.isPointerDown = false;
@@ -1347,7 +1244,6 @@ app.registerExtension({
             
             // Add layout control widget
             this.layoutWidget = this.addWidget("combo", "Layout Mode", this.properties.comparer_mode, (value) => {
-                console.log("[AdvancedImageComparer] Layout changed to:", value);
                 this.properties.comparer_mode = value;
                 
                 // Show/hide controls based on mode
@@ -1373,21 +1269,18 @@ app.registerExtension({
 
             // Add carousel control widgets (initially hidden)
             this.prevButton = this.addWidget("button", "◀ Previous", null, () => {
-                console.log("[AdvancedImageComparer] Previous button widget clicked");
                 if (this.comparerWidget) {
                     this.comparerWidget.previousPair();
                 }
             });
             
             this.nextButton = this.addWidget("button", "Next ▶", null, () => {
-                console.log("[AdvancedImageComparer] Next button widget clicked");
                 if (this.comparerWidget) {
                     this.comparerWidget.nextPair();
                 }
             });
             
             this.autoPlayButton = this.addWidget("button", "▶ Play", null, () => {
-                console.log("[AdvancedImageComparer] Auto-play button widget clicked");
                 if (this.comparerWidget) {
                     this.comparerWidget.toggleAutoPlay();
                     // Update button text
@@ -1395,25 +1288,23 @@ app.registerExtension({
                 }
             });
             
-            this.pairInfoWidget = this.addWidget("text", "Pair Info", "1 / 1", null, {});
+            this.pairInfoWidget = this.addWidget("text", "Pair Info", "1 / 1", () => {}, {});
             this.pairInfoWidget.disabled = true;
 
             // Add batch pagination control widgets (initially hidden)
             this.batchPrevButton = this.addWidget("button", "◀ Prev Page", null, () => {
-                console.log("[AdvancedImageComparer] Previous batch page button widget clicked");
                 if (this.comparerWidget) {
                     this.comparerWidget.previousBatchPage();
                 }
             });
             
             this.batchNextButton = this.addWidget("button", "Next Page ▶", null, () => {
-                console.log("[AdvancedImageComparer] Next batch page button widget clicked");
                 if (this.comparerWidget) {
                     this.comparerWidget.nextBatchPage();
                 }
             });
             
-            this.batchPageInfoWidget = this.addWidget("text", "Page Info", "Page 1 / 1", null, {});
+            this.batchPageInfoWidget = this.addWidget("text", "Page Info", "Page 1 / 1", () => {}, {});
             this.batchPageInfoWidget.disabled = true;
 
             // Add Onion Skin opacity slider (initially hidden)
@@ -1427,16 +1318,13 @@ app.registerExtension({
             });
 
             // Create the custom widget
-            console.log("[AdvancedImageComparer] Creating custom widget...");
             this.comparerWidget = this.addCustomWidget(new AdvancedImageComparerWidget("advanced_comparer", this));
-            console.log("[AdvancedImageComparer] Widget created:", this.comparerWidget);
             
             // Initialize controls visibility
             this.updateControlsVisibility();
             
             this.setSize(this.computeSize());
             this.setDirtyCanvas(true, true);
-            console.log("[AdvancedImageComparer] Node initialization complete, properties:", this.properties);
         };
 
         // Method to show/hide controls based on mode
@@ -1455,8 +1343,6 @@ app.registerExtension({
             
             // Show Onion Skin opacity slider for Onion Skin mode
             const showOnionSkinSlider = mode === "Onion Skin";
-            
-            console.log("[AdvancedImageComparer] Updating controls visibility - mode:", mode, "hasMultiplePairs:", hasMultiplePairs, "showBatchSelector:", showBatchSelector, "showCarouselControls:", showCarouselControls, "showBatchPagination:", showBatchPagination, "showOnionSkinSlider:", showOnionSkinSlider);
             
             // Update batch selector
             if (this.batchSelectorWidget) {
@@ -1515,26 +1401,26 @@ app.registerExtension({
         // Override computeSize to account for the widget
         const originalComputeSize = nodeType.prototype.computeSize;
         nodeType.prototype.computeSize = function(out) {
-            const size = originalComputeSize ? originalComputeSize.apply(this, arguments) : [300, 150];
+            const size = originalComputeSize ? originalComputeSize.apply(this, arguments) : [200, 100]; // Reduced defaults
             if (this.comparerWidget) {
                 const widgetSize = this.comparerWidget.computeSize(size[0]);
                 
-                // Calculate additional space needed for controls
-                let extraHeight = 60; // Base padding for layout widget + title bar
+                // Calculate additional space needed for controls - reduced padding
+                let extraHeight = 40; // Reduced from 60 for base padding
                 
                 const mode = this.properties.comparer_mode;
                 const hasMultiplePairs = this.comparerWidget.maxPairs > 1;
                 
                 if (mode === "Carousel" && hasMultiplePairs) {
-                    extraHeight += 120; // Additional space for 4 carousel control widgets (30px each)
+                    extraHeight += 90; // Reduced from 120 for carousel controls
                 } else if (["Slider", "Click", "Side-by-Side", "Stacked"].includes(mode) && hasMultiplePairs) {
-                    extraHeight += 30; // Additional space for batch selector widget
+                    extraHeight += 25; // Reduced from 30 for batch selector
                 } else if (mode === "Batch" && this.comparerWidget.maxBatchPages > 1) {
-                    extraHeight += 90; // Additional space for 3 batch pagination widgets (30px each)
+                    extraHeight += 70; // Reduced from 90 for batch pagination
                 } else if (mode === "Onion Skin") {
-                    extraHeight += 30; // Additional space for opacity slider
+                    extraHeight += 25; // Reduced from 30 for opacity slider
                     if (hasMultiplePairs) {
-                        extraHeight += 30; // Additional space for batch selector widget
+                        extraHeight += 25; // Reduced from 30 for batch selector
                     }
                 }
                 
@@ -1543,57 +1429,34 @@ app.registerExtension({
             return size;
         };
 
-                // Override onExecuted to handle image data - this should be called when the node executes
+        // Override onExecuted to handle image data - this should be called when the node executes
         const originalOnExecuted = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function(message) {
-            console.log("[AdvancedImageComparer] onExecuted called!");
-            console.log("[AdvancedImageComparer] Arguments:", arguments);
-            console.log("[AdvancedImageComparer] Message:", message);
-            console.log("[AdvancedImageComparer] This:", this);
-            console.log("[AdvancedImageComparer] Has comparerWidget:", !!this.comparerWidget);
-            
             // Call the original onExecuted first (this handles the standard PreviewImage functionality)
             let result;
             if (originalOnExecuted) {
-                console.log("[AdvancedImageComparer] Calling original onExecuted");
                 result = originalOnExecuted.apply(this, arguments);
-                console.log("[AdvancedImageComparer] Original onExecuted result:", result);
             }
             
             // Now handle our custom logic
             if (message && typeof message === 'object') {
-                console.log("[AdvancedImageComparer] Processing message for custom widget");
                 
                 // Check for images in different possible locations
                 let images = null;
                 if (message.ui && message.ui.images && Array.isArray(message.ui.images)) {
                     images = message.ui.images;
-                    console.log("[AdvancedImageComparer] Found images in message.ui.images:", images);
                 } else if (message.images && Array.isArray(message.images)) {
                     images = message.images;
-                    console.log("[AdvancedImageComparer] Found images in message.images:", images);
-                } else {
-                    console.log("[AdvancedImageComparer] No images found in expected locations");
-                    console.log("[AdvancedImageComparer] Message keys:", Object.keys(message));
-                    console.log("[AdvancedImageComparer] Message.ui:", message.ui);
-                    console.log("[AdvancedImageComparer] Message.images:", message.images);
                 }
                 
                 if (images && images.length > 0) {
-                    console.log("[AdvancedImageComparer] Processing", images.length, "images");
                     if (this.comparerWidget) {
-                        console.log("[AdvancedImageComparer] Setting widget value");
                         this.comparerWidget.value = { images: images };
-                        console.log("[AdvancedImageComparer] Widget value set, triggering redraw");
                         this.setDirtyCanvas(true, false);
                     } else {
                         console.error("[AdvancedImageComparer] No comparerWidget found on node!");
                     }
-                } else {
-                    console.log("[AdvancedImageComparer] No valid images found");
                 }
-            } else {
-                console.log("[AdvancedImageComparer] Invalid message type:", typeof message);
             }
             
             return result || message;
@@ -1622,19 +1485,18 @@ app.registerExtension({
 
         nodeType.prototype.onMouseEnter = function(event) {
             this.setIsPointerDown(!!app.canvas.pointer_is_down);
-      this.isPointerOver = true;
+            this.isPointerOver = true;
             this.setDirtyCanvas(true, false);
-    };
+        };
     
         nodeType.prototype.onMouseLeave = function(event) {
             this.setIsPointerDown(false);
-      this.isPointerOver = false;
+            this.isPointerOver = false;
             this.setDirtyCanvas(true, false);
         };
 
-                nodeType.prototype.onMouseMove = function(event, pos, canvas) {
+        nodeType.prototype.onMouseMove = function(event, pos, canvas) {
             this.pointerOverPos = [...pos];
-            console.log("[AdvancedImageComparer] Mouse move - pos:", pos, "mode:", this.properties.comparer_mode);
             
             const mode = this.properties.comparer_mode || "Slider";
             
@@ -1654,23 +1516,101 @@ app.registerExtension({
         };
 
         // Add context menu options (keeping for convenience, but main control is via widget)
-    const getExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
+        const getExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
         nodeType.prototype.getExtraMenuOptions = function(_, options) {
-      if (getExtraMenuOptions) {
-        getExtraMenuOptions.apply(this, arguments);
-      }
-      
-      options.push(
-        {
-          content: "Reset to Default Size",
-          callback: () => {
-            this.setSize(this.computeSize());
-            this.setDirtyCanvas(true, false);
-          }
-        }
-      );
-    };
+            if (getExtraMenuOptions) {
+                getExtraMenuOptions.apply(this, arguments);
+            }
+            
+            const layoutModes = ["Slider", "Click", "Side-by-Side", "Stacked", "Grid", "Carousel", "Batch", "Onion Skin"];
+            const currentMode = this.properties.comparer_mode || "Slider";
+            
+            // Add separator for layout modes section
+            options.push(null);
+            
+            // Add main layout modes submenu
+            const layoutSubmenu = [];
+            
+            layoutModes.forEach(mode => {
+                layoutSubmenu.push({
+                    content: `${mode === currentMode ? "✓ " : ""}${mode}`,
+                    callback: () => {
+                        this.properties.comparer_mode = mode;
+                        if (this.layoutWidget) {
+                            this.layoutWidget.value = mode;
+                        }
+                        this.updateControlsVisibility();
+                        this.setDirtyCanvas(true, false);
+                    }
+                });
+            });
+            
+            options.push({
+                content: "Layout Mode",
+                submenu: {
+                    options: layoutSubmenu
+                }
+            });
+            
+            // Add quick access to most common modes
+            options.push(null); // separator
+            
+            const quickModes = ["Slider", "Side-by-Side", "Grid", "Carousel"];
+            quickModes.forEach(mode => {
+                if (mode !== currentMode) {
+                    options.push({
+                        content: `Switch to ${mode}`,
+                        callback: () => {
+                            this.properties.comparer_mode = mode;
+                            if (this.layoutWidget) {
+                                this.layoutWidget.value = mode;
+                            }
+                            this.updateControlsVisibility();
+                            this.setDirtyCanvas(true, false);
+                        }
+                    });
+                }
+            });
+            
+            // Add Select Pair submenu if applicable
+            if (this.comparerWidget && this.comparerWidget.maxPairs > 1 &&
+                ["Slider", "Click", "Side-by-Side", "Stacked", "Onion Skin"].includes(currentMode)) {
+                
+                options.push(null); // separator
+                const pairSubmenu = [];
+                for (let i = 0; i < this.comparerWidget.maxPairs; i++) {
+                    pairSubmenu.push({
+                        content: `${i === this.comparerWidget.currentPairIndex ? "✓ " : ""}Pair ${i + 1}`,
+                        callback: () => {
+                            if (this.comparerWidget) {
+                                this.comparerWidget.currentPairIndex = i;
+                                this.comparerWidget.updateSelectedPair();
+                                this.setDirtyCanvas(true, false);
+                            }
+                        }
+                    });
+                }
+                options.push({
+                    content: "Select Pair",
+                    submenu: {
+                        options: pairSubmenu
+                    }
+                });
+            }
+            
+            options.push(null); // separator
+            
+            options.push(
+                {
+                    content: "Reset to Default Size",
+                    callback: () => {
+                        this.setSize(this.computeSize());
+                        this.setDirtyCanvas(true, false);
+                    }
+                }
+            );
+        };
     
-    console.log("AdvancedImageComparer node setup complete");
-  }
+        console.log("AdvancedImageComparer node setup complete");
+    }
 }); 

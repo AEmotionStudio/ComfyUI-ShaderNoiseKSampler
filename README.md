@@ -1,6 +1,6 @@
 # ComfyUI-ShaderNoiseKSampler
 
-![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
@@ -108,13 +108,13 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 
 ## 🖼️ Advanced Image Comparer
 
-ComfyUI-ShaderNoiseKSampler now includes an `AdvancedImageComparer` node, a versatile utility for visually comparing two images or batches of images directly within your workflow. This node is invaluable for evaluating the subtle (or significant) differences produced by varying parameters, seeds, or even different models.
+ComfyUI-ShaderNoiseKSampler includes an `AdvancedImageComparer` node, a versatile utility for visually comparing two images or batches of images directly within your workflow. This node is invaluable for evaluating the subtle (or significant) differences produced by varying parameters, seeds, or even different models.
 
 ![Advanced Image Comparer Showcase](images/advanced_image_comparer_showcase.webp) *
 
 ### Features:
 
--   **Multiple Comparison Modes**: Choose the best way to visualize differences:
+-   **Eight Comparison Modes**: Choose the best way to visualize differences:
     -   **Slider**: Overlay images and use a slider to reveal one or the other.
     -   **Click**: Toggle between the two images with a click.
     -   **Side-by-Side**: Display images next to each other.
@@ -138,10 +138,47 @@ ComfyUI-ShaderNoiseKSampler now includes an `AdvancedImageComparer` node, a vers
 4.  **Interact**:
     -   **Slider Mode**: Hover your mouse over the image and move it left or right.
     -   **Click Mode**: Click on the image to toggle between A and B.
+    -   **Grid Mode**: View multiple pairs at once in a grid layout.
     -   **Carousel/Batch Modes**: Use the provided UI controls (buttons, pair selector) to navigate.
     -   **Onion Skin Mode**: Adjust the "Opacity B" slider to control the transparency of the second image.
 
 This tool is designed to enhance your A/B testing and iterative refinement process, making it easier to observe the impact of your creative choices.
+
+## 🎬 Video Comparer
+
+The `VideoComparer` node provides a powerful way to visually compare two videos directly within your ComfyUI workflow. This node is perfect for comparing different generation settings, model outputs, or any video-related experiments you're conducting.
+
+![Video Comparer Showcase](images/video_comparer_showcase.webp) *
+
+### Features:
+
+-   **Six Viewing Modes**: Choose the comparison method that works best for your needs:
+    -   **Playback**: Standard video playback with the ability to switch between videos A and B.
+    -   **Side-by-Side**: Display both videos next to each other for direct comparison.
+    -   **Stacked**: View videos stacked vertically, one above the other.
+    -   **Slider**: Overlay videos with a draggable slider to reveal portions of each.
+    -   **Onion Skin**: Overlay videos with adjustable opacity for the top video.
+    -   **Sync Compare**: Synchronized comparison mode that keeps both videos in perfect time alignment.
+-   **Interactive Playback Controls**: Play, pause, and navigate through frames with an intuitive control interface.
+-   **Frame-by-Frame Navigation**: Precisely compare specific frames with frame counter display.
+-   **Adjustable FPS**: Set the playback speed to suit your analysis needs.
+-   **Memory-Efficient Design**: Smart loading and caching system to handle large videos without overloading your browser.
+-   **Distinctive UI**: Features the same golden eyeball design as the Advanced Image Comparer for a consistent experience.
+
+### Usage:
+
+1.  **Add Node**: Add the `Video Comparer` node (found in the `utils` category) to your ComfyUI graph.
+2.  **Connect Inputs**:
+    -   `video_a`: Connect the first video.
+    -   `video_b`: Connect the second video for comparison.
+    -   `fps`: Adjust the playback speed (default is 8 fps).
+3.  **Interact**:
+    -   Use the dropdown menu to select your preferred viewing mode.
+    -   Navigate using the playback controls at the bottom of the node.
+    -   In Slider mode, move your mouse left/right to reveal different portions of each video.
+    -   In Onion Skin mode, adjust the opacity using the controls provided.
+
+This tool is especially valuable for comparing subtle differences in video generation outcomes, helping you fine-tune your workflows for optimal results.
 
 ## 📥 Installation
 

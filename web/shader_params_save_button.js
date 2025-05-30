@@ -178,12 +178,38 @@ app.registerExtension({
                         // Serialize with pretty printing
                         const jsonData = JSON.stringify(currentProps, null, 2);
                         
-                        // Save to localStorage as well for redundancy
+                        // Save to localStorage with size limit and error handling
                         try {
-                            localStorage.setItem('shader_params', jsonData);
-                            console.log("Saved to localStorage successfully");
+                            // Check if data is too large for localStorage
+                            const dataSize = new Blob([jsonData]).size;
+                            if (dataSize > 1024 * 1024) { // 1MB limit
+                                console.warn("Shader params data too large for localStorage, skipping localStorage save");
+                            } else {
+                                // Remove old shader params first to free space
+                                const oldKeys = Object.keys(localStorage).filter(key => 
+                                    key.startsWith('shader_params') || key.includes('shader')
+                                );
+                                oldKeys.forEach(key => {
+                                    if (key !== 'shader_params') { // Keep only the main one
+                                        try {
+                                            localStorage.removeItem(key);
+                                        } catch (e) { /* ignore */ }
+                                    }
+                                });
+                                
+                                localStorage.setItem('shader_params', jsonData);
+                                console.log("Saved to localStorage successfully");
+                            }
                         } catch (localErr) {
-                            console.error("Failed to save to localStorage:", localErr);
+                            if (localErr.name === 'QuotaExceededError') {
+                                console.warn("localStorage quota exceeded, skipping localStorage save:", localErr.message);
+                                // Try to free up space by removing old workflow data
+                                if (window.storageOptimizer) {
+                                    window.storageOptimizer.forceCleanup();
+                                }
+                            } else {
+                                console.error("Failed to save to localStorage:", localErr);
+                            }
                         }
                         
                         // Send the file directly to the data directory - most reliable method

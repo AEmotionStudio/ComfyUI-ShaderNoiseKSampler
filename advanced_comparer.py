@@ -43,7 +43,6 @@ class AdvancedImageComparer(PreviewImage):
             # Add flag to identify this as image A
             img["is_image_a"] = True
             result["ui"]["images"].append(img)
-            print(f"Added image A: {img['filename']}")
     
     # Process and save image B if provided
     if image_b is not None and len(image_b) > 0:
@@ -54,7 +53,5 @@ class AdvancedImageComparer(PreviewImage):
             # Add flag to identify this as image B
             img["is_image_b"] = True
             result["ui"]["images"].append(img)
-            print(f"Added image B: {img['filename']}")
     
-    print(f"Final result: {result}")
     return result 
