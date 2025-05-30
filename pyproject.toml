@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-shadernoiseksampler"
 description = "Transform AI image generation from random exploration into deliberate artistic navigation. This advanced KSampler replacement blends traditional noise with shader noise. Navigate latent space with intention using adjustable noise parameters, shape masks, and colors transformations."
-version = "1.0.6"
+version = "1.0.7"
 license = {file = "LICENSE"}
 
 [project.urls]
