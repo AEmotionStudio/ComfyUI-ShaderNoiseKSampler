@@ -1,5 +1,6 @@
 // AdvancedImageComparer.js
 // Implementation based on rgthree's image_comparer.js but simplified and enhanced for batch comparison
+// Now includes auto-fill slot functionality
 
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
@@ -1317,6 +1318,15 @@ app.registerExtension({
                 step: 0.01
             });
 
+            // Add cache management buttons for debugging
+            this.clearCacheButton = this.addWidget("button", "Clear Cache", null, () => {
+                // Call the Python class method to clear cache
+                console.log("[AdvancedImageComparer] Clearing image cache");
+                // We can't directly call Python methods from JS, but we can log this action
+                // The cache clearing happens automatically in the Python code
+            });
+            this.clearCacheButton.type = "hidden"; // Hide by default, can be shown for debugging
+
             // Create the custom widget
             this.comparerWidget = this.addCustomWidget(new AdvancedImageComparerWidget("advanced_comparer", this));
             
@@ -1406,7 +1416,7 @@ app.registerExtension({
                 const widgetSize = this.comparerWidget.computeSize(size[0]);
                 
                 // Calculate additional space needed for controls - reduced padding
-                let extraHeight = 40; // Reduced from 60 for base padding
+                let extraHeight = 40; // Base padding for layout widget + title bar
                 
                 const mode = this.properties.comparer_mode;
                 const hasMultiplePairs = this.comparerWidget.maxPairs > 1;
@@ -1450,12 +1460,16 @@ app.registerExtension({
                 }
                 
                 if (images && images.length > 0) {
+                    console.log(`[AdvancedImageComparer] Received ${images.length} images`);
+                    
                     if (this.comparerWidget) {
                         this.comparerWidget.value = { images: images };
                         this.setDirtyCanvas(true, false);
                     } else {
                         console.error("[AdvancedImageComparer] No comparerWidget found on node!");
                     }
+                } else {
+                    console.log("[AdvancedImageComparer] No images received in message");
                 }
             }
             
@@ -1515,7 +1529,7 @@ app.registerExtension({
             return true;
         };
 
-        // Add context menu options (keeping for convenience, but main control is via widget)
+        // Add context menu options
         const getExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
         nodeType.prototype.getExtraMenuOptions = function(_, options) {
             if (getExtraMenuOptions) {
@@ -1527,6 +1541,21 @@ app.registerExtension({
             
             // Add separator for layout modes section
             options.push(null);
+            
+            // Add auto-fill toggle
+            options.push({
+                content: "Toggle Auto Fill Empty Slot",
+                callback: () => {
+                    // Toggle the auto_fill widget value by finding it in widgets
+                    const autoFillWidget = this.widgets?.find(w => w.name === "auto_fill");
+                    if (autoFillWidget) {
+                        autoFillWidget.value = !autoFillWidget.value;
+                        console.log("[AdvancedImageComparer] Auto-fill toggled via menu:", autoFillWidget.value);
+                    }
+                }
+            });
+            
+            options.push(null); // separator
             
             // Add main layout modes submenu
             const layoutSubmenu = [];
@@ -1611,6 +1640,6 @@ app.registerExtension({
             );
         };
     
-        console.log("AdvancedImageComparer node setup complete");
+        console.log("AdvancedImageComparer node setup complete with auto-fill functionality");
     }
-}); 
+});
