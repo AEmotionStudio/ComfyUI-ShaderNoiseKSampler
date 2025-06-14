@@ -1,6 +1,6 @@
 # ComfyUI-ShaderNoiseKSampler
 
-![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
@@ -29,6 +29,7 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that blends stan
 ## 🚀 Recent Updates
 
 - **Comparer Auto-Fill - 6/12/25**: Both the `Advanced Image Comparer` and `Video Comparer` nodes now feature an `auto_fill` toggle. This addition streamlines your workflow by allowing you to compare with a single input. When `auto_fill` is enabled (the default setting), any empty image or video slot will be automatically populated with the output from the previous generation. This makes iterative A/B testing—comparing your latest creation to the one right before it—faster and more intuitive. It does not pull from your output folder but from the cached images or videos of your current session.
+![Video Comparer Updated WEBP](images/video_comparer_updated.webp)
 
 ## 🧭 Navigating the Seed Universe
 
