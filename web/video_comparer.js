@@ -6,112 +6,6 @@ import { api } from "../../../scripts/api.js";
 
 console.log("VideoComparer module loaded");
 
-// Global storage management
-window.comfyUIStorageManager = window.comfyUIStorageManager || {
-    initialized: false,
-    
-    init() {
-        if (this.initialized) return;
-        this.initialized = true;
-        
-        // Add global error handlers
-        window.addEventListener('error', (event) => {
-            if (event.error && event.error.name === 'QuotaExceededError') {
-                console.warn("[StorageManager] Global quota exceeded error caught");
-                this.emergencyCleanup();
-                event.preventDefault();
-            }
-        });
-        
-        window.addEventListener('unhandledrejection', (event) => {
-            if (event.reason && event.reason.name === 'QuotaExceededError') {
-                console.warn("[StorageManager] Global quota exceeded promise rejection caught");
-                this.emergencyCleanup();
-                event.preventDefault();
-            }
-        });
-        
-        console.log("[StorageManager] Initialized with emergency cleanup handlers");
-    },
-    
-    emergencyCleanup() {
-        console.log("[StorageManager] Performing emergency cleanup");
-        
-        try {
-            // Don't clean up if video comparers are actively loading
-            if (window.videoComparerInstances) {
-                const activeLoading = window.videoComparerInstances.some(instance => 
-                    instance.activeLoads && instance.activeLoads.size > 0
-                );
-                
-                if (activeLoading) {
-                    console.log("[StorageManager] Skipping cleanup - active loading in progress");
-                    return;
-                }
-            }
-            
-            // Clear workflow persistence data
-            const keys = Object.keys(localStorage);
-            let cleaned = 0;
-            
-            keys.forEach(key => {
-                if (key.startsWith('workflow') || 
-                    key.startsWith('comfyui') ||
-                    key.includes('temp') ||
-                    key.includes('cache') ||
-                    key.includes('persist')) {
-                    try {
-                        localStorage.removeItem(key);
-                        cleaned++;
-                    } catch (e) {
-                        // Ignore individual removal errors
-                    }
-                }
-            });
-            
-            console.log(`[StorageManager] Emergency cleanup removed ${cleaned} localStorage items`);
-            
-            // Only clean video frames if really necessary
-            if (cleaned === 0 && window.videoComparerInstances) {
-                console.log("[StorageManager] Cleaning oldest video frame caches");
-                window.videoComparerInstances.forEach(instance => {
-                    if (instance.cleanupOldestFrames) {
-                        instance.cleanupOldestFrames();
-                    }
-                });
-            }
-            
-            // Force garbage collection if available
-            if (window.gc) {
-                window.gc();
-            }
-            
-        } catch (error) {
-            console.error("[StorageManager] Error during emergency cleanup:", error);
-        }
-    },
-    
-    getStorageUsage() {
-        let total = 0;
-        try {
-            for (let key in localStorage) {
-                if (localStorage.hasOwnProperty(key)) {
-                    total += localStorage[key].length + key.length;
-                }
-            }
-        } catch (e) {
-            console.warn("[StorageManager] Could not calculate storage usage:", e);
-        }
-        return total;
-    }
-};
-
-// Initialize storage manager
-window.comfyUIStorageManager.init();
-
-// Track video comparer instances for cleanup
-window.videoComparerInstances = window.videoComparerInstances || [];
-
 // Cache for rendering optimization
 const CACHE = {
     titleCanvas: null,
@@ -439,27 +333,11 @@ class VideoComparerWidget {
         this.pairsPerPage = 2; // Show 2 pairs per page in batch mode (videos are larger than images)
         this.maxBatchPages = 0;
         
-        // Register this instance for global cleanup
-        if (window.videoComparerInstances && !window.videoComparerInstances.includes(this)) {
-            window.videoComparerInstances.push(this);
-        }
-        
         console.log("[VideoComparer] Widget constructor complete");
     }
 
     set value(v) {
         console.log("[VideoComparer] Widget value setter called with:", v);
-        
-        // Check storage before processing large video data
-        if (window.comfyUIStorageManager) {
-            const currentUsage = window.comfyUIStorageManager.getStorageUsage();
-            const usageMB = (currentUsage / (1024 * 1024)).toFixed(2);
-            
-            if (currentUsage > 5 * 1024 * 1024) { // 5MB threshold
-                console.warn(`[VideoComparer] High storage usage detected: ${usageMB}MB`);
-                window.comfyUIStorageManager.emergencyCleanup();
-            }
-        }
         
         // Reset state
         this.isPlaying = false;
@@ -1630,14 +1508,6 @@ class VideoComparerWidget {
         
         // Reset scrubbing state
         this.isScrubbing = false;
-        
-        // Remove from global instances tracking
-        if (window.videoComparerInstances) {
-            const index = window.videoComparerInstances.indexOf(this);
-            if (index > -1) {
-                window.videoComparerInstances.splice(index, 1);
-            }
-        }
         
         // Clean up all cached frames
         this.cleanupAllFrames();

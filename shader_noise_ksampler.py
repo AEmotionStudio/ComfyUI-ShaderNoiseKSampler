@@ -919,8 +919,6 @@ class ShaderNoiseKSampler:
             
             # Get the shader generator function
             generator_func = get_shader_generator(shader_type)
-            # Add print for shader_type in _generate_shader_noise
-            print(f"_generate_shader_noise: Using shader_type: {shader_type}")
             
             # Generate noise frame by frame
             noise_frames = []
@@ -999,8 +997,6 @@ class ShaderNoiseKSampler:
             
             # Get the shader generator function
             generator_func = get_shader_generator(shader_type)
-            # Add print for shader_type in _generate_shader_noise
-            print(f"_generate_shader_noise: Using shader_type: {shader_type}")
             
             # Prepare arguments based on what the function accepts
             generator_args = {
@@ -1500,7 +1496,6 @@ class ShaderNoiseKSampler:
 
         # Determine the target channel count early on using the model
         # Use model_to_use here to correctly get channels if model was wrapped (though usually wrapper forwards this)
-        print("ℹ️ Determining target channel count for the model...")
         target_channels = self.get_model_channel_count(model_to_use)
         
         # Initialize dimension indices and counts
