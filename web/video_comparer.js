@@ -2067,12 +2067,12 @@ app.registerExtension({
             
             // Show video selector only in Playback mode
             if (this.videoSelectorWidget) {
-                this.videoSelectorWidget.type = mode === "Playback" ? "combo" : "hidden";
+                this.videoSelectorWidget.hidden = mode !== "Playback";
             }
             
             // Show opacity slider only in Onion Skin mode
             if (this.onionSkinOpacitySlider) {
-                this.onionSkinOpacitySlider.type = mode === "Onion Skin" ? "slider" : "hidden";
+                this.onionSkinOpacitySlider.hidden = mode !== "Onion Skin";
             }
         };
 

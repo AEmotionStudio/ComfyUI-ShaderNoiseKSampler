@@ -1325,7 +1325,7 @@ app.registerExtension({
                 // We can't directly call Python methods from JS, but we can log this action
                 // The cache clearing happens automatically in the Python code
             });
-            this.clearCacheButton.type = "hidden"; // Hide by default, can be shown for debugging
+            this.clearCacheButton.hidden = true; // Hide by default, can be shown for debugging
 
             // Create the custom widget
             this.comparerWidget = this.addCustomWidget(new AdvancedImageComparerWidget("advanced_comparer", this));
@@ -1356,7 +1356,7 @@ app.registerExtension({
             
             // Update batch selector
             if (this.batchSelectorWidget) {
-                this.batchSelectorWidget.type = showBatchSelector ? "combo" : "hidden";
+                this.batchSelectorWidget.hidden = !showBatchSelector;
                 if (showBatchSelector && this.comparerWidget) {
                     // Update the options for the batch selector
                     const options = [];
@@ -1370,16 +1370,16 @@ app.registerExtension({
             
             // Update carousel controls
             if (this.prevButton) {
-                this.prevButton.type = showCarouselControls ? "button" : "hidden";
+                this.prevButton.hidden = !showCarouselControls;
             }
             if (this.nextButton) {
-                this.nextButton.type = showCarouselControls ? "button" : "hidden";
+                this.nextButton.hidden = !showCarouselControls;
             }
             if (this.autoPlayButton) {
-                this.autoPlayButton.type = showCarouselControls ? "button" : "hidden";
+                this.autoPlayButton.hidden = !showCarouselControls;
             }
             if (this.pairInfoWidget) {
-                this.pairInfoWidget.type = showCarouselControls ? "text" : "hidden";
+                this.pairInfoWidget.hidden = !showCarouselControls;
                 if (showCarouselControls && this.comparerWidget) {
                     this.pairInfoWidget.value = `${this.comparerWidget.currentPairIndex + 1} / ${this.comparerWidget.maxPairs}`;
                 }
@@ -1387,13 +1387,13 @@ app.registerExtension({
             
             // Update batch pagination controls
             if (this.batchPrevButton) {
-                this.batchPrevButton.type = showBatchPagination ? "button" : "hidden";
+                this.batchPrevButton.hidden = !showBatchPagination;
             }
             if (this.batchNextButton) {
-                this.batchNextButton.type = showBatchPagination ? "button" : "hidden";
+                this.batchNextButton.hidden = !showBatchPagination;
             }
             if (this.batchPageInfoWidget) {
-                this.batchPageInfoWidget.type = showBatchPagination ? "text" : "hidden";
+                this.batchPageInfoWidget.hidden = !showBatchPagination;
                 if (showBatchPagination && this.comparerWidget) {
                     this.batchPageInfoWidget.value = `Page ${this.comparerWidget.currentBatchPage + 1} / ${this.comparerWidget.maxBatchPages}`;
                 }
@@ -1401,7 +1401,7 @@ app.registerExtension({
             
             // Update Onion Skin opacity slider
             if (this.onionSkinOpacitySlider) {
-                this.onionSkinOpacitySlider.type = showOnionSkinSlider ? "slider" : "hidden";
+                this.onionSkinOpacitySlider.hidden = !showOnionSkinSlider;
                 if (showOnionSkinSlider) {
                     this.onionSkinOpacitySlider.value = this.properties.onionSkinOpacity;
                 }
