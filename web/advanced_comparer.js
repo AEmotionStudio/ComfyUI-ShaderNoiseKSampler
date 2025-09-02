@@ -361,6 +361,53 @@ class AdvancedImageComparerWidget {
         if (this.node && this.node.updateControlsVisibility) {
             this.node.updateControlsVisibility();
         }
+        
+        // Force a size recalculation to ensure proper initial display with larger minimums
+        if (this.node) {
+            setTimeout(() => {
+                const computedSize = this.node.computeSize();
+                const currentSize = this.node.size;
+                const minWidth = 700;   // Ensure minimum size for prominent display
+                const minHeight = 600;  // Ensure minimum size for prominent display
+                
+                // Use the larger of computed size or our minimums
+                const targetSize = [
+                    Math.max(computedSize[0], minWidth),
+                    Math.max(computedSize[1], minHeight)
+                ];
+                
+                // Resize if target is larger than current
+                if (targetSize[0] > currentSize[0] || targetSize[1] > currentSize[1]) {
+                    console.log(`[Widget] Forcing size update: [${currentSize[0]}, ${currentSize[1]}] → [${targetSize[0]}, ${targetSize[1]}]`);
+                    this.node.setSize(targetSize);
+                }
+            }, 50);
+        }
+        
+        // Immediately ensure node is large enough when images are set - be very aggressive
+        if (this.node) {
+            const currentSize = this.node.size;
+            const minWidth = 700;   // Even larger minimum width for prominent image display
+            const minHeight = 600;  // Even larger minimum height for prominent image display
+            
+            // Always force resize to ensure prominent display - don't just check if too small
+            const newSize = [
+                Math.max(currentSize[0], minWidth),
+                Math.max(currentSize[1], minHeight)
+            ];
+            
+            // Force the resize immediately and synchronously
+            console.log(`[Widget] Ensuring prominent sizing from [${currentSize[0]}, ${currentSize[1]}] to [${newSize[0]}, ${newSize[1]}]`);
+            this.node.setSize(newSize);
+            
+            // Force immediate canvas update with the new size
+            this.node.setDirtyCanvas(true, true);
+            
+            // Also force a delayed update to ensure everything is properly refreshed
+            setTimeout(() => {
+                this.node.setDirtyCanvas(true, true);
+            }, 100);
+        }
     }
 
     get value() {
@@ -409,9 +456,14 @@ class AdvancedImageComparerWidget {
         this.y = y;
         this.last_y = y;
         
-        // Calculate the actual available height for images
+        // Calculate the actual available height for images - maximize space for image display
         const [nodeWidth, nodeHeight] = node.size;
-        const availableHeight = nodeHeight - y - 10;
+        const availableHeight = Math.max(200, nodeHeight - y - 10); // Increased minimum, minimal padding for maximum image space
+        
+        // Ensure we have adequate space - if not, this might be a timing issue with resize
+        if (availableHeight < 250 && this.value.images && this.value.images.length > 0) {
+            console.log(`[Widget] Draw called with small availableHeight: ${availableHeight}, node size: [${nodeWidth}, ${nodeHeight}]`);
+        }
         
         const mode = node.properties?.comparer_mode || "Slider";
         
@@ -575,7 +627,7 @@ class AdvancedImageComparerWidget {
         }
 
         const image = imageData.img;
-        const padding = 4;
+        const padding = 2; // Minimal padding for grid cells to maximize image space
         const usableWidth = cellWidth - padding * 2;
         const usableHeight = cellHeight - padding * 2;
         
@@ -584,6 +636,7 @@ class AdvancedImageComparerWidget {
         
         let targetWidth, targetHeight;
         
+        // Scale to fill most of the cell space
         if (imageAspect > cellAspect) {
             targetWidth = usableWidth;
             targetHeight = usableWidth / imageAspect;
@@ -597,8 +650,13 @@ class AdvancedImageComparerWidget {
 
         ctx.save();
         
+        // Clip to cell bounds
+        ctx.beginPath();
+        ctx.rect(x + padding, y + padding, usableWidth, usableHeight);
+        ctx.clip();
+        
         // Draw border
-        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
         ctx.lineWidth = 1;
         ctx.strokeRect(x + padding, y + padding, usableWidth, usableHeight);
         
@@ -611,11 +669,11 @@ class AdvancedImageComparerWidget {
         
         // Draw label
         ctx.fillStyle = "rgba(0,0,0,0.8)";
-        ctx.fillRect(destX, destY, 25, 18);
+        ctx.fillRect(destX, destY, 28, 16);
         ctx.fillStyle = "white";
-        ctx.font = "11px Arial";
+        ctx.font = "10px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(label, destX + 12, destY + 13);
+        ctx.fillText(label, destX + 14, destY + 11);
 
         ctx.restore();
     }
@@ -626,7 +684,7 @@ class AdvancedImageComparerWidget {
         }
 
         const image = imageData.img;
-        const padding = 2;
+        const padding = 3; // Minimal padding for batch pairs to maximize image space
         const usableWidth = pairWidth - padding * 2;
         const usableHeight = pairHeight - padding * 2;
         
@@ -635,6 +693,7 @@ class AdvancedImageComparerWidget {
         
         let targetWidth, targetHeight;
         
+        // Scale to fill most of the pair space
         if (imageAspect > pairAspect) {
             targetWidth = usableWidth;
             targetHeight = usableWidth / imageAspect;
@@ -648,6 +707,11 @@ class AdvancedImageComparerWidget {
 
         ctx.save();
         
+        // Clip to pair bounds
+        ctx.beginPath();
+        ctx.rect(x + padding, y + padding, usableWidth, usableHeight);
+        ctx.clip();
+        
         // Draw image
         ctx.drawImage(
             image,
@@ -657,23 +721,25 @@ class AdvancedImageComparerWidget {
         
         // Draw label
         ctx.fillStyle = "rgba(0,0,0,0.8)";
-        ctx.fillRect(destX, destY, 25, 18);
+        ctx.fillRect(destX, destY, 30, 16);
         ctx.fillStyle = "white";
-        ctx.font = "12px Arial";
+        ctx.font = "11px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(imageData.name, destX + 12, destY + 13);
+        ctx.fillText(imageData.name, destX + 15, destY + 11);
         
-        // Draw separator line for side-by-side in batch mode
-        if (imageIndex === 0 && pairWidth < this.node.size[0]) {
-            ctx.beginPath();
-            ctx.moveTo(x + pairWidth, y);
-            ctx.lineTo(x + pairWidth, y + pairHeight);
-            ctx.strokeStyle = "rgba(255,255,255,0.5)";
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        }
-
         ctx.restore();
+        
+        // Draw separator line for side-by-side in batch mode (outside of clipping)
+        if (imageIndex === 0 && pairWidth < this.node.size[0]) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x + pairWidth, y + padding);
+            ctx.lineTo(x + pairWidth, y + pairHeight - padding);
+            ctx.strokeStyle = "rgba(255,255,255,0.5)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 
     drawBatchControls(ctx, y, width, availableHeight) {
@@ -777,55 +843,68 @@ class AdvancedImageComparerWidget {
 
         const image = imageData.img;
         
+        // Use nearly all available space for maximum image prominence
+        const padding = 3; // Minimal padding from node edges
+        const usableWidth = nodeWidth - (padding * 2);
+        const usableHeight = availableHeight - (padding * 2);
+        
         const imageAspect = image.naturalWidth / image.naturalHeight;
-        const widgetAspect = nodeWidth / availableHeight;
+        const usableAspect = usableWidth / usableHeight;
         
-        let targetWidth, targetHeight, offsetX = 0;
+        let targetWidth, targetHeight;
         
-        // Ensure minimum size for visibility
-        const minSize = 100;
-        const effectiveHeight = Math.max(availableHeight, minSize);
-        const effectiveWidth = Math.max(nodeWidth, minSize);
-        
-        if (imageAspect > widgetAspect) {
-            targetWidth = effectiveWidth;
-            targetHeight = effectiveWidth / imageAspect;
+        // Scale image to fill most of the available space while maintaining aspect ratio
+        if (imageAspect > usableAspect) {
+            // Image is wider than available space - fit to width
+            targetWidth = usableWidth;
+            targetHeight = usableWidth / imageAspect;
         } else {
-            targetHeight = effectiveHeight;
-            targetWidth = effectiveHeight * imageAspect;
-            offsetX = (nodeWidth - targetWidth) / 2;
+            // Image is taller than available space - fit to height  
+            targetHeight = usableHeight;
+            targetWidth = usableHeight * imageAspect;
         }
 
+        // Center the image within the available space
+        const destX = padding + (usableWidth - targetWidth) / 2;
+        const destY = y + padding + (usableHeight - targetHeight) / 2;
+        
+        // Calculate crop parameters for slider mode
         const widthMultiplier = image.naturalWidth / targetWidth;
         const sourceX = 0;
         const sourceY = 0;
-        const sourceWidth = cropX != null ? (cropX - offsetX) * widthMultiplier : image.naturalWidth;
+        const sourceWidth = cropX != null ? Math.max(0, (cropX - destX) * widthMultiplier) : image.naturalWidth;
         const sourceHeight = image.naturalHeight;
-        
-        const destX = (nodeWidth - targetWidth) / 2;
-        const destY = y + (availableHeight - targetHeight) / 2;
-        const destWidth = cropX != null ? cropX - offsetX : targetWidth;
+        const destWidth = cropX != null ? Math.max(0, cropX - destX) : targetWidth;
         const destHeight = targetHeight;
 
         ctx.save();
         
-        if (cropX) {
-            ctx.beginPath();
-            ctx.rect(destX, destY, destWidth, destHeight);
-            ctx.clip();
+        // Clip to ensure image stays within bounds
+        ctx.beginPath();
+        ctx.rect(padding, y + padding, usableWidth, usableHeight);
+        ctx.clip();
+        
+        if (cropX && cropX > destX) {
+            // Draw cropped portion for slider mode
+            ctx.drawImage(
+                image,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                destX, destY, destWidth, destHeight
+            );
+        } else {
+            // Draw full image
+            ctx.drawImage(
+                image,
+                0, 0, image.naturalWidth, image.naturalHeight,
+                destX, destY, targetWidth, targetHeight
+            );
         }
         
-        ctx.drawImage(
-            image,
-            sourceX, sourceY, sourceWidth, sourceHeight,
-            destX, destY, destWidth, destHeight
-        );
-        
         // Draw slider line
-        if (cropX != null && cropX >= (nodeWidth - targetWidth) / 2 && cropX <= targetWidth + offsetX) {
+        if (cropX != null && cropX > destX && cropX < destX + targetWidth) {
             ctx.beginPath();
             ctx.moveTo(cropX, destY);
-            ctx.lineTo(cropX, destY + destHeight);
+            ctx.lineTo(cropX, destY + targetHeight);
             ctx.globalCompositeOperation = "difference";
             ctx.strokeStyle = "rgba(255,255,255,1)";
             ctx.lineWidth = 2;
@@ -950,33 +1029,39 @@ class AdvancedImageComparerWidget {
 
         const image = imageData.img;
         const halfWidth = nodeWidth / 2;
-        const padding = 2; // Small padding between images
-        const usableWidth = halfWidth - padding;
-        
-        // Ensure minimum size for visibility
-        const minSize = 100;
-        const effectiveHeight = Math.max(availableHeight, minSize);
-        const effectiveWidth = Math.max(usableWidth, minSize / 2);
+        const padding = 3; // Minimal padding from edges for maximum image space
+        const separatorWidth = 1; // Thin center separator
+        const usableWidth = halfWidth - padding - (separatorWidth / 2);
+        const usableHeight = availableHeight - (padding * 2);
         
         const imageAspect = image.naturalWidth / image.naturalHeight;
-        const widgetAspect = effectiveWidth / effectiveHeight;
+        const usableAspect = usableWidth / usableHeight;
         
         let targetWidth, targetHeight;
         
-        if (imageAspect > widgetAspect) {
-            targetWidth = effectiveWidth;
-            targetHeight = effectiveWidth / imageAspect;
+        // Scale to fill most of the available half-space
+        if (imageAspect > usableAspect) {
+            targetWidth = usableWidth;
+            targetHeight = usableWidth / imageAspect;
         } else {
-            targetHeight = effectiveHeight;
-            targetWidth = effectiveHeight * imageAspect;
+            targetHeight = usableHeight;
+            targetWidth = usableHeight * imageAspect;
         }
 
+        // Position images in their respective halves
         const destX = imageIndex === 0 ? 
-            (halfWidth - targetWidth) / 2 : 
-            halfWidth + padding + (usableWidth - targetWidth) / 2;
-        const destY = y + (availableHeight - targetHeight) / 2;
+            padding + (usableWidth - targetWidth) / 2 : 
+            halfWidth + (separatorWidth / 2) + padding + (usableWidth - targetWidth) / 2;
+        const destY = y + padding + (usableHeight - targetHeight) / 2;
 
         ctx.save();
+        
+        // Clip to respective half to prevent overlap
+        const clipX = imageIndex === 0 ? 0 : halfWidth + (separatorWidth / 2);
+        const clipWidth = imageIndex === 0 ? halfWidth - (separatorWidth / 2) : halfWidth - (separatorWidth / 2);
+        ctx.beginPath();
+        ctx.rect(clipX, y, clipWidth, availableHeight);
+        ctx.clip();
         
         // Draw image
         ctx.drawImage(
@@ -986,24 +1071,26 @@ class AdvancedImageComparerWidget {
         );
         
         // Draw label
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(destX, destY, 20, 20);
+        ctx.fillStyle = "rgba(0,0,0,0.8)";
+        ctx.fillRect(destX, destY, 25, 18);
         ctx.fillStyle = "white";
-        ctx.font = "12px Arial";
+        ctx.font = "11px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(imageData.name, destX + 10, destY + 14);
+        ctx.fillText(imageData.name, destX + 12, destY + 13);
         
-        // Draw separator line
-        if (imageIndex === 0) {
-            ctx.beginPath();
-            ctx.moveTo(halfWidth, y);
-            ctx.lineTo(halfWidth, y + availableHeight);
-            ctx.strokeStyle = "rgba(255,255,255,0.5)";
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        }
-
         ctx.restore();
+        
+        // Draw separator line (only once for the first image)
+        if (imageIndex === 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(halfWidth, y + padding);
+            ctx.lineTo(halfWidth, y + availableHeight - padding);
+            ctx.strokeStyle = "rgba(255,255,255,0.5)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 
     drawImageStacked(ctx, imageData, y, nodeWidth, availableHeight, imageIndex) {
@@ -1013,33 +1100,38 @@ class AdvancedImageComparerWidget {
 
         const image = imageData.img;
         const halfHeight = availableHeight / 2;
-        const padding = 2; // Small padding between images
-        const usableHeight = halfHeight - padding;
-        
-        // Ensure minimum size for visibility
-        const minSize = 100;
-        const effectiveHeight = Math.max(usableHeight, minSize / 2);
-        const effectiveWidth = Math.max(nodeWidth, minSize);
+        const padding = 3; // Minimal padding from edges for maximum image space
+        const separatorHeight = 1; // Thin center separator
+        const usableWidth = nodeWidth - (padding * 2);
+        const usableHeight = halfHeight - padding - (separatorHeight / 2);
         
         const imageAspect = image.naturalWidth / image.naturalHeight;
-        const widgetAspect = effectiveWidth / effectiveHeight;
+        const usableAspect = usableWidth / usableHeight;
         
         let targetWidth, targetHeight;
         
-        if (imageAspect > widgetAspect) {
-            targetWidth = effectiveWidth;
-            targetHeight = effectiveWidth / imageAspect;
+        // Scale to fill most of the available half-space
+        if (imageAspect > usableAspect) {
+            targetWidth = usableWidth;
+            targetHeight = usableWidth / imageAspect;
         } else {
-            targetHeight = effectiveHeight;
-            targetWidth = effectiveHeight * imageAspect;
+            targetHeight = usableHeight;
+            targetWidth = usableHeight * imageAspect;
         }
 
-        const destX = (nodeWidth - targetWidth) / 2;
+        const destX = padding + (usableWidth - targetWidth) / 2;
         const destY = imageIndex === 0 ? 
-            y + (halfHeight - targetHeight) / 2 : 
-            y + halfHeight + padding + (usableHeight - targetHeight) / 2;
+            y + padding + (usableHeight - targetHeight) / 2 : 
+            y + halfHeight + (separatorHeight / 2) + padding + (usableHeight - targetHeight) / 2;
 
         ctx.save();
+        
+        // Clip to respective half to prevent overlap
+        const clipY = imageIndex === 0 ? y : y + halfHeight + (separatorHeight / 2);
+        const clipHeight = imageIndex === 0 ? halfHeight - (separatorHeight / 2) : halfHeight - (separatorHeight / 2);
+        ctx.beginPath();
+        ctx.rect(0, clipY, nodeWidth, clipHeight);
+        ctx.clip();
         
         // Draw image
         ctx.drawImage(
@@ -1049,24 +1141,26 @@ class AdvancedImageComparerWidget {
         );
         
         // Draw label
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(destX, destY, 20, 20);
+        ctx.fillStyle = "rgba(0,0,0,0.8)";
+        ctx.fillRect(destX, destY, 25, 18);
         ctx.fillStyle = "white";
-        ctx.font = "12px Arial";
+        ctx.font = "11px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(imageData.name, destX + 10, destY + 14);
+        ctx.fillText(imageData.name, destX + 12, destY + 13);
         
-        // Draw separator line
-        if (imageIndex === 0) {
-            ctx.beginPath();
-            ctx.moveTo(0, y + halfHeight);
-            ctx.lineTo(nodeWidth, y + halfHeight);
-            ctx.strokeStyle = "rgba(255,255,255,0.5)";
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        }
-
         ctx.restore();
+        
+        // Draw separator line (only once for the first image)
+        if (imageIndex === 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(padding, y + halfHeight);
+            ctx.lineTo(nodeWidth - padding, y + halfHeight);
+            ctx.strokeStyle = "rgba(255,255,255,0.5)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 
     drawOnionSkinMode(ctx, y, width, availableHeight) {
@@ -1087,41 +1181,41 @@ class AdvancedImageComparerWidget {
     computeSize(width) {
         const mode = this.node?.properties?.comparer_mode || "Slider";
         
-        // Base height calculation - reduced minimum sizes for better sizing flexibility
-        let height = Math.max(150, width * 0.5); // Reduced from 300 and 0.75
+        // Base height calculation - extra generous sizing for prominent image display  
+        let height = Math.max(500, width * 1.0); // Extra large for prominent image preview
         
         // Adjust height based on layout mode
         switch (mode) {
             case "Stacked":
                 // Stacked mode needs more height to show both images vertically
-                height = Math.max(200, width * 0.8); // Reduced from 500 and 1.2
+                height = Math.max(700, width * 1.5); // Extra large for prominent stacked viewing
                 break;
             case "Side-by-Side":
-                // Side-by-side can use standard height but smaller than before
-                height = Math.max(120, width * 0.4); // Reduced from 300 and 0.6
+                // Side-by-side needs generous height for both images
+                height = Math.max(500, width * 1.0); // Larger for prominent side-by-side viewing
                 break;
             case "Grid":
                 // Grid mode needs more height to show multiple pairs
                 const pairs = Math.min(this.maxPairs || 1, 64);
                 const cols = Math.ceil(Math.sqrt(pairs * 2));
                 const rows = Math.ceil((pairs * 2) / cols);
-                height = Math.max(180, (width / cols) * rows + 60); // Reduced from 400 and 80
+                height = Math.max(500, (width / cols) * rows + 100); // Larger for better grid visibility
                 break;
             case "Carousel":
-                // Carousel mode uses standard height plus controls
-                height = Math.max(150, width * 0.4 + 60); // Reduced from 350, 0.6, and 80
+                // Carousel mode uses generous height for prominent image display
+                height = Math.max(450, width * 0.9 + 100); // Larger for prominent carousel viewing
                 break;
             case "Batch":
                 // Batch mode shows multiple pairs vertically
                 const visiblePairs = Math.min(this.maxPairs || 1, 3);
-                height = Math.max(200, visiblePairs * (width * 0.3) + 60); // Reduced from 500, 0.4, and 80
+                height = Math.max(550, visiblePairs * (width * 0.6) + 100); // Larger for prominent batch viewing
                 break;
             case "Onion Skin":
-                height = Math.max(150, width * 0.5); // Reduced from 300 and 0.75
+                height = Math.max(400, width * 0.9); // Larger for prominent onion skin viewing
                 break;
             default:
-                // Slider and Click modes use standard height but smaller
-                height = Math.max(150, width * 0.5); // Reduced from 300 and 0.75
+                // Slider and Click modes use generous height for prominent display
+                height = Math.max(400, width * 0.9); // Larger for prominent image visibility
                 break;
         }
         
@@ -1163,7 +1257,7 @@ class AdvancedImageComparerWidget {
                     this.currentPairIndex = imageIndex;
                     node.properties.comparer_mode = "Carousel";
                     node.layoutWidget.value = "Carousel";
-                    node.setSize(node.computeSize());
+                    node.updateControlsVisibility();
                     node.setDirtyCanvas(true, false);
                     return true;
                 }
@@ -1245,6 +1339,7 @@ app.registerExtension({
             
             // Add layout control widget
             this.layoutWidget = this.addWidget("combo", "Layout Mode", this.properties.comparer_mode, (value) => {
+                console.log(`[AdvancedImageComparer] Layout mode changed to: ${value}`);
                 this.properties.comparer_mode = value;
                 
                 // Show/hide controls based on mode
@@ -1333,7 +1428,9 @@ app.registerExtension({
             // Initialize controls visibility
             this.updateControlsVisibility();
             
-            this.setSize(this.computeSize());
+            // Set an extra large initial size optimized for prominent image display
+            // Use a very large default size that provides ample space for image previews
+            this.setSize([700, 600]); // Extra large initial size for prominent image display
             this.setDirtyCanvas(true, true);
         };
 
@@ -1345,14 +1442,16 @@ app.registerExtension({
             // Show batch selector for modes that need individual pair selection
             const showBatchSelector = hasMultiplePairs && ["Slider", "Click", "Side-by-Side", "Stacked", "Onion Skin"].includes(mode);
             
-            // Show carousel controls for carousel mode
-            const showCarouselControls = mode === "Carousel" && hasMultiplePairs;
+            // Show carousel controls for carousel mode - always show if mode is Carousel (even with single pair for consistency)
+            const showCarouselControls = mode === "Carousel";
             
             // Show batch pagination controls for batch mode with multiple pages
             const showBatchPagination = mode === "Batch" && this.comparerWidget && this.comparerWidget.maxBatchPages > 1;
             
             // Show Onion Skin opacity slider for Onion Skin mode
             const showOnionSkinSlider = mode === "Onion Skin";
+            
+            console.log(`[AdvancedImageComparer] updateControlsVisibility: mode=${mode}, hasMultiplePairs=${hasMultiplePairs}, showCarouselControls=${showCarouselControls}`);
             
             // Update batch selector
             if (this.batchSelectorWidget) {
@@ -1411,26 +1510,27 @@ app.registerExtension({
         // Override computeSize to account for the widget
         const originalComputeSize = nodeType.prototype.computeSize;
         nodeType.prototype.computeSize = function(out) {
-            const size = originalComputeSize ? originalComputeSize.apply(this, arguments) : [200, 100]; // Reduced defaults
+            const size = originalComputeSize ? originalComputeSize.apply(this, arguments) : [700, 600]; // Extra large defaults for prominent image display
             if (this.comparerWidget) {
                 const widgetSize = this.comparerWidget.computeSize(size[0]);
                 
-                // Calculate additional space needed for controls - reduced padding
-                let extraHeight = 40; // Base padding for layout widget + title bar
+                // Calculate additional space needed for controls - increased padding for better layout
+                let extraHeight = 60; // Increased base padding for layout widget + title bar
                 
                 const mode = this.properties.comparer_mode;
                 const hasMultiplePairs = this.comparerWidget.maxPairs > 1;
                 
-                if (mode === "Carousel" && hasMultiplePairs) {
-                    extraHeight += 90; // Reduced from 120 for carousel controls
+                if (mode === "Carousel") {
+                    // Always show carousel controls when in carousel mode
+                    extraHeight += 120; // Restored height for carousel controls
                 } else if (["Slider", "Click", "Side-by-Side", "Stacked"].includes(mode) && hasMultiplePairs) {
-                    extraHeight += 25; // Reduced from 30 for batch selector
+                    extraHeight += 35; // Increased for batch selector
                 } else if (mode === "Batch" && this.comparerWidget.maxBatchPages > 1) {
-                    extraHeight += 70; // Reduced from 90 for batch pagination
+                    extraHeight += 90; // Restored for batch pagination
                 } else if (mode === "Onion Skin") {
-                    extraHeight += 25; // Reduced from 30 for opacity slider
+                    extraHeight += 35; // Increased for opacity slider
                     if (hasMultiplePairs) {
-                        extraHeight += 25; // Reduced from 30 for batch selector
+                        extraHeight += 35; // Increased for batch selector
                     }
                 }
                 
@@ -1464,6 +1564,30 @@ app.registerExtension({
                     
                     if (this.comparerWidget) {
                         this.comparerWidget.value = { images: images };
+                        
+                        // Ensure the node is large enough for prominent image display - be very aggressive
+                        const currentSize = this.size;
+                        const minWidth = 700;   // Even larger minimum for prominent image display
+                        const minHeight = 600;  // Even larger minimum for prominent image display
+                        
+                        // Always ensure adequate size for prominent display
+                        const newSize = [
+                            Math.max(currentSize[0], minWidth),
+                            Math.max(currentSize[1], minHeight)
+                        ];
+                        
+                        // Always apply the sizing to ensure prominence - immediately
+                        console.log(`[AdvancedImageComparer] Ensuring prominent display size from [${currentSize[0]}, ${currentSize[1]}] to [${newSize[0]}, ${newSize[1]}]`);
+                        this.setSize(newSize);
+                        
+                        // Force immediate complete layout refresh
+                        this.setDirtyCanvas(true, true);
+                        
+                        // Force additional delayed refresh to ensure proper sizing
+                        setTimeout(() => {
+                            this.setDirtyCanvas(true, true);
+                        }, 100);
+                        
                         this.setDirtyCanvas(true, false);
                     } else {
                         console.error("[AdvancedImageComparer] No comparerWidget found on node!");
@@ -1564,6 +1688,7 @@ app.registerExtension({
                 layoutSubmenu.push({
                     content: `${mode === currentMode ? "✓ " : ""}${mode}`,
                     callback: () => {
+                        console.log(`[AdvancedImageComparer] Context menu mode change to: ${mode}`);
                         this.properties.comparer_mode = mode;
                         if (this.layoutWidget) {
                             this.layoutWidget.value = mode;
@@ -1590,6 +1715,7 @@ app.registerExtension({
                     options.push({
                         content: `Switch to ${mode}`,
                         callback: () => {
+                            console.log(`[AdvancedImageComparer] Quick switch to: ${mode}`);
                             this.properties.comparer_mode = mode;
                             if (this.layoutWidget) {
                                 this.layoutWidget.value = mode;
@@ -1633,7 +1759,8 @@ app.registerExtension({
                 {
                     content: "Reset to Default Size",
                     callback: () => {
-                        this.setSize(this.computeSize());
+                        // Reset to extra large default size optimized for prominent image display
+                        this.setSize([700, 600]);
                         this.setDirtyCanvas(true, false);
                     }
                 }
