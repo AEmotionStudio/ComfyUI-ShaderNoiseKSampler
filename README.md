@@ -370,14 +370,7 @@ Embark on a journey down the unseen path, exploring uncharted territories within
 
 ## 🤝 Contributing
 
-Contributions are welcome! Whether it's bug reports, feature suggestions, or pull requests, your help is appreciated.
-
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/AmazingFeature`).
-3.  Make your changes.
-4.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-5.  Push to the branch (`git push origin feature/AmazingFeature`).
-6.  Open a Pull Request.
+Contributions are welcome! Please see the [contributing guidelines](CONTRIBUTING.md) for more information on how to get started.
 
 ## 🙏 Acknowledgements
 
