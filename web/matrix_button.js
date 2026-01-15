@@ -144,6 +144,11 @@ import { app } from "../../scripts/app.js";
                     const button = self.addWidget("button", "📊 Show Shader Matrix", null, function() {
                         // Create modal container
                         const modal = document.createElement("div");
+                        // Accessibility attributes for the modal
+                        modal.setAttribute('role', 'dialog');
+                        modal.setAttribute('aria-modal', 'true');
+                        modal.setAttribute('aria-label', 'Shader Matrix Documentation');
+
                         modal.style.cssText = `
                             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
                             background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(26,13,52,0.95));
@@ -959,7 +964,7 @@ import { app } from "../../scripts/app.js";
                             </style>
                             
                             <!-- This button is handled by the closeModalCleanup logic if class matches -->
-                            <button class="close-button" title="Close" style="position: absolute; top: 15px; right: 15px; width: 30px; height: 30px; border-radius: 50%; background: rgba(var(--accent-color), 0.7); color: white; border: none; font-size: 1.2rem; z-index: 100; display: flex; align-items:center; justify-content:center; line-height:1;">×</button>
+                            <button class="close-button" aria-label="Close" title="Close" style="position: absolute; top: 15px; right: 15px; width: 30px; height: 30px; border-radius: 50%; background: rgba(var(--accent-color), 0.7); color: white; border: none; font-size: 1.2rem; z-index: 100; display: flex; align-items:center; justify-content:center; line-height:1;">×</button>
                             
                             <div id="canvas-container"></div>
     
@@ -2978,7 +2983,7 @@ def apply_color_to_noise(noise_tensor, shader_params):
 </div>
                             </footer>
                         
-                            <button id="scroll-top" title="Go to top">↑</button>
+                            <button id="scroll-top" aria-label="Scroll to top" title="Go to top">↑</button>
                             
                             <!-- Scripts temporarily removed for debugging linter errors -->
                             
@@ -2996,6 +3001,15 @@ def apply_color_to_noise(noise_tensor, shader_params):
                         
                         modal.appendChild(content);
                         document.body.appendChild(modal);
+
+                        // Accessibility: Set focus to the close button when modal opens
+                        // Using a small timeout to ensure DOM insertion is complete and to play nice with screen readers
+                        setTimeout(() => {
+                            const closeBtn = content.querySelector('.close-button');
+                            if (closeBtn) {
+                                closeBtn.focus();
+                            }
+                        }, 50);
                         
                         // Call the renderer for noise visualizations
                         if (window.NoiseVisualizer && window.NoiseVisualizer.renderAllInModal) {
