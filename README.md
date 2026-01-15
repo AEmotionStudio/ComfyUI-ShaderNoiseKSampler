@@ -8,28 +8,28 @@
 
 ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that blends standard noise generation with a multi-stage shader-based system. Unlike traditional sampling that teleports randomly between different seeds, this tool provides a structured vehicle for exploring the neighborhood around a chosen seed, using mathematical patterns to navigate along coherent paths through latent space.
 
-![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_display.webp)
+![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler_display.webp)
 
 > [!TIP]
 > Perfect for artists and researchers looking to explore the latent space with more intention, sculpt image features with mathematical precision, and achieve unique visual styles through deliberate exploration rather than random discovery. (Using a fixed seed is key to this deliberate exploration, allowing you to systematically investigate the variations around a chosen starting point.)
 
-![ShaderNoiseKSampler Showcase PNG](images/shader_noise_ksampler.png)
+![ShaderNoiseKSampler Showcase PNG](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler.png)
 
 > [!IMPORTANT]
 >The Shader Noise KSampler contains a shader display and requires saving, while the Shader Noise KSampler (Direct) *does not* contain a shader display and *does not* require saving. The shader display will help you better understand the parameter controls visually, while the (Direct) version is better for ideation and enables finer control over input values.
 
 **Shader Noise KSampler**
-![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_save.webp)
+![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler_save.webp)
 **(Only parameters with 🔄 require saving if changed)**
 
 **Shader Noise KSampler (Direct)**
-![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_direct.webp)
+![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler_direct.webp)
 **(No saving required but does not have a shader display for visualizing the shader noise patterns)**
 
 ## 🚀 Recent Updates
 
 - **Comparer Auto-Fill - 6/12/25**: Both the `Advanced Image Comparer` and `Video Comparer` nodes now feature an `auto_fill` toggle. This addition streamlines your workflow by allowing you to compare with a single input. When `auto_fill` is enabled (the default setting), any empty image or video slot will be automatically populated with the output from the previous generation. This makes iterative A/B testing—comparing your latest creation to the one right before it—faster and more intuitive. It does not pull from your output folder but from the cached images or videos of your current session.
-![Video Comparer Updated WEBP](images/video_comparer_updated.webp)
+![Video Comparer Updated WEBP](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/video_comparer_updated.webp)
 
 ## 🧭 Navigating the Seed Universe
 
@@ -46,18 +46,18 @@ The shader noise is your map and the shader parameters (like Noise Scale, Octave
 
 The core innovation is treating latent space as a territory to be explored rather than a lottery to be played - turning the act of AI image generation into a journey of deliberate artistic discovery guided by the elegant language of mathematical patterns.
 
-![ShaderNoiseKSampler Shader Vehicle](images/I_dont_care_what_you_think_this_shit_rips.webp)
+![ShaderNoiseKSampler Shader Vehicle](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/I_dont_care_what_you_think_this_shit_rips.webp)
 
 **Regular KSampler Seed Travel vs Regular Shader Noise KSampler Seed Travel**
-![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_compare.webp)
+![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler_compare.webp)
 *(Same settings are used in both samplers)*
 
 **Shader Noise Neighboorhood Seed Travel**
-![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_seed_1.webp)
+![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler_seed_1.webp)
 *(Same settings are used in both samplers)*
 
 **Shader Noise KSampler Palettes**
-![ShaderNoiseKSampler Showcase WEBP](images/shader_noise_ksampler_palettes.webp)
+![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler_palettes.webp)
 *(Each shader noise palette offers a unique lens into latent space)*
 
 ## 🔮 The Innovation: Controllable Noise
@@ -74,7 +74,7 @@ This controlled noise approach bridges the gap between the deterministic world o
 
 ## 📖 The Shader Matrix: In-Depth Documentation
 
-![ShaderNoiseKSampler Shader Matrix](images/shader_noise_ksampler_matrix.webp)
+![ShaderNoiseKSampler Shader Matrix](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/shader_noise_ksampler_matrix.webp)
 
 A core feature of this project is the **"📊 Show Shader Matrix"** button available on the `ShaderNoiseKSampler` (and related) nodes. Clicking this button opens an extensive, self-contained modal dialog—The Shader Matrix—which provides:
 
@@ -115,7 +115,7 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 
 ComfyUI-ShaderNoiseKSampler includes an `AdvancedImageComparer` node, a versatile utility for visually comparing two images or batches of images directly within your workflow. This node is invaluable for evaluating the subtle (or significant) differences produced by varying parameters, seeds, or even different models.
 
-![Advanced Image Comparer Showcase](images/advanced_image_comparer_showcase.webp) *
+![Advanced Image Comparer Showcase](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/advanced_image_comparer_showcase.webp) *
 
 ### Features:
 
@@ -153,7 +153,7 @@ This tool is designed to enhance your A/B testing and iterative refinement proce
 
 The `VideoComparer` node provides a powerful way to visually compare two videos directly within your ComfyUI workflow. This node is perfect for comparing different generation settings, model outputs, or any video-related experiments you're conducting.
 
-![Video Comparer Showcase](images/video_comparer_showcase.webp) *
+![Video Comparer Showcase](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/video_comparer_showcase.webp) *
 
 ### Features:
 
@@ -318,15 +318,15 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 
 **Domain Warp**
 
-![Domain Warp Noise Preview](images/domain_warp_preview.webp)
+![Domain Warp Noise Preview](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/domain_warp_preview.webp)
 
 **Tensor Field**
 
-![Tensor Field Noise Preview](images/tensor_field_preview.webp)
+![Tensor Field Noise Preview](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/tensor_field_preview.webp)
 
 **Curl Noise**
 
-![Curl Noise Preview](images/curl_noise_preview.webp)
+![Curl Noise Preview](https://github.com/AEmotionStudio/ComfyUI-DiscordSend/releases/download/assets-v1/curl_noise_preview.webp)
 
 -   **Blend Modes**: Determine how the crafted shader noise interacts with the underlying base noise. `Multiply` can create depth, `Add` can introduce highlights, and `Overlay` can enhance contrast.
 -   **Noise Transformations**: Apply mathematical functions like `absolute` (creates ridges), `sin` (creates bands), or `sqrt` (compresses highlights) to the raw shader noise before blending, dramatically altering its characteristics.
