@@ -338,61 +338,79 @@ class ShaderParamsReader:
     @staticmethod
     def _interpolate_colors(stops, t):
         """
-        Interpolate colors based on stops.
+        Interpolate colors based on stops using vectorized operations.
         t is a normalized value tensor [B, 1, H, W] in [0,1] range.
         stops: list of [value, color_tuple_or_tensor e.g. (R,G,B) or [1,3,1,1] tensor].
-        Returns R, G, B components, each as [B, 1, H, W] in [0,1] range (if stops are [0,1]).
+        Returns R, G, B components, each as [B, 1, H, W] in [0,1] range.
         """
         device = t.device
         dtype = t.dtype
         
-        processed_stops = []
+        # Prepare stops tensors
+        stop_vals = []
+        stop_colors = []
+
         for val, color_val in stops:
+            stop_vals.append(float(val))
             if isinstance(color_val, (list, tuple)):
                 c_tensor = torch.tensor(color_val, device=device, dtype=dtype).view(1, 3, 1, 1)
-            else: # assume it's already a tensor of shape [1,3,1,1] or broadcastable
+            else: # assume it's already a tensor
                 c_tensor = color_val.to(device=device, dtype=dtype)
-                if len(c_tensor.shape) == 1 and c_tensor.shape[0] == 3: # e.g. torch.tensor([r,g,b])
+                if c_tensor.numel() == 3:
                     c_tensor = c_tensor.view(1, 3, 1, 1)
-            processed_stops.append((float(val), c_tensor))
+            stop_colors.append(c_tensor)
 
-        # Initialize final_color based on t's shape [B, 1, H, W] -> output [B, 3, H, W]
-        final_color = torch.zeros((t.shape[0], 3, t.shape[2], t.shape[3]), device=device, dtype=dtype)
+        # Create tensors for bucketize/gather
+        stop_vals_tensor = torch.tensor(stop_vals, device=device, dtype=dtype)
+        # Concatenate colors to [num_stops, 3] for indexing (remove spatial dims for now)
+        stop_colors_stack = torch.cat([c.view(1, 3) for c in stop_colors], dim=0)
         
-        for i in range(len(processed_stops) - 1):
-            t0, c0 = processed_stops[i]    # c0 is [1, 3, 1, 1]
-            t1, c1 = processed_stops[i+1]  # c1 is [1, 3, 1, 1]
-            
-            # Mask for pixels in the current segment
-            if i == len(processed_stops) - 2: # Last segment includes t1
-                segment_mask = (t >= t0) & (t <= t1)
-            else: # Other segments are [t0, t1)
-                segment_mask = (t >= t0) & (t < t1)
+        # Find indices where elements should be inserted to maintain order
+        # bucketize returns indices such that stop_vals[i-1] <= t < stop_vals[i]
+        indices = torch.bucketize(t, stop_vals_tensor)
 
-            # Normalize t within the segment [t0, t1] -> [0, 1]
-            denominator = (t1 - t0)
-            # Avoid division by zero if t0 == t1
-            safe_denominator = torch.where(torch.abs(denominator) < 1e-8, torch.sign(denominator) * 1e-8 + 1e-8 * (1.0 - torch.abs(torch.sign(denominator))), denominator)
-            
-            local_t = (t - t0) / safe_denominator
-            local_t_clamped = torch.clamp(local_t, 0.0, 1.0) # Shape [B, 1, H, W]
-            
-            # Lerp colors. c0, c1 are [1,3,1,1], local_t_clamped is [B,1,H,W]
-            # Resulting interp_color_segment will be [B,3,H,W]
-            interp_color_segment = ShaderParamsReader._lerp(c0, c1, local_t_clamped)
-            
-            # Apply using segment_mask (expanded to [B,3,H,W])
-            final_color = torch.where(segment_mask.expand_as(interp_color_segment), interp_color_segment, final_color)
+        # Clamp indices to be within [1, num_stops-1]
+        # This ensures we always have a valid previous stop (idx-1) and current stop (idx)
+        # For t < stops[0], indices=0 -> clamped to 1. Uses segment (stops[0], stops[1]).
+        # For t >= stops[-1], indices=num_stops -> clamped to num_stops-1. Uses segment (stops[-2], stops[-1]).
+        idxs = torch.clamp(indices, 1, len(stops) - 1)
 
-        # Handle cases where t is outside the defined stops range
-        mask_below_first = t < processed_stops[0][0]
-        first_color_expanded = processed_stops[0][1].expand_as(final_color)
-        final_color = torch.where(mask_below_first.expand_as(final_color), first_color_expanded, final_color)
+        # Gather start and end values/colors for each pixel's segment
+        # idxs is [B, 1, H, W], stop_vals_tensor is [N]
+        # Advanced indexing: we want result [B, 1, H, W]
+        # Flatten t and idxs for simpler gathering if needed, but PyTorch handles this
+
+        t0 = stop_vals_tensor[idxs - 1] # [B, 1, H, W]
+        t1 = stop_vals_tensor[idxs]     # [B, 1, H, W]
+
+        # Gather colors
+        # stop_colors_stack is [N, 3]. idxs is [B, 1, H, W]
+        # c0 will be [B, 1, H, W, 3]
+        c0 = stop_colors_stack[idxs - 1]
+        c1 = stop_colors_stack[idxs]
+
+        # Permute to [B, 3, H, W] and squeeze singleton dimension from original idxs indexing
+        # Note: Indexing with [B, 1, H, W] into [N, 3] creates [B, 1, H, W, 3]
+        c0 = c0.permute(0, 4, 2, 3, 1).squeeze(-1) # [B, 3, H, W]
+        c1 = c1.permute(0, 4, 2, 3, 1).squeeze(-1) # [B, 3, H, W]
+
+        # Calculate local interpolation factor
+        denominator = (t1 - t0)
+        # Avoid division by zero
+        safe_denominator = torch.where(torch.abs(denominator) < 1e-8, torch.ones_like(denominator), denominator)
+
+        local_t = (t - t0) / safe_denominator
+        local_t = torch.clamp(local_t, 0.0, 1.0) # [B, 1, H, W]
+
+        # Interpolate
+        # c0, c1 are [B, 3, H, W], local_t is [B, 1, H, W] (broadcasts)
+        final_color = ShaderParamsReader._lerp(c0, c1, local_t)
+
+        # Handle strict out of bounds values (below first stop or above last stop)
+        # If t < stop[0], local_t was computed relative to stop[0] and stop[1].
+        # It will be negative, clamped to 0. So result = c0 = stop[0]. Correct.
+        # If t > stop[-1], local_t > 1, clamped to 1. Result = c1 = stop[-1]. Correct.
         
-        mask_above_last = t > processed_stops[-1][0]
-        last_color_expanded = processed_stops[-1][1].expand_as(final_color)
-        final_color = torch.where(mask_above_last.expand_as(final_color), last_color_expanded, final_color)
-
         return final_color[:, 0:1], final_color[:, 1:2], final_color[:, 2:3]
 
     @staticmethod
@@ -757,6 +775,7 @@ class ShaderParamsReader:
         result = noise_tensor * (1.0 - color_intensity) + color_tensor * color_intensity
         print(f"Applied {color_scheme} color scheme - result shape: {result.shape}")
         return result
+
 
     @staticmethod
     def apply_shape_mask(coords_normalized_01, shape_type, time=0.0, base_seed=0, use_temporal_coherence=False):
