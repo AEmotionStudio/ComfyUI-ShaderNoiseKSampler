@@ -76,7 +76,25 @@ class ShaderParamsReader:
         
         # Path to the shader_params.json file (default or custom)
         if custom_path:
-            params_file = custom_path
+            # Security check for path traversal - resolve symlinks
+            try:
+                resolved_path = os.path.realpath(custom_path)
+                extension_real_path = os.path.realpath(EXTENSION_DIR)
+
+                # Allow paths strictly inside the extension directory
+                # os.path.commonpath raises ValueError on Windows if drives differ
+                is_safe = os.path.commonpath([resolved_path, extension_real_path]) == extension_real_path
+            except (ValueError, OSError):
+                is_safe = False
+
+            if not is_safe:
+                print(f"SECURITY WARNING: Prevented access to external file: {custom_path}")
+                # Fallback to default path instead of opening potentially dangerous file
+                params_file = os.path.join(EXTENSION_DIR, "shader_params.json")
+                if not os.path.exists(params_file):
+                    params_file = os.path.join(EXTENSION_DIR, "data", "shader_params.json")
+            else:
+                params_file = resolved_path
         else:
             # Try to find params in root directory first
             params_file = os.path.join(EXTENSION_DIR, "shader_params.json")
