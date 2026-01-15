@@ -758,7 +758,7 @@ class ShaderParamsReader:
         print(f"Applied {color_scheme} color scheme - result shape: {result.shape}")
         return result
 
-    # ... (rest of the file with apply_shape_mask and legacy functions)
+
     @staticmethod
     def apply_shape_mask(coords_normalized_01, shape_type, time=0.0, base_seed=0, use_temporal_coherence=False):
         """
