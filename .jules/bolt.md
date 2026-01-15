@@ -1,0 +1,3 @@
+## 2024-05-23 - Vectorized Color Interpolation
+**Learning:** The codebase contained loop-based color interpolation logic in `ShaderParamsReader` and `CurlNoiseGenerator` which iterated over color stops and applied boolean masks for each segment. This is O(N*S) where N is pixels and S is stops.
+**Action:** Replaced with `torch.bucketize` and vector indexing/gathering to perform interpolation in a single vectorized pass O(N). This pattern should be applied whenever discretizing continuous values into bins/segments for interpolation in PyTorch.
