@@ -45,15 +45,24 @@ import { app } from "../../scripts/app.js";
             return; // Unknown tab structure
         }
 
-        tabsContainer.querySelectorAll(tabSelector).forEach(tab => tab.classList.remove('active'));
-        if (clickedTabElement) {
-            clickedTabElement.classList.add('active');
-        } else {
+        tabsContainer.querySelectorAll(tabSelector).forEach(tab => {
+            tab.classList.remove('active');
+            tab.setAttribute('aria-selected', 'false');
+            tab.setAttribute('tabindex', '-1');
+        });
+
+        let activeTab = clickedTabElement;
+        if (!activeTab) {
             // If no clicked element, try to find the tab by tabId (less robust)
-            const targetTab = Array.from(tabsContainer.querySelectorAll(tabSelector)).find(
+            activeTab = Array.from(tabsContainer.querySelectorAll(tabSelector)).find(
                 t => t.getAttribute('onclick') && t.getAttribute('onclick').includes(tabIdToActivate)
             );
-            if (targetTab) targetTab.classList.add('active');
+        }
+
+        if (activeTab) {
+            activeTab.classList.add('active');
+            activeTab.setAttribute('aria-selected', 'true');
+            activeTab.setAttribute('tabindex', '0');
         }
 
         if (contentScope) {
@@ -105,6 +114,31 @@ import { app } from "../../scripts/app.js";
         } else {
             preElement.style.display = 'none';
             buttonElement.textContent = 'Show';
+        }
+    };
+
+    window.handleTabNavigation = function(event, tabElement) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            tabElement.click();
+            return;
+        }
+
+        const tabs = Array.from(tabElement.parentElement.children).filter(child => child.classList.contains('tab'));
+        const index = tabs.indexOf(tabElement);
+        let nextIndex = -1;
+
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            nextIndex = (index + 1) % tabs.length;
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            nextIndex = (index - 1 + tabs.length) % tabs.length;
+        }
+
+        if (nextIndex !== -1) {
+            event.preventDefault();
+            const nextTab = tabs[nextIndex];
+            nextTab.focus();
+            nextTab.click(); // Optional: automatically activate the tab on focus
         }
     };
 
@@ -1294,22 +1328,22 @@ import { app } from "../../scripts/app.js";
                                     <h2>⚛️ Noise Mathematics <span class="sacred-symbol">📐</span> The Underlying Formulations</h2>
                                     <p>Each shader noise archetype in ShaderNoiseKSampler is built upon rigorous mathematical foundations. Understanding these mathematical principles reveals the sacred geometry inherent in these patterns and allows for more intentional application in the creative process.</p>
                                     
-                                    <div class="tabs">
-                                        <div class="tab active" onclick="window.showTab('tab-perlin', this)">Perlin</div>
-                                        <div class="tab" onclick="window.showTab('tab-cellular', this)">Cellular</div>
-                                        <div class="tab" onclick="window.showTab('tab-tensor', this)">Tensor Field</div>
-                                        <div class="tab" onclick="window.showTab('tab-curl', this)">Curl Noise</div>
-                                        <div class="tab" onclick="window.showTab('tab-domain-warp', this)">Domain Warp</div>
-                                        <div class="tab" onclick="window.showTab('tab-fractal', this)">Fractal</div>
-                                        <div class="tab" onclick="window.showTab('tab-waves', this)">Waves</div>
-                                        <div class="tab" onclick="window.showTab('tab-gaussian', this)">Gaussian</div>
-                                        <div class="tab" onclick="window.showTab('tab-heterogeneous-fbm', this)">Heterogeneous FBM</div>
-                                        <div class="tab" onclick="window.showTab('tab-interference', this)">Interference</div>
-                                        <div class="tab" onclick="window.showTab('tab-spectral', this)">Spectral</div>
-                                        <div class="tab" onclick="window.showTab('tab-projection-3d', this)">3D Projection</div>
+                                    <div class="tabs" role="tablist" aria-label="Noise Patterns">
+                                        <div class="tab active" role="tab" aria-selected="true" tabindex="0" aria-controls="tab-perlin" onclick="window.showTab('tab-perlin', this)" onkeydown="window.handleTabNavigation(event, this)">Perlin</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-cellular" onclick="window.showTab('tab-cellular', this)" onkeydown="window.handleTabNavigation(event, this)">Cellular</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-tensor" onclick="window.showTab('tab-tensor', this)" onkeydown="window.handleTabNavigation(event, this)">Tensor Field</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-curl" onclick="window.showTab('tab-curl', this)" onkeydown="window.handleTabNavigation(event, this)">Curl Noise</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-domain-warp" onclick="window.showTab('tab-domain-warp', this)" onkeydown="window.handleTabNavigation(event, this)">Domain Warp</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-fractal" onclick="window.showTab('tab-fractal', this)" onkeydown="window.handleTabNavigation(event, this)">Fractal</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-waves" onclick="window.showTab('tab-waves', this)" onkeydown="window.handleTabNavigation(event, this)">Waves</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-gaussian" onclick="window.showTab('tab-gaussian', this)" onkeydown="window.handleTabNavigation(event, this)">Gaussian</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-heterogeneous-fbm" onclick="window.showTab('tab-heterogeneous-fbm', this)" onkeydown="window.handleTabNavigation(event, this)">Heterogeneous FBM</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-interference" onclick="window.showTab('tab-interference', this)" onkeydown="window.handleTabNavigation(event, this)">Interference</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-spectral" onclick="window.showTab('tab-spectral', this)" onkeydown="window.handleTabNavigation(event, this)">Spectral</div>
+                                        <div class="tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-projection-3d" onclick="window.showTab('tab-projection-3d', this)" onkeydown="window.handleTabNavigation(event, this)">3D Projection</div>
                                     </div>
                                     
-                                    <div id="tab-perlin" class="tab-content active">
+                                    <div id="tab-perlin" role="tabpanel" class="tab-content active">
                                         <h3>Perlin Noise Mathematics</h3>
                                         <p>Perlin noise, developed by Ken Perlin in 1983, uses a grid of random gradient vectors with interpolation to create smooth, natural-looking noise. The core computation involves:</p>
                                         <div class="math-formula">
@@ -1369,7 +1403,7 @@ import { app } from "../../scripts/app.js";
                                         </div>
                                     </div>
                                     
-                                    <div id="tab-cellular" class="tab-content">
+                                    <div id="tab-cellular" role="tabpanel" class="tab-content">
                                         <h3>Cellular Noise Mathematics</h3>
                                         <p>Cellular noise (also known as Worley noise) creates Voronoi-like patterns based on distance metrics to feature points:</p>
                                         <div class="math-formula">
@@ -1424,7 +1458,7 @@ import { app } from "../../scripts/app.js";
                                         </div>
                                     </div>
                                     
-                                    <div id="tab-tensor" class="tab-content">
+                                    <div id="tab-tensor" role="tabpanel" class="tab-content">
                                         <h3>Tensor Field Mathematics</h3>
                                         <p>Tensor fields represent directional information at every point in space, creating flow-like patterns. The core mathematics involves computing the eigenvalues λ and eigenvectors v of tensor matrices:</p>
                                         <div class="math-formula">
@@ -1490,7 +1524,7 @@ import { app } from "../../scripts/app.js";
                                         </div>
                                     </div>
                                     
-                                    <div id="tab-curl" class="tab-content">
+                                    <div id="tab-curl" role="tabpanel" class="tab-content">
                                         <h3>Curl Noise Mathematics</h3>
                                         <p>Curl noise generates divergence-free vector fields, perfect for fluid-like motions. It\'s based on the curl operator from vector calculus:</p>
                                         <div class="math-formula">
@@ -1557,7 +1591,7 @@ import { app } from "../../scripts/app.js";
                                         </div>
                                     </div>
 
-                                    <div id="tab-domain-warp" class="tab-content">
+                                    <div id="tab-domain-warp" role="tabpanel" class="tab-content">
                                         <h3>Domain Warp Mathematics</h3>
                                         <p>Domain warping is a technique where the input coordinates (the domain) of a noise function are displaced or distorted by another noise function. This creates swirling, turbulent, or flowing effects in the final pattern. Instead of sampling noise at point P, we sample at P + offset(P), where offset(P) is itself a noise function.</p>
                                         <div class="math-formula">
@@ -1633,7 +1667,7 @@ def sample_perlin_like(coords, seed):
                                         </div>
                                     </div>
 
-                                    <div id="tab-fractal" class="tab-content">
+                                    <div id="tab-fractal" role="tabpanel" class="tab-content">
                                         <h3>Fractal Noise (FBM) Mathematics</h3>
                                         <p>Fractal noise, often implemented as Fractal Brownian Motion (FBM), is a fundamental technique for generating natural-looking textures. It is constructed by summing multiple layers (octaves) of a base noise function (like Perlin or Simplex). Each successive octave has a higher frequency and a lower amplitude.</p>
                                         <div class="math-formula">
@@ -1698,7 +1732,7 @@ def sample_perlin_like(coords, seed):
                                         </div>
                                     </div>
 
-                                    <div id="tab-waves" class="tab-content">
+                                    <div id="tab-waves" role="tabpanel" class="tab-content">
                                         <h3>Waves Noise Mathematics</h3>
                                         <p>Waves noise is typically generated by summing multiple sine or cosine wave functions. Each wave can have its own amplitude, frequency, phase, and direction. The superposition of these waves can create a wide variety_of_patterns, from simple ripples to complex interference effects.</p>
                                         <div class="math-formula">
@@ -1765,7 +1799,7 @@ def sample_perlin_like(coords, seed):
                                         </div>
                                     </div>
 
-                                    <div id="tab-gaussian" class="tab-content">
+                                    <div id="tab-gaussian" role="tabpanel" class="tab-content">
                                         <h3>Gaussian Noise Mathematics</h3>
                                         <p>Gaussian noise is a statistical noise characterized by a probability density function (PDF) that follows the Gaussian (or normal) distribution. Its values are typically clustered around a mean (μ), with a spread determined by the standard deviation (σ). In image processing, it's often used to simulate random sensor noise or as a basis for other effects.</p>
                                         <div class="math-formula">
@@ -1817,7 +1851,7 @@ def sample_perlin_like(coords, seed):
                                         </div>
                                     </div>
 
-                                    <div id="tab-heterogeneous-fbm" class="tab-content">
+                                    <div id="tab-heterogeneous-fbm" role="tabpanel" class="tab-content">
                                         <h3>Heterogeneous FBM Mathematics</h3>
                                         <p>Heterogeneous Fractal Brownian Motion (Hetero FBM) is an extension of standard FBM. While standard FBM uses constant parameters (like persistence/amplitude falloff and lacunarity/frequency gain) across all octaves and spatial locations, Hetero FBM allows these parameters, or the base noise characteristics, to vary spatially. This creates textures with non-uniform complexity, where some areas might be smoother and others rougher or more detailed.</p>
                                         <div class="math-formula">
@@ -1894,7 +1928,7 @@ def sample_perlin_like(coords, seed):
                                         </div>
                                     </div>
 
-                                    <div id="tab-interference" class="tab-content">
+                                    <div id="tab-interference" role="tabpanel" class="tab-content">
                                         <h3>Interference Noise Mathematics</h3>
                                         <p>Interference patterns arise from the superposition of two or more waves. When waves meet, they can reinforce each other (constructive interference) or cancel each other out (destructive interference), depending on their relative phases and amplitudes. This principle is fundamental in physics (e.g., light and sound waves) and can be used to generate complex visual patterns.</p>
                                         <div class="math-formula">
@@ -1979,7 +2013,7 @@ def sample_fbm_like(coords, octaves, seed, persistence, lacunarity):
                                         </div>
                                     </div>
 
-                                    <div id="tab-spectral" class="tab-content">
+                                    <div id="tab-spectral" role="tabpanel" class="tab-content">
                                         <h3>Spectral Noise Mathematics</h3>
                                         <p>Spectral noise generation involves directly defining or manipulating the noise's properties in the frequency domain (its spectrum) using techniques like the Fourier Transform. By controlling the amplitude and phase of different frequencies, a wide variety_of_textures can be created, from smooth to rough, or with specific directional biases.</p>
                                         <p>The general process is:</p>
@@ -2066,7 +2100,7 @@ def sample_fbm_like(coords, octaves, seed, persistence, lacunarity):
                                         </div>
                                     </div>
 
-                                    <div id="tab-projection-3d" class="tab-content">
+                                    <div id="tab-projection-3d" role="tabpanel" class="tab-content">
                                         <h3>3D Projection Noise Mathematics</h3>
                                         <p>3D Projection noise involves generating a 3D noise field (e.g., 3D Perlin, Simplex, or FBM) and then sampling a 2D slice from it. This technique creates 2D patterns that appear to have depth, volume, or temporal evolution if the slice position changes over time.</p>
                                         <div class="math-formula">
