@@ -27,7 +27,7 @@ function imageDataToUrl(data) {
         console.error("[VideoComparer] Invalid image data", data);
         return "";
     }
-    return api.apiURL(`/view?filename=${encodeURIComponent(data.filename)}&type=${data.type || ""}&subfolder=${data.subfolder || ""}${app.getPreviewFormatParam()}${app.getRandParam()}`);
+    return api.apiURL(`/view?filename=${encodeURIComponent(data.filename)}&type=${encodeURIComponent(data.type || "")}&subfolder=${encodeURIComponent(data.subfolder || "")}${app.getPreviewFormatParam()}${app.getRandParam()}`);
 }
 
 /**

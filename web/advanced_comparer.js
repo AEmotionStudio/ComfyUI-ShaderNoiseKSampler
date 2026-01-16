@@ -24,7 +24,7 @@ const CACHE = {
 };
 
 function imageDataToUrl(data) {
-    return api.apiURL(`/view?filename=${encodeURIComponent(data.filename)}&type=${data.type || ""}&subfolder=${data.subfolder || ""}${app.getPreviewFormatParam()}${app.getRandParam()}`);
+    return api.apiURL(`/view?filename=${encodeURIComponent(data.filename)}&type=${encodeURIComponent(data.type || "")}&subfolder=${encodeURIComponent(data.subfolder || "")}${app.getPreviewFormatParam()}${app.getRandParam()}`);
 }
 
 /**
