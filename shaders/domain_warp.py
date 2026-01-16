@@ -163,39 +163,52 @@ class DomainWarpGenerator:
 
         # Helper for color stops interpolation
         def interpolate_colors(stops, t, device):
-            # stops: list of [value, color_tensor]
+            # stops: list of [value, color_tensor/list]
             # t: normalized value tensor [B, 1, H, W]
             
-            # Find the two stops t falls between
-            idx = torch.zeros_like(t, dtype=torch.long)
-            for i in range(len(stops) - 1):
-                idx = torch.where((t >= stops[i][0]) & (t < stops[i+1][0]), torch.full_like(idx, i), idx)
-            idx = torch.where(t >= stops[-1][0], torch.full_like(idx, len(stops) - 2), idx) # Handle >= last stop value
+            # Optimized using bucketize for O(N) performance
+            num_stops = len(stops)
 
-            # Gather the start and end stops based on idx
-            # Initialize with target spatial shape, ensure first stop color tensor is on the correct device
-            final_color_shape = (t.shape[0], 3, t.shape[2], t.shape[3]) # B, C, H, W
-            final_color = torch.zeros(final_color_shape, device=device)
+            # Prepare boundaries and colors
+            boundaries = torch.tensor([s[0] for s in stops], device=device)
+
+            # Colors in stops can be lists or tensors in this file
+            # Need to handle both
+            color_tensors = []
+            for s in stops:
+                c = s[1]
+                if not isinstance(c, torch.Tensor):
+                    c = torch.tensor(c, device=device)
+                else:
+                    c = c.to(device)
+                color_tensors.append(c.view(3))
+
+            colors = torch.stack(color_tensors) # [S, 3]
+
+            # Find indices
+            bucket_indices = torch.bucketize(t, boundaries)
+            idx = torch.clamp(bucket_indices, 1, num_stops - 1)
+
+            idx_lower = idx - 1
+            idx_upper = idx
+
+            # Gather boundary values
+            t0 = boundaries[idx_lower]
+            t1 = boundaries[idx_upper]
+
+            # Gather colors using embedding
+            # Note: Need torch.nn.functional for embedding
+            c0 = torch.nn.functional.embedding(idx_lower.squeeze(1), colors).permute(0, 3, 1, 2)
+            c1 = torch.nn.functional.embedding(idx_upper.squeeze(1), colors).permute(0, 3, 1, 2)
+
+            # Calculate interpolation factor
+            denominator = t1 - t0 + 1e-8
+            local_t = (t - t0) / denominator
+            local_t = torch.clamp(local_t, 0.0, 1.0)
+
+            # Interpolate
+            final_color = lerp(c0, c1, local_t)
             
-            for i in range(len(stops) - 1):
-                mask = (idx == i) # Shape [B, 1, H, W]
-                t0_val, c0_list = stops[i]
-                t1_val, c1_list = stops[i+1]
-
-                c0 = torch.tensor(c0_list, device=device).view(1, 3, 1, 1) # Shape [1, 3, 1, 1]
-                c1 = torch.tensor(c1_list, device=device).view(1, 3, 1, 1) # Shape [1, 3, 1, 1]
-                
-                # Normalize t within the segment [t0, t1] -> [0, 1] for all pixels
-                denominator = (t1_val - t0_val + 1e-8) # Avoid division by zero
-                local_t_all = (t - t0_val) / denominator
-                local_t_clamped = torch.clamp(local_t_all, 0.0, 1.0) # Shape [B, 1, H, W]
-
-                # Lerp the colors for this segment - c0/c1 will broadcast
-                interp_color = lerp(c0, c1, local_t_clamped) # Shape [B, 3, H, W]
-                
-                # Apply the interpolated color where the mask is true
-                final_color = torch.where(mask.expand_as(interp_color), interp_color, final_color)
-
             return final_color[:, 0:1], final_color[:, 1:2], final_color[:, 2:3] # R, G, B
         
         # Generate warped noise - pass phase_shift to the domain_warp function
