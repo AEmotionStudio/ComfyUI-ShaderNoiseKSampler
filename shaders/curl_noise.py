@@ -558,35 +558,43 @@ class CurlNoiseGenerator:
                 # stops: list of [value, color_tensor]
                 # t: normalized value tensor [B, 1, H, W]
                 
-                # Find the two stops t falls between
-                idx = torch.zeros_like(t, dtype=torch.long)
-                for i in range(len(stops) - 1):
-                    idx = torch.where((t >= stops[i][0]) & (t < stops[i+1][0]), torch.full_like(idx, i), idx)
-                idx = torch.where(t >= stops[-1][0], torch.full_like(idx, len(stops) - 2), idx) # Handle >= last stop value
+                # Optimized using bucketize for O(N) performance instead of O(N*S)
+                device = t.device
+                num_stops = len(stops)
 
-                # Gather the start and end stops based on idx
-                # Need to manually index based on the calculated 'idx'
-                # This is complex with tensors, so we'll use masks for each segment
-                final_color = torch.zeros_like(stops[0][1].expand(-1, -1, t.shape[2], t.shape[3])) # Initialize with target spatial shape
+                # Prepare boundaries and colors
+                boundaries = torch.tensor([s[0] for s in stops], device=device)
+                # colors shape: [S, 3] - flattening spatial dims from [1, 3, 1, 1]
+                colors = torch.stack([s[1].view(3) for s in stops])
+
+                # Find indices where boundaries[i-1] <= t < boundaries[i]
+                bucket_indices = torch.bucketize(t, boundaries)
+
+                # Clamp indices to valid segment range [1, num_stops-1]
+                # We want segment index such that t is between boundaries[idx-1] and boundaries[idx]
+                idx = torch.clamp(bucket_indices, 1, num_stops - 1)
+
+                idx_lower = idx - 1
+                idx_upper = idx
+
+                # Gather boundary values
+                t0 = boundaries[idx_lower] # [B, 1, H, W]
+                t1 = boundaries[idx_upper] # [B, 1, H, W]
+
+                # Gather colors using embedding lookup
+                # Need to squeeze dim 1 from indices [B, 1, H, W] -> [B, H, W]
+                # Embedding output [B, H, W, 3] -> Permute to [B, 3, H, W]
+                c0 = torch.nn.functional.embedding(idx_lower.squeeze(1), colors).permute(0, 3, 1, 2)
+                c1 = torch.nn.functional.embedding(idx_upper.squeeze(1), colors).permute(0, 3, 1, 2)
+
+                # Calculate interpolation factor
+                denominator = t1 - t0 + 1e-8
+                local_t = (t - t0) / denominator
+                local_t = torch.clamp(local_t, 0.0, 1.0)
+
+                # Interpolate
+                final_color = lerp(c0, c1, local_t)
                 
-                for i in range(len(stops) - 1):
-                    mask = (idx == i) # Shape [B, 1, H, W]
-                    t0, c0 = stops[i] # c0 shape [1, 3, 1, 1]
-                    t1, c1 = stops[i+1] # c1 shape [1, 3, 1, 1]
-                    
-                    # Normalize t within the segment [t0, t1] -> [0, 1] for all pixels
-                    # Avoid division by zero for constant segments
-                    denominator = (t1 - t0 + 1e-8)
-                    local_t_all = (t - t0) / denominator
-                    local_t_clamped = torch.clamp(local_t_all, 0.0, 1.0) # Shape [B, 1, H, W]
-
-                    # Lerp the colors for this segment - c0/c1 will broadcast
-                    interp_color = lerp(c0, c1, local_t_clamped) # Shape [B, 3, H, W]
-                    
-                    # Apply the interpolated color where the mask is true
-                    # Expand mask to match color channels
-                    final_color = torch.where(mask.expand_as(interp_color), interp_color, final_color)
-
                 return final_color[:, 0:1], final_color[:, 1:2], final_color[:, 2:3] # R, G, B
 
             # Ensure input is normalized [0, 1] for color stops
