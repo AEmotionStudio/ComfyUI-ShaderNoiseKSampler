@@ -1182,22 +1182,20 @@ class ShaderNoiseKSampler:
                 result = 1.0 - (1.0 - base_noise) * (1.0 - shader_noise * strength)
             
             elif blend_mode == "overlay":
-                # Overlay blend mode
-                mask = base_noise < 0.5
-                result = torch.zeros_like(base_noise)
-                result[mask] = 2 * base_noise[mask] * (shader_noise[mask] * strength)
-                result[~mask] = 1 - 2 * (1 - base_noise[~mask]) * (1 - shader_noise[~mask] * strength)
+                # Overlay blend mode - Optimized using torch.where for vectorization
+                term1 = 2 * base_noise * (shader_noise * strength)
+                term2 = 1 - 2 * (1 - base_noise) * (1 - shader_noise * strength)
+                result = torch.where(base_noise < 0.5, term1, term2)
             
             elif blend_mode == "soft_light":
                 # Soft light blend mode
                 result = ((1.0 - 2.0 * shader_noise) * base_noise**2 + 2.0 * shader_noise * base_noise) * strength + base_noise * (1.0 - strength)
             
             elif blend_mode == "hard_light":
-                # Hard light blend mode
-                mask = shader_noise < 0.5
-                result = torch.zeros_like(base_noise)
-                result[mask] = 2 * base_noise[mask] * shader_noise[mask] * strength + base_noise[mask] * (1 - strength)
-                result[~mask] = 1 - 2 * (1 - base_noise[~mask]) * (1 - shader_noise[~mask]) * strength + base_noise[~mask] * (1 - strength)
+                # Hard light blend mode - Optimized using torch.where for vectorization
+                term1 = 2 * base_noise * shader_noise * strength + base_noise * (1 - strength)
+                term2 = 1 - 2 * (1 - base_noise) * (1 - shader_noise) * strength + base_noise * (1 - strength)
+                result = torch.where(shader_noise < 0.5, term1, term2)
             
             elif blend_mode == "difference":
                 # Difference blend mode
