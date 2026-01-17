@@ -80,15 +80,25 @@ class ShaderParamsReader:
             try:
                 resolved_path = os.path.realpath(custom_path)
                 extension_real_path = os.path.realpath(EXTENSION_DIR)
+                data_dir_real_path = os.path.join(extension_real_path, "data")
+                default_config_real_path = os.path.join(extension_real_path, "shader_params.json")
 
-                # Allow paths strictly inside the extension directory
-                # os.path.commonpath raises ValueError on Windows if drives differ
-                is_safe = os.path.commonpath([resolved_path, extension_real_path]) == extension_real_path
+                # 1. Strict extension check
+                if not resolved_path.lower().endswith('.json'):
+                    print(f"SECURITY WARNING: Invalid file extension (must be .json): {custom_path}")
+                    is_safe = False
+                else:
+                    # 2. Strict location check: Must be in data/ OR be the root shader_params.json
+                    # Note: data_dir_real_path might not exist if folder is missing, but commonpath handles strings
+                    is_in_data = os.path.commonpath([resolved_path, data_dir_real_path]) == data_dir_real_path
+                    is_default_config = resolved_path == default_config_real_path
+
+                    is_safe = is_in_data or is_default_config
             except (ValueError, OSError):
                 is_safe = False
 
             if not is_safe:
-                print(f"SECURITY WARNING: Prevented access to external file: {custom_path}")
+                print(f"SECURITY WARNING: Prevented access to unauthorized file: {custom_path}")
                 # Fallback to default path instead of opening potentially dangerous file
                 params_file = os.path.join(EXTENSION_DIR, "shader_params.json")
                 if not os.path.exists(params_file):
