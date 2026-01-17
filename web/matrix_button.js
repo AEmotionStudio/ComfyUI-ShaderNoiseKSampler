@@ -111,9 +111,11 @@ import { app } from "../../scripts/app.js";
         if (isHidden) {
             preElement.style.display = 'block';
             buttonElement.textContent = 'Hide';
+            buttonElement.setAttribute('aria-expanded', 'true');
         } else {
             preElement.style.display = 'none';
             buttonElement.textContent = 'Show';
+            buttonElement.setAttribute('aria-expanded', 'false');
         }
     };
 
@@ -1357,9 +1359,9 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Perlin Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-perlin" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def perlin_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-perlin" class="foldable-content" style="display: none;"><code class="language-python">def perlin_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters for noise generation
     scale = shader_params.get("shaderScale", 1.0)
     octaves = shader_params.get("shaderOctaves", 3)
@@ -1419,9 +1421,9 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Cellular Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-cellular" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def cellular_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-cellular" class="foldable-content" style="display: none;"><code class="language-python">def cellular_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale = shader_params.get("shaderScale", 1.0)
     octaves = shader_params.get("shaderOctaves", 1)
@@ -1482,9 +1484,9 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Tensor Field Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-tensor" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def tensor_field_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-tensor" class="foldable-content" style="display: none;"><code class="language-python">def tensor_field_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale = shader_params.get("shaderScale", 1.0)
     viz_type = int(shader_params.get("shaderOctaves", 3)) % 4 # Using octaves to pick viz_type
@@ -1538,9 +1540,9 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Curl Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-curl" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def curl_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-curl" class="foldable-content" style="display: none;"><code class="language-python">def curl_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale = shader_params.get("shaderScale", 1.0)
     # warp_strength = shader_params.get("shaderWarpStrength", 0.5) # Not used directly here for simple curl value
@@ -1609,9 +1611,9 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Domain Warp Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-domain-warp" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def domain_warp_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-domain-warp" class="foldable-content" style="display: none;"><code class="language-python">def domain_warp_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale = shader_params.get("shaderScale", 1.0)
     octaves = shader_params.get("shaderOctaves", 3)) # Used for the base noise often
@@ -1685,9 +1687,9 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Fractal Noise (FBM) Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-fractal" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def fractal_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-fractal" class="foldable-content" style="display: none;"><code class="language-python">def fractal_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale = shader_params.get("shaderScale", 1.0)
     octaves = int(shader_params.get("shaderOctaves", 4))
@@ -1752,9 +1754,9 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Waves Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-waves" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def waves_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-waves" class="foldable-content" style="display: none;"><code class="language-python">def waves_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale = shader_params.get("shaderScale", 1.0)       # General scale for coordinates
     num_waves = int(shader_params.get("shaderOctaves", 3)) # Use 'octaves' as number of waves
@@ -1814,9 +1816,9 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Gaussian Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-gaussian" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def gaussian_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-gaussian" class="foldable-content" style="display: none;"><code class="language-python">def gaussian_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     mean = shader_params.get("shaderMean", 0.0)
     std_dev = shader_params.get("shaderStdDev", 1.0) # This is 'scale' in some contexts
@@ -1869,9 +1871,9 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Heterogeneous FBM Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-heterogeneous-fbm" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def heterogeneous_fbm_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-heterogeneous-fbm" class="foldable-content" style="display: none;"><code class="language-python">def heterogeneous_fbm_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract base parameters
     scale = shader_params.get("shaderScale", 1.0)
     octaves = int(shader_params.get("shaderOctaves", 4))
@@ -1947,9 +1949,9 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Interference Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-interference" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def interference_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-interference" class="foldable-content" style="display: none;"><code class="language-python">def interference_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale1 = shader_params.get("shaderScale", 1.0)
     scale2 = shader_params.get("shaderScale2", 1.5) # Scale for the second noise source
@@ -2030,9 +2032,9 @@ def sample_fbm_like(coords, octaves, seed, persistence, lacunarity):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Spectral Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-spectral" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def spectral_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-spectral" class="foldable-content" style="display: none;"><code class="language-python">def spectral_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     beta = shader_params.get("shaderSpectralBeta", 1.0) # Exponent for 1/f^beta filter
     # A low-pass/high-pass cutoff might also be a parameter
@@ -2120,9 +2122,9 @@ def sample_fbm_like(coords, octaves, seed, persistence, lacunarity):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>3D Projection Noise Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-projection-3d" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">def projection_3d_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
+                                            <pre id="code-projection-3d" class="foldable-content" style="display: none;"><code class="language-python">def projection_3d_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
     scale_xy = shader_params.get("shaderScale", 1.0)  # Spatial scale for X and Y
     scale_z = shader_params.get("shaderZScale", 1.0)  # Scale for the Z dimension of the 3D noise
@@ -2346,9 +2348,9 @@ def sample_3d_fbm_like(coords_3d, octaves, seed, persistence, lacunarity):
                                     <div class="code-block-container">
                                         <div class="code-block-header">
                                             <span>Conceptual Temporal Noise (Python)</span>
-                                            <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                            <button class="toggle-code-button" aria-expanded="false" aria-controls="code-temporal" onclick="window.toggleCodeSection(this)">Show</button>
                                         </div>
-                                        <pre class="foldable-content" style="display: none;"><code class="language-python">
+                                        <pre id="code-temporal" class="foldable-content" style="display: none;"><code class="language-python">
 import torch
 
 # Placeholder for a 3D simplex noise function
@@ -2492,9 +2494,9 @@ def generate_animated_noise_frame(batch_size, height, width, scale, current_time
                                     <div class="code-block-container">
                                         <div class="code-block-header">
                                             <span>Illustrative Shape Mask Application (Python)</span>
-                                            <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                            <button class="toggle-code-button" aria-expanded="false" aria-controls="code-shape-mask" onclick="window.toggleCodeSection(this)">Show</button>
                                         </div>
-                                        <pre class="foldable-content" style="display: none;"><code class="language-python">import torch
+                                        <pre id="code-shape-mask" class="foldable-content" style="display: none;"><code class="language-python">import torch
 
 def apply_shape_mask_illustrative(input_field, coords_bhwc, mask_type="radial", shape_mask_strength=0.7):
     '''Illustrative: Generate and apply a shape mask to an input field.
@@ -2702,9 +2704,9 @@ def apply_shape_mask_illustrative(input_field, coords_bhwc, mask_type="radial", 
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Color Scheme Implementation</span>
-                                                <button class="toggle-code-button" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-color-scheme" onclick="window.toggleCodeSection(this)">Show</button>
                                             </div>
-                                            <pre class="foldable-content" style="display: none;"><code class="language-python">
+                                            <pre id="code-color-scheme" class="foldable-content" style="display: none;"><code class="language-python">
 # How color schemes are applied in the backend (simplified from curl_noise.py)
 def apply_color_scheme(normalized_value, color_scheme, device):
     """
