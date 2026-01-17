@@ -90,14 +90,14 @@ class ShaderParamsReader:
                     is_safe = False
                 else:
                     # 2. Strict location check: Must be in data/ OR be the root shader_params.json
-                    # Use .lower() to handle potential case sensitivity mismatches on all platforms
-                    # (e.g. user renamed 'data' to 'Data' on Linux, or Windows case insensitivity)
-                    resolved_lower = resolved_path.lower()
-                    data_dir_lower = data_dir_real_path.lower()
-                    default_config_lower = default_config_real_path.lower()
+                    # Use normcase for platform-appropriate case normalization
+                    # (lowercases on Windows, preserves case on Linux)
+                    resolved_norm = os.path.normcase(resolved_path)
+                    data_dir_norm = os.path.normcase(data_dir_real_path)
+                    default_config_norm = os.path.normcase(default_config_real_path)
 
-                    is_in_data = os.path.commonpath([resolved_lower, data_dir_lower]) == data_dir_lower
-                    is_default_config = resolved_lower == default_config_lower
+                    is_in_data = os.path.commonpath([resolved_norm, data_dir_norm]) == data_dir_norm
+                    is_default_config = resolved_norm == default_config_norm
 
                     is_safe = is_in_data or is_default_config
             except (ValueError, OSError):
