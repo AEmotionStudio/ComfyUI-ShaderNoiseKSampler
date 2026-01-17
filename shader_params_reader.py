@@ -80,8 +80,9 @@ class ShaderParamsReader:
             try:
                 resolved_path = os.path.realpath(custom_path)
                 extension_real_path = os.path.realpath(EXTENSION_DIR)
-                data_dir_real_path = os.path.join(extension_real_path, "data")
-                default_config_real_path = os.path.join(extension_real_path, "shader_params.json")
+                # Use realpath to ensure we are comparing canonical paths (handles symlinks and casing)
+                data_dir_real_path = os.path.realpath(os.path.join(extension_real_path, "data"))
+                default_config_real_path = os.path.realpath(os.path.join(extension_real_path, "shader_params.json"))
 
                 # 1. Strict extension check
                 if not resolved_path.lower().endswith('.json'):
@@ -89,9 +90,14 @@ class ShaderParamsReader:
                     is_safe = False
                 else:
                     # 2. Strict location check: Must be in data/ OR be the root shader_params.json
-                    # Note: data_dir_real_path might not exist if folder is missing, but commonpath handles strings
-                    is_in_data = os.path.commonpath([resolved_path, data_dir_real_path]) == data_dir_real_path
-                    is_default_config = resolved_path == default_config_real_path
+                    # Use .lower() to handle potential case sensitivity mismatches on all platforms
+                    # (e.g. user renamed 'data' to 'Data' on Linux, or Windows case insensitivity)
+                    resolved_lower = resolved_path.lower()
+                    data_dir_lower = data_dir_real_path.lower()
+                    default_config_lower = default_config_real_path.lower()
+
+                    is_in_data = os.path.commonpath([resolved_lower, data_dir_lower]) == data_dir_lower
+                    is_default_config = resolved_lower == default_config_lower
 
                     is_safe = is_in_data or is_default_config
             except (ValueError, OSError):
