@@ -93,13 +93,20 @@ class ShaderParamsReader:
                     # Use normcase for platform-appropriate case normalization
                     # (lowercases on Windows, preserves case on Linux)
                     resolved_norm = os.path.normcase(resolved_path)
+                    extension_norm = os.path.normcase(extension_real_path)
                     data_dir_norm = os.path.normcase(data_dir_real_path)
                     default_config_norm = os.path.normcase(default_config_real_path)
 
+                    # 2. Security Check: File must be physically inside the extension directory
+                    # This blocks symlinks pointing outside the extension folder
+                    is_inside_extension = os.path.commonpath([resolved_norm, extension_norm]) == extension_norm
+
+                    # 3. Scope Check: File must be in data/ or be the config file
+                    # This blocks reading source code or secrets in the extension root
                     is_in_data = os.path.commonpath([resolved_norm, data_dir_norm]) == data_dir_norm
                     is_default_config = resolved_norm == default_config_norm
 
-                    is_safe = is_in_data or is_default_config
+                    is_safe = is_inside_extension and (is_in_data or is_default_config)
             except (ValueError, OSError):
                 is_safe = False
 
