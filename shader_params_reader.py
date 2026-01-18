@@ -46,6 +46,47 @@ class ShaderParamsReader:
         return torch.frac(hash_val)
 
     @staticmethod
+    def validate_and_sanitize_params(params):
+        """
+        Validates and sanitizes shader parameters to prevent DoS or unexpected behavior.
+        Clamps values to reasonable ranges and ensures correct types.
+        """
+        sanitized = params.copy()
+
+        # 1. Octaves: Clamp to reasonable range (e.g., 1-20) to prevent massive loops
+        if "octaves" in sanitized:
+            try:
+                # Convert to float first to handle string representations of floats
+                val = float(sanitized["octaves"])
+                # Clamp between 1 and 20, and convert to int
+                sanitized["octaves"] = int(max(1.0, min(val, 20.0)))
+            except (ValueError, TypeError):
+                print(f"Warning: Invalid octaves value '{sanitized['octaves']}', defaulting to 3")
+                sanitized["octaves"] = 3
+
+        # 2. Scale: Ensure float
+        if "scale" in sanitized:
+            try:
+                sanitized["scale"] = float(sanitized["scale"])
+            except (ValueError, TypeError):
+                sanitized["scale"] = 1.0
+
+        # 3. Intensity/Strength: Ensure float and clamp to 0-1 (usually)
+        # Though some shaders might allow > 1, extremely high values can cause issues
+        for key in ["intensity", "shapemaskstrength", "warp_strength", "phase_shift"]:
+            if key in sanitized:
+                try:
+                    val = float(sanitized[key])
+                    # Optional: Clamp if strictly required, but ensuring float is main safety
+                    # For strength, 0-10 is generous enough while preventing overflow
+                    # sanitized[key] = max(-100.0, min(val, 100.0))
+                    sanitized[key] = val
+                except (ValueError, TypeError):
+                    sanitized[key] = 0.0 if "strength" in key or "shift" in key else 1.0
+
+        return sanitized
+
+    @staticmethod
     def get_shader_params(custom_path=None):
         """
         Utility function to read shader parameters from file.
@@ -227,6 +268,9 @@ class ShaderParamsReader:
                                 params["shader_type"] = "spectral"
                                 print(f"Mapped shaderType '{shader_type}' to 'spectral'")
                     
+                    # Validate and sanitize loaded parameters before merging
+                    params = ShaderParamsReader.validate_and_sanitize_params(params)
+
                     # Fill in any missing parameters with defaults
                     for key, value in default_params.items():
                         if key not in params:
