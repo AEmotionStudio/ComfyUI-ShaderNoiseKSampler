@@ -81,6 +81,7 @@ import { app } from "../../scripts/app.js";
     window.setupScrollTop = function(modalContentElement) { // Added modalContentElement parameter
         if (!modalContentElement) return; // Check the passed element
         const scrollTopButton = modalContentElement.querySelector('#scroll-top'); // Use passed element
+        const titleElement = modalContentElement.querySelector('#treatise-title');
 
         if (scrollTopButton) {
             modalContentElement.addEventListener('scroll', () => { // Use passed element
@@ -93,6 +94,9 @@ import { app } from "../../scripts/app.js";
             scrollTopButton.addEventListener('click', (e) => {
                 e.stopPropagation();
                 modalContentElement.scrollTo({ top: 0, behavior: 'smooth' });
+                if (titleElement) {
+                    titleElement.focus({ preventScroll: true });
+                }
             });
         }
     };
@@ -1005,7 +1009,7 @@ import { app } from "../../scripts/app.js";
                             <div id="canvas-container"></div>
     
                             <header>
-                                <h1>The Shader Matrix</h1>
+                                <h1 id="treatise-title" tabindex="-1">The Shader Matrix</h1>
                                 <p class="tagline">Harnessing Noise with Shader Algorithms for Image Generation</p>
                             </header>
                             
