@@ -11,6 +11,18 @@ import { app } from "../../scripts/app.js";
         const section = modalContent.querySelector('#' + sectionId);
         if (section) {
             section.scrollIntoView({ behavior: 'smooth' });
+
+            // UX Enhancement: Move focus to the section header for accessibility
+            const header = section.querySelector('h1, h2, h3, h4, h5, h6');
+            if (header) {
+                // Ensure the header is focusable programmatically
+                if (!header.hasAttribute('tabindex')) {
+                    header.setAttribute('tabindex', '-1');
+                }
+                // Focus the header to update reading position for keyboard/screen reader users
+                // preventScroll: true prevents the browser from fighting the smooth scroll
+                header.focus({ preventScroll: true });
+            }
         }
     };
 
