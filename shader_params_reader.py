@@ -54,15 +54,17 @@ class ShaderParamsReader:
         sanitized = params.copy()
 
         # 1. Octaves: Clamp to reasonable range (e.g., 1-20) to prevent massive loops
-        if "octaves" in sanitized:
-            try:
-                # Convert to float first to handle string representations of floats
-                val = float(sanitized["octaves"])
-                # Clamp between 1 and 20, and convert to int
-                sanitized["octaves"] = int(max(1.0, min(val, 20.0)))
-            except (ValueError, TypeError):
-                print(f"Warning: Invalid octaves value '{sanitized['octaves']}', defaulting to 3")
-                sanitized["octaves"] = 3
+        # Check both parameter names
+        for key in ["octaves", "shaderOctaves"]:
+            if key in sanitized:
+                try:
+                    # Convert to float first to handle string representations of floats
+                    val = float(sanitized[key])
+                    # Clamp between 1 and 20, and convert to int
+                    sanitized[key] = int(max(1.0, min(val, 20.0)))
+                except (ValueError, TypeError):
+                    print(f"Warning: Invalid octaves value '{sanitized[key]}', defaulting to 3")
+                    sanitized[key] = 3
 
         # 2. Scale: Ensure float
         if "scale" in sanitized:
