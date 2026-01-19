@@ -411,30 +411,31 @@ class TemporalCoherentNoiseGenerator:
         """
         # Simple hash for deterministic, repeatable patterns
         # Convert to integers before applying bitwise operations
-        # Need to use mod instead of bitwise & for floats
-        ix_int = torch.floor(ix).to(torch.int32)
-        iy_int = torch.floor(iy).to(torch.int32)
-        iz_int = torch.floor(iz).to(torch.int32)
-        seed_int = torch.floor(seed).to(torch.int32)
+        # Use .int() which is faster than .to(torch.int32)
+        # Note: Inputs are expected to be integer-valued floats (already floored)
+        ix_int = ix.int()
+        iy_int = iy.int()
+        iz_int = iz.int()
+        seed_int = seed.int()
         
-        # Compute hash (now with integer tensors)
+        # Compute hash (using integer arithmetic)
         h = (ix_int * 1619 + iy_int * 31337 + iz_int * 6971 + seed_int * 1013) & 15
         
-        # Convert back to original dtype for the rest of the calculations
-        h = h.to(x.dtype)
-        
-        # Convert lower 4 bits of hash to 12 gradient directions
+        # Determine gradients based on hash bits
+        # Note: h is an integer tensor here, so comparisons are integer operations
         u = torch.where(h < 8, x, y)
         v = torch.where(h < 4, y, torch.where((h == 12) | (h == 14), x, z))
         
-        # Convert hash to 12 gradient directions
-        # 1 or -1 based on hash bits - avoiding bitwise operations on floats
-        # The & operation is replaced with modulo division which is safer for floats
-        h_mod_2 = torch.remainder(h, 2)
-        h_mod_4 = torch.remainder(h, 4)
+        # Calculate signs using bitwise operations directly on int tensor h
+        # (h & 1) == 0 -> positive (1.0)
+        # (h & 1) == 1 -> negative (-1.0)
+        # Formula: 1.0 - 2.0 * (h & 1).float()
+        u_sign = 1.0 - 2.0 * (h & 1).float()
         
-        u_sign = (h_mod_2 == 0).float() * 2.0 - 1.0
-        v_sign = (h_mod_4 < 2).float() * 2.0 - 1.0
+        # (h & 2) == 0 -> positive (1.0)
+        # (h & 2) == 2 -> negative (-1.0)
+        # Formula: 1.0 - (h & 2).float()  [since 2.0 is the value of bit 2]
+        v_sign = 1.0 - (h & 2).float()
         
         return u_sign * u + v_sign * v
 
