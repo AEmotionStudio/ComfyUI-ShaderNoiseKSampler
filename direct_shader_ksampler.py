@@ -1,5 +1,5 @@
 import comfy.sample
-from .shader_params_reader import get_shader_params
+from .shader_params_reader import get_shader_params, ShaderParamsReader
 from .shader_noise_ksampler import ShaderNoiseKSampler, get_visualizer, set_debug_level
 
 # Define a simple parameter response mapper if needed
@@ -190,6 +190,10 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
         
         # Visualization type (default to 3/ellipses as in the default parameters)
         shader_params["visualization_type"] = shader_params.get("visualization_type", 3)
+
+        # Apply security validation and sanitization to the overridden parameters
+        # This prevents DoS attacks (e.g. excessive octaves) and ensures parameter safety
+        shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
 
         # --- Handle Parameter Response Mapper Integration ---
         if target_attribute_changes and target_attribute_changes.strip():
