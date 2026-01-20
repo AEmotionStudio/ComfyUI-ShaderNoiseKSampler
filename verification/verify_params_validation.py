@@ -6,20 +6,26 @@ import unittest
 # Ensure we can import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Handle import even if torch is missing in dev environment
 try:
     from shader_params_reader import ShaderParamsReader
 except ImportError:
     # If torch is not installed or import fails for other reasons, we might need to mock it.
-    # But since I installed torch, let's try to import directly first.
     print("Failed to import ShaderParamsReader. Checking torch installation...")
     try:
         import torch
         print("Torch is installed.")
+        # If torch is installed but import still failed, try importing again to see the real error
+        from shader_params_reader import ShaderParamsReader
     except ImportError:
         print("Torch is NOT installed. Mocking torch...")
         from unittest.mock import MagicMock
         sys.modules["torch"] = MagicMock()
-        from shader_params_reader import ShaderParamsReader
+        try:
+            from shader_params_reader import ShaderParamsReader
+        except ImportError:
+            print("Still failed to import ShaderParamsReader even with mock.")
+            raise
 
 class TestShaderParamsValidation(unittest.TestCase):
     def test_invalid_string_parameters_are_sanitized(self):
@@ -78,6 +84,44 @@ class TestShaderParamsValidation(unittest.TestCase):
         sanitized = ShaderParamsReader.validate_and_sanitize_params(alias_params)
         self.assertEqual(sanitized["shader_type"], "tensor_field")
         print("\n[VERIFICATION] SUCCESS: Aliases were handled correctly.")
+
+    def test_legacy_integer_shape_types(self):
+        """
+        Verify that legacy integer shape types are correctly mapped.
+        """
+        # Test valid integer mapping
+        legacy_params = {
+            "shape_type": 1 # Should map to "circle"
+        }
+        sanitized = ShaderParamsReader.validate_and_sanitize_params(legacy_params)
+        self.assertEqual(sanitized["shape_type"], "circle")
+
+        # Test valid string-integer mapping
+        legacy_str_params = {
+            "shape_type": "2" # Should map to "square"
+        }
+        sanitized_str = ShaderParamsReader.validate_and_sanitize_params(legacy_str_params)
+        self.assertEqual(sanitized_str["shape_type"], "square")
+
+        print("\n[VERIFICATION] SUCCESS: Legacy integer shape types handled correctly.")
+
+    def test_invalid_integer_shape_types(self):
+        """
+        Verify that INVALID integer shape types are rejected (default to none).
+        """
+        invalid_int_params = {
+            "shape_type": 999
+        }
+        sanitized = ShaderParamsReader.validate_and_sanitize_params(invalid_int_params)
+        self.assertEqual(sanitized["shape_type"], "none")
+
+        invalid_str_int_params = {
+            "shape_type": "999"
+        }
+        sanitized_str = ShaderParamsReader.validate_and_sanitize_params(invalid_str_int_params)
+        self.assertEqual(sanitized_str["shape_type"], "none")
+
+        print("\n[VERIFICATION] SUCCESS: Invalid integer shape types rejected.")
 
 if __name__ == "__main__":
     unittest.main()

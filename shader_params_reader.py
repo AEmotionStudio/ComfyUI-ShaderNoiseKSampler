@@ -24,6 +24,17 @@ class ShaderParamsReader:
         "gradient_x", "gradient_y", "stars"
     }
 
+    # Legacy mapping for integer shape types to string identifiers
+    # 1: circle/radial (old), 2: square, 3: star
+    LEGACY_SHAPE_MAPPING = {
+        1: "circle",
+        2: "square",
+        3: "star",
+        "1": "circle",
+        "2": "square",
+        "3": "star"
+    }
+
     VALID_COLOR_SCHEMES = {
         "none", "rgb", "complementary", "monochrome", "gradient",
         "blue_red", "viridis", "plasma", "inferno", "magma", "turbo",
@@ -126,15 +137,28 @@ class ShaderParamsReader:
                 sanitized["shader_type"] = st
 
         if "shape_type" in sanitized:
-            # Handle integer inputs for legacy shape types
             shape_val = sanitized["shape_type"]
+            # Handle integer inputs for legacy shape types (1, 2, 3)
+            # and map them to their string equivalents if valid
+            is_legacy = False
             if isinstance(shape_val, int) or (isinstance(shape_val, str) and shape_val.isdigit()):
-                # Map legacy int types to strings if possible, or allow known ints
-                # For now, convert to string for consistent handling or keep if logic supports it.
-                # The apply_shape_mask function handles 1, 2, 3 ints.
-                # Let's verify if we need to strictly convert them.
-                pass
-            else:
+                # Convert to integer for lookup (handles string "1" and int 1)
+                try:
+                    lookup_key = int(shape_val)
+                    if lookup_key in ShaderParamsReader.LEGACY_SHAPE_MAPPING:
+                        # Map to valid string name
+                        sanitized["shape_type"] = ShaderParamsReader.LEGACY_SHAPE_MAPPING[lookup_key]
+                        is_legacy = True
+                    else:
+                        print(f"Warning: Invalid legacy integer shape_type '{shape_val}', defaulting to 'none'")
+                        sanitized["shape_type"] = "none"
+                        is_legacy = True
+                except (ValueError, TypeError):
+                    # Fallthrough to string handling if conversion fails weirdly
+                    pass
+
+            # If not a handled legacy integer, treat as string identifier
+            if not is_legacy:
                 st = str(shape_val).lower()
                 if st not in ShaderParamsReader.VALID_SHAPE_TYPES:
                     print(f"Warning: Invalid shape_type '{st}', defaulting to 'none'")
