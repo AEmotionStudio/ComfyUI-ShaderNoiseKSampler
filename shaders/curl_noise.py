@@ -2,6 +2,124 @@ import torch
 import torch.nn.functional as F
 import math
 
+# Define color schemes dictionary at module level for O(1) access
+COLOR_SCHEMES = {
+    "viridis": [
+        (0.0, (0.267, 0.005, 0.329)),
+        (0.33, (0.188, 0.407, 0.553)),
+        (0.66, (0.208, 0.718, 0.471)),
+        (1.0, (0.992, 0.906, 0.143))
+    ],
+    "inferno": [
+        (0.0, (0.001, 0.001, 0.016)),
+        (0.25, (0.259, 0.039, 0.408)),
+        (0.5, (0.576, 0.149, 0.404)),
+        (0.75, (0.867, 0.318, 0.227)),
+        (0.85, (0.988, 0.647, 0.039)),
+        (1.0, (0.988, 1.000, 0.643))
+    ],
+    "magma": [
+        (0.0, (0.001, 0.001, 0.016)),
+        (0.25, (0.231, 0.059, 0.439)),
+        (0.5, (0.549, 0.161, 0.506)),
+        (0.75, (0.871, 0.288, 0.408)),
+        (0.85, (0.996, 0.624, 0.427)),
+        (1.0, (0.988, 0.992, 0.749))
+    ],
+    "turbo": [
+        (0.0, (0.188, 0.071, 0.235)),
+        (0.25, (0.275, 0.408, 0.859)),
+        (0.5, (0.149, 0.749, 0.549)),
+        (0.65, (0.831, 1.000, 0.314)),
+        (0.85, (0.980, 0.718, 0.298)),
+        (1.0, (0.729, 0.004, 0.000))
+    ],
+    "jet": [
+        (0.0, (0.000, 0.000, 0.498)),
+        (0.125, (0.000, 0.000, 1.000)),
+        (0.375, (0.000, 1.000, 1.000)),
+        (0.625, (1.000, 1.000, 0.000)),
+        (0.875, (1.000, 0.000, 0.000)),
+        (1.0, (0.498, 0.000, 0.000))
+    ],
+    "hot": [
+        (0.0, (0.0, 0.0, 0.0)),
+        (0.375, (1.0, 0.0, 0.0)),
+        (0.75, (1.0, 1.0, 0.0)),
+        (1.0, (1.0, 1.0, 1.0))
+    ],
+    "parula": [
+        (0.0, (0.208, 0.165, 0.529)),
+        (0.25, (0.059, 0.361, 0.867)),
+        (0.5, (0.000, 0.710, 0.651)),
+        (0.75, (1.000, 0.765, 0.216)),
+        (1.0, (0.988, 0.996, 0.643))
+    ],
+    "pink": [
+        (0.0, (0.05, 0.05, 0.05)),
+        (0.5, (1.0, 0.0, 1.0)),
+        (1.0, (1.0, 1.0, 1.0))
+    ],
+    "bone": [
+        (0.0, (0.0, 0.0, 0.0)),
+        (0.375, (0.329, 0.329, 0.455)),
+        (0.75, (0.627, 0.757, 0.757)),
+        (1.0, (1.0, 1.0, 1.0))
+    ],
+    "ocean": [
+        (0.0, (0.0, 0.0, 0.0)),
+        (0.33, (0.0, 0.0, 0.6)),
+        (0.66, (0.0, 0.6, 1.0)),
+        (1.0, (0.6, 1.0, 1.0))
+    ],
+    "terrain": [
+        (0.0, (0.2, 0.2, 0.6)),
+        (0.33, (0.0, 0.8, 0.4)),
+        (0.66, (1.0, 0.8, 0.0)),
+        (1.0, (1.0, 1.0, 1.0))
+    ],
+    "neon": [
+        (0.0, (1.0, 0.0, 1.0)),
+        (0.5, (0.0, 1.0, 1.0)),
+        (1.0, (1.0, 1.0, 0.0))
+    ],
+    "fire": [
+        (0.0, (0.0, 0.0, 0.0)),
+        (0.25, (1.0, 0.0, 0.0)),
+        (0.6, (1.0, 1.0, 0.0)),
+        (1.0, (1.0, 1.0, 1.0))
+    ],
+    # 2-color interpolations (start, end)
+    "blue_red": [
+        (0.0, (0.0, 0.0, 1.0)),
+        (1.0, (1.0, 0.0, 0.0))
+    ],
+    "cool": [
+        (0.0, (0.0, 1.0, 1.0)),
+        (1.0, (1.0, 0.0, 1.0))
+    ],
+    "autumn": [
+        (0.0, (1.0, 0.0, 0.0)),
+        (1.0, (1.0, 1.0, 0.0))
+    ],
+    "winter": [
+        (0.0, (0.0, 0.0, 1.0)),
+        (1.0, (0.0, 1.0, 0.5))
+    ],
+    "spring": [
+        (0.0, (1.0, 0.0, 1.0)),
+        (1.0, (1.0, 1.0, 0.0))
+    ],
+    "summer": [
+        (0.0, (0.0, 0.5, 0.4)),
+        (1.0, (1.0, 1.0, 0.4))
+    ],
+    "copper": [
+        (0.0, (0.0, 0.0, 0.0)),
+        (1.0, (1.0, 0.6, 0.4))
+    ]
+}
+
 class CurlNoiseGenerator:
     """
     PyTorch implementation of Curl Noise that closely matches
@@ -14,6 +132,70 @@ class CurlNoiseGenerator:
     Now enhanced with true temporal coherence for smooth animations.
     """
     
+    @staticmethod
+    def _interpolate_colors(stops, t):
+        """
+        Optimized color interpolation using torch.bucketize and gathering.
+
+        Args:
+            stops: List of tuples (value, (r, g, b)) defining the gradient
+            t: Normalized value tensor [B, 1, H, W] (or any shape broadcastable)
+
+        Returns:
+            Tuple of tensors (r, g, b), each with same shape as t (channels last logic handled internally)
+        """
+        device = t.device
+        num_stops = len(stops)
+
+        # Prepare boundaries and colors
+        # boundaries: [S]
+        boundaries = torch.tensor([s[0] for s in stops], device=device)
+        # colors: [S, 3]
+        colors = torch.tensor([s[1] for s in stops], device=device)
+
+        # Find indices where boundaries[i-1] <= t < boundaries[i]
+        # This gives us the index of the upper bound for each value in t
+        # Ensure t is contiguous for better performance
+        if not t.is_contiguous():
+            t = t.contiguous()
+        bucket_indices = torch.bucketize(t, boundaries)
+
+        # Clamp indices to valid segment range [1, num_stops-1]
+        # We want the segment index 'idx' such that t falls between boundaries[idx-1] and boundaries[idx]
+        idx = torch.clamp(bucket_indices, 1, num_stops - 1)
+
+        idx_lower = idx - 1
+        idx_upper = idx
+
+        # Gather boundary values corresponding to the segments
+        # boundaries is 1D, so we can index directly with the shaped indices
+        t0 = boundaries[idx_lower] # Same shape as t
+        t1 = boundaries[idx_upper] # Same shape as t
+
+        # Gather colors using embedding lookup
+        # idx_lower/upper have shape [B, 1, H, W], we want output [B, 1, H, W, 3]
+        # Since embedding expects indices to not have feature dimension for lookup if we want [..., D],
+        # we treat indices as flat or just pass them. embedding(input, weight) -> input_shape + (embedding_dim,)
+        c0 = torch.nn.functional.embedding(idx_lower, colors) # Shape: [..., 3]
+        c1 = torch.nn.functional.embedding(idx_upper, colors) # Shape: [..., 3]
+
+        # Calculate interpolation factor
+        denominator = t1 - t0 + 1e-8
+        local_t = (t - t0) / denominator
+        local_t = torch.clamp(local_t, 0.0, 1.0)
+
+        # Expand local_t for broadcasting against the color dimension
+        # local_t is [..., 1] (implied from t being [..., 1] conceptually, though t is [B,1,H,W])
+        # c0 is [B, 1, H, W, 3]
+        local_t_expanded = local_t.unsqueeze(-1)
+
+        # Interpolate: a + (b - a) * t
+        final_color = c0 + (c1 - c0) * local_t_expanded
+
+        # final_color is [B, 1, H, W, 3]. We need to return separate R, G, B channels
+        # formatted as [B, 1, H, W]
+        return final_color[..., 0], final_color[..., 1], final_color[..., 2]
+
     @staticmethod
     def get_curl_noise(batch_size, height, width, shader_params, device="cuda", seed=0, target_channels=4):
         """
@@ -104,21 +286,10 @@ class CurlNoiseGenerator:
             target_channels = 8
             shader_params["target_channels"] = 8     
 
-        # Print params being used for debugging
-        # print(f"CurlNoise: Using shader_type: {shader_params.get('shader_type', 'curl_noise')}") # Added print
-        # print(f"CurlNoise: Scale={scale}, Warp Strength={warp_strength}, Phase Shift={phase_shift}, Octaves={octaves}") # Modified print
-        # print(f"CurlNoise: Temporal settings: time={time}, base_seed={base_seed}, coherence={use_temporal_coherence}") # Modified print
-        # print(f"CurlNoise: Shape Mask: type={shape_type}, strength={shape_mask_strength}") # Modified print
-        # print(f"CurlNoise: Color Scheme: scheme={color_scheme}, intensity={color_intensity}") # Modified print
-        # print(f"CurlNoise: Target Channels: {target_channels}") # Modified print
-        
         # Create coordinate grid (normalized to [0, 1])
         y_coords = torch.linspace(0, 1, height, device=device).view(1, 1, height, 1).expand(batch_size, 1, height, width)
         x_coords = torch.linspace(0, 1, width, device=device).view(1, 1, 1, width).expand(batch_size, 1, height, width)
         coords = torch.cat((x_coords, y_coords), dim=1)
-        
-        # Track the initial coordinate grid tensor
-        # debugger.track_tensor_shape_history(coords, "coords_grid", "initial_creation")
         
         # Apply curl noise with FBM to get velocity field
         coords_bhwc = coords.permute(0, 2, 3, 1)  # Convert to [batch, height, width, 2]
@@ -139,11 +310,9 @@ class CurlNoiseGenerator:
             base_seed, # Use base_seed for consistent velocity field across frames if temporal
             use_temporal_coherence
         )
-        # debugger.track_tensor_shape_history(base_velocity, "base_velocity", "after_get_velocity_field")
         
         # 2. Apply warp intensity using warp_strength
         warped_velocity = CurlNoiseGenerator.apply_warp_intensity(base_velocity, warp_strength)
-        # debugger.track_tensor_shape_history(warped_velocity, "warped_velocity", "after_apply_warp_intensity")
         
         # The 'velocity' variable will now refer to the *warped* velocity for subsequent steps
         velocity = warped_velocity # BHWC format [B, H, W, 2]
@@ -414,39 +583,26 @@ class CurlNoiseGenerator:
                     shape_mask = shape_mask[..., 0:1] # Take first channel -> [B, H, W, 1]
                 # If shape is already [B, H, W, 1], do nothing
 
-                # Track shape mask tensor (now guaranteed to be 4D)
-                # debugger.track_tensor_shape_history(shape_mask, "shape_mask", "after_creation_and_reshape")
-
                 # Apply shape mask using lerp to the *warped* velocity
                 velocity = torch.lerp(velocity, velocity * shape_mask, shape_mask_strength)
-                # debugger.track_tensor_shape_history(velocity, "velocity_masked", "after_shape_mask_lerp")
-
-
-            # print(f"Applied shape mask '{shape_type}' with strength {shape_mask_strength}")
         
         # --- Prepare Warped Velocity for Channel Generation ---
         # Convert *warped* velocity from [B,H,W,2] to [B,2,H,W] for PyTorch processing
         velocity_bchw = velocity.permute(0, 3, 1, 2)
-        # debugger.track_tensor_shape_history(velocity_bchw, "velocity_bchw", "after_permutation_of_warped")
         
         # Check if velocity field has the correct shape with 2 channels (X and Y components)
         velocity_shape = velocity_bchw.shape
-        # print(f"Warped velocity field shape (BCHW): {velocity_shape}")
         
         # If velocity only has 1 channel instead of 2, fix it
         if velocity_shape[1] == 1:
-            # print("WARNING: Warped velocity field has only 1 channel, expanding to 2 channels")
             # Duplicate the channel to create an X and Y component
             velocity_bchw = velocity_bchw.repeat(1, 2, 1, 1)
             # Apply a small rotation to the second channel to make it different
             velocity_bchw[:, 1] = velocity_bchw[:, 0] * 0.8
-            # debugger.track_tensor_shape_history(velocity_bchw, "velocity_bchw", "after_shape_correction")
         
         # Extract velocity components (vx, vy) from the *warped* velocity field
         vx = velocity_bchw[:, 0:1]  # X component with shape [batch, 1, height, width]
         vy = velocity_bchw[:, 1:2]  # Y component with shape [batch, 1, height, width]
-        # debugger.track_tensor_shape_history(vx, "vx_warped", "warped_velocity_component")
-        # debugger.track_tensor_shape_history(vy, "vy_warped", "warped_velocity_component")
 
         # --- Generate Base Noise Pattern via Advection ---
         # Calculate dt for advection based on phase_shift
@@ -465,12 +621,9 @@ class CurlNoiseGenerator:
             base_seed, # Use base_seed for consistent advection pattern across frames if temporal
             use_temporal_coherence
         )
-        # advected_noise_pattern is expected to be [B, H, W, 1]
-        # debugger.track_tensor_shape_history(advected_noise_pattern, "advected_noise_pattern", "after_advect")
 
         # Convert advected pattern to B,C,H,W format [B, 1, H, W]
         advected_noise_bchw = advected_noise_pattern.permute(0, 3, 1, 2)
-        # debugger.track_tensor_shape_history(advected_noise_bchw, "advected_noise_bchw", "after_advect_permutation")
         
         # Determine how many channels to generate
         channels_to_generate = target_channels  # Use all the channels the model requires
@@ -495,13 +648,6 @@ class CurlNoiseGenerator:
                 # print(f"WARNING: vmag has shape {vmag.shape} before color interpolation. Taking first channel.")
                 vmag_interp = vmag[:, 0:1] # Shape [B, 1, H, W]
             # --- FIX END ---
-
-            # Track component tensors
-            # debugger.track_tensor_shape_history(vx, "vx_component", "velocity_component")
-            # debugger.track_tensor_shape_history(vy, "vy_component", "velocity_component")
-            # Log the original vmag shape and the one used for interpolation
-            # debugger.track_tensor_shape_history(vmag, "vmag_original", "velocity_component_original")
-            # debugger.track_tensor_shape_history(vmag_interp, "vmag_interp", "velocity_component_for_interp")
 
             # Compute angle from X axis (normalized to [0,1])
             vangle = torch.atan2(vy, vx)
@@ -553,55 +699,14 @@ class CurlNoiseGenerator:
             def lerp(a, b, t):
                 return a + (b - a) * t
 
-            # Helper for color stops interpolation
-            def interpolate_colors(stops, t):
-                # stops: list of [value, color_tensor]
-                # t: normalized value tensor [B, 1, H, W]
-                
-                # Optimized using bucketize for O(N) performance instead of O(N*S)
-                device = t.device
-                num_stops = len(stops)
-
-                # Prepare boundaries and colors
-                boundaries = torch.tensor([s[0] for s in stops], device=device)
-                # colors shape: [S, 3] - flattening spatial dims from [1, 3, 1, 1]
-                colors = torch.stack([s[1].view(3) for s in stops])
-
-                # Find indices where boundaries[i-1] <= t < boundaries[i]
-                bucket_indices = torch.bucketize(t, boundaries)
-
-                # Clamp indices to valid segment range [1, num_stops-1]
-                # We want segment index such that t is between boundaries[idx-1] and boundaries[idx]
-                idx = torch.clamp(bucket_indices, 1, num_stops - 1)
-
-                idx_lower = idx - 1
-                idx_upper = idx
-
-                # Gather boundary values
-                t0 = boundaries[idx_lower] # [B, 1, H, W]
-                t1 = boundaries[idx_upper] # [B, 1, H, W]
-
-                # Gather colors using embedding lookup
-                # Need to squeeze dim 1 from indices [B, 1, H, W] -> [B, H, W]
-                # Embedding output [B, H, W, 3] -> Permute to [B, 3, H, W]
-                c0 = torch.nn.functional.embedding(idx_lower.squeeze(1), colors).permute(0, 3, 1, 2)
-                c1 = torch.nn.functional.embedding(idx_upper.squeeze(1), colors).permute(0, 3, 1, 2)
-
-                # Calculate interpolation factor
-                denominator = t1 - t0 + 1e-8
-                local_t = (t - t0) / denominator
-                local_t = torch.clamp(local_t, 0.0, 1.0)
-
-                # Interpolate
-                final_color = lerp(c0, c1, local_t)
-                
-                return final_color[:, 0:1], final_color[:, 1:2], final_color[:, 2:3] # R, G, B
-
             # Ensure input is normalized [0, 1] for color stops
             normalized_value = vmag_interp # Use the fixed vmag for all color calculations
 
             # Different coloring options
-            if color_scheme == "rainbow":
+            if color_scheme in COLOR_SCHEMES:
+                 result_r, result_g, result_b = CurlNoiseGenerator._interpolate_colors(COLOR_SCHEMES[color_scheme], normalized_value)
+
+            elif color_scheme == "rainbow":
                 # Rainbow coloring based on angle
                 h = vangle # Hue from angle [0, 1]
                 s = torch.ones_like(h) * 0.8 # Fixed saturation
@@ -622,6 +727,7 @@ class CurlNoiseGenerator:
                  result_r = 0.5 + 0.5 * torch.sin(vangle * 6.28318 + time_broadcast)
                  result_g = 0.5 + 0.5 * torch.sin(vangle * 6.28318 + normalized_value * 3.14159 + time_broadcast * 2.0) # Use fixed value
                  result_b = 0.5 + 0.5 * torch.cos(vangle * 3.14159 + normalized_value * 6.28318 + time_broadcast * 3.0) # Use fixed value
+
             elif color_scheme == "vorticity":
                 # Vorticity visualization - more accurate curl representation
                 # Calculate numerical curl: dVx/dy - dVy/dx
@@ -645,161 +751,13 @@ class CurlNoiseGenerator:
                 result_g = (positive_curl_mask + negative_curl_mask) * (1.0 - curl_norm) # White in middle
                 result_b = negative_curl_mask * curl_norm # Blue for negative curl proxy
 
-            # --- Add other color schemes from JS ---
-            elif color_scheme == "blue_red":
-                 c0 = torch.tensor([0.0, 0.0, 1.0], device=device).view(1, 3, 1, 1)
-                 c1 = torch.tensor([1.0, 0.0, 0.0], device=device).view(1, 3, 1, 1)
-                 color = lerp(c0, c1, normalized_value) # Use fixed value
-                 result_r, result_g, result_b = color[:, 0:1], color[:, 1:2], color[:, 2:3]
-            elif color_scheme == "viridis":
-                 stops = [
-                     (0.0, torch.tensor([0.267, 0.005, 0.329], device=device).view(1, 3, 1, 1)), # #440154
-                     (0.33, torch.tensor([0.188, 0.407, 0.553], device=device).view(1, 3, 1, 1)), # #30678D
-                     (0.66, torch.tensor([0.208, 0.718, 0.471], device=device).view(1, 3, 1, 1)), # #35B778
-                     (1.0, torch.tensor([0.992, 0.906, 0.143], device=device).view(1, 3, 1, 1))  # #FDE724
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            # Plasma already implemented above
-            elif color_scheme == "inferno":
-                 stops = [
-                     (0.0, torch.tensor([0.001, 0.001, 0.016], device=device).view(1, 3, 1, 1)), # #000004
-                     (0.25, torch.tensor([0.259, 0.039, 0.408], device=device).view(1, 3, 1, 1)), # #420A68
-                     (0.5, torch.tensor([0.576, 0.149, 0.404], device=device).view(1, 3, 1, 1)), # #932667
-                     (0.75, torch.tensor([0.867, 0.318, 0.227], device=device).view(1, 3, 1, 1)), # #DD513A
-                     (0.85, torch.tensor([0.988, 0.647, 0.039], device=device).view(1, 3, 1, 1)), # #FCA50A
-                     (1.0, torch.tensor([0.988, 1.000, 0.643], device=device).view(1, 3, 1, 1))  # #FCFFA4
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "magma":
-                 stops = [
-                     (0.0, torch.tensor([0.001, 0.001, 0.016], device=device).view(1, 3, 1, 1)), # #000004
-                     (0.25, torch.tensor([0.231, 0.059, 0.439], device=device).view(1, 3, 1, 1)), # #3B0F70
-                     (0.5, torch.tensor([0.549, 0.161, 0.506], device=device).view(1, 3, 1, 1)), # #8C2981
-                     (0.75, torch.tensor([0.871, 0.288, 0.408], device=device).view(1, 3, 1, 1)), # #DE4968
-                     (0.85, torch.tensor([0.996, 0.624, 0.427], device=device).view(1, 3, 1, 1)), # #FE9F6D
-                     (1.0, torch.tensor([0.988, 0.992, 0.749], device=device).view(1, 3, 1, 1))  # #FCFDBF
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "turbo":
-                stops = [
-                    (0.0, torch.tensor([0.188, 0.071, 0.235], device=device).view(1, 3, 1, 1)), # #30123b
-                    (0.25, torch.tensor([0.275, 0.408, 0.859], device=device).view(1, 3, 1, 1)), # #4669db
-                    (0.5, torch.tensor([0.149, 0.749, 0.549], device=device).view(1, 3, 1, 1)), # #26bf8c
-                    (0.65, torch.tensor([0.831, 1.000, 0.314], device=device).view(1, 3, 1, 1)), # #d4ff50
-                    (0.85, torch.tensor([0.980, 0.718, 0.298], device=device).view(1, 3, 1, 1)), # #fab74c
-                    (1.0, torch.tensor([0.729, 0.004, 0.000], device=device).view(1, 3, 1, 1))  # #ba0100
-                ]
-                result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "jet":
-                stops = [
-                    (0.0, torch.tensor([0.000, 0.000, 0.498], device=device).view(1, 3, 1, 1)), # #00007f
-                    (0.125, torch.tensor([0.000, 0.000, 1.000], device=device).view(1, 3, 1, 1)), # #0000ff blue
-                    (0.375, torch.tensor([0.000, 1.000, 1.000], device=device).view(1, 3, 1, 1)), # #00ffff cyan
-                    (0.625, torch.tensor([1.000, 1.000, 0.000], device=device).view(1, 3, 1, 1)), # #ffff00 yellow
-                    (0.875, torch.tensor([1.000, 0.000, 0.000], device=device).view(1, 3, 1, 1)), # #ff0000 red
-                    (1.0, torch.tensor([0.498, 0.000, 0.000], device=device).view(1, 3, 1, 1))  # #7f0000 dark red
-                ]
-                result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            # Rainbow already implemented above
-            elif color_scheme == "cool":
-                 c0 = torch.tensor([0.0, 1.0, 1.0], device=device).view(1, 3, 1, 1) # Cyan
-                 c1 = torch.tensor([1.0, 0.0, 1.0], device=device).view(1, 3, 1, 1) # Magenta
-                 color = lerp(c0, c1, normalized_value) # Use fixed value
-                 result_r, result_g, result_b = color[:, 0:1], color[:, 1:2], color[:, 2:3]
-            elif color_scheme == "hot":
-                 stops = [
-                     (0.0, torch.tensor([0.0, 0.0, 0.0], device=device).view(1, 3, 1, 1)), # Black
-                     (0.375, torch.tensor([1.0, 0.0, 0.0], device=device).view(1, 3, 1, 1)), # Red
-                     (0.75, torch.tensor([1.0, 1.0, 0.0], device=device).view(1, 3, 1, 1)), # Yellow
-                     (1.0, torch.tensor([1.0, 1.0, 1.0], device=device).view(1, 3, 1, 1))  # White
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "parula":
-                 stops = [
-                     (0.0, torch.tensor([0.208, 0.165, 0.529], device=device).view(1, 3, 1, 1)), # #352a87
-                     (0.25, torch.tensor([0.059, 0.361, 0.867], device=device).view(1, 3, 1, 1)), # #0f5cdd
-                     (0.5, torch.tensor([0.000, 0.710, 0.651], device=device).view(1, 3, 1, 1)), # #00b5a6
-                     (0.75, torch.tensor([1.000, 0.765, 0.216], device=device).view(1, 3, 1, 1)), # #ffc337
-                     (1.0, torch.tensor([0.988, 0.996, 0.643], device=device).view(1, 3, 1, 1))  # #fcfea4
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
             elif color_scheme == "hsv":
                  # Use angle for hue, magnitude for value
                  h = vangle
                  s = torch.ones_like(h) * 0.9 # High saturation
                  v = normalized_value # Use fixed value
                  result_r, result_g, result_b = hsv_to_rgb(h, s, v)
-            elif color_scheme == "autumn":
-                 c0 = torch.tensor([1.0, 0.0, 0.0], device=device).view(1, 3, 1, 1) # Red
-                 c1 = torch.tensor([1.0, 1.0, 0.0], device=device).view(1, 3, 1, 1) # Yellow
-                 color = lerp(c0, c1, normalized_value) # Use fixed value
-                 result_r, result_g, result_b = color[:, 0:1], color[:, 1:2], color[:, 2:3]
-            elif color_scheme == "winter":
-                 c0 = torch.tensor([0.0, 0.0, 1.0], device=device).view(1, 3, 1, 1) # Blue
-                 c1 = torch.tensor([0.0, 1.0, 0.5], device=device).view(1, 3, 1, 1) # Greenish-Cyan
-                 color = lerp(c0, c1, normalized_value) # Use fixed value
-                 result_r, result_g, result_b = color[:, 0:1], color[:, 1:2], color[:, 2:3]
-            elif color_scheme == "spring":
-                 c0 = torch.tensor([1.0, 0.0, 1.0], device=device).view(1, 3, 1, 1) # Magenta
-                 c1 = torch.tensor([1.0, 1.0, 0.0], device=device).view(1, 3, 1, 1) # Yellow
-                 color = lerp(c0, c1, normalized_value) # Use fixed value
-                 result_r, result_g, result_b = color[:, 0:1], color[:, 1:2], color[:, 2:3]
-            elif color_scheme == "summer":
-                 c0 = torch.tensor([0.0, 0.5, 0.4], device=device).view(1, 3, 1, 1) # Dark Green
-                 c1 = torch.tensor([1.0, 1.0, 0.4], device=device).view(1, 3, 1, 1) # Yellow
-                 color = lerp(c0, c1, normalized_value) # Use fixed value
-                 result_r, result_g, result_b = color[:, 0:1], color[:, 1:2], color[:, 2:3]
-            elif color_scheme == "copper":
-                 c0 = torch.tensor([0.0, 0.0, 0.0], device=device).view(1, 3, 1, 1) # Black
-                 c1 = torch.tensor([1.0, 0.6, 0.4], device=device).view(1, 3, 1, 1) # Copper
-                 color = lerp(c0, c1, normalized_value) # Use fixed value
-                 result_r, result_g, result_b = color[:, 0:1], color[:, 1:2], color[:, 2:3]
-            elif color_scheme == "pink":
-                 stops = [
-                     (0.0, torch.tensor([0.05, 0.05, 0.05], device=device).view(1, 3, 1, 1)), # Dark gray
-                     (0.5, torch.tensor([1.0, 0.0, 1.0], device=device).view(1, 3, 1, 1)), # Magenta
-                     (1.0, torch.tensor([1.0, 1.0, 1.0], device=device).view(1, 3, 1, 1))  # White
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "bone":
-                 stops = [
-                     (0.0, torch.tensor([0.0, 0.0, 0.0], device=device).view(1, 3, 1, 1)), # Black
-                     (0.375, torch.tensor([0.329, 0.329, 0.455], device=device).view(1, 3, 1, 1)), # Dark blueish-gray
-                     (0.75, torch.tensor([0.627, 0.757, 0.757], device=device).view(1, 3, 1, 1)), # Light blueish-gray
-                     (1.0, torch.tensor([1.0, 1.0, 1.0], device=device).view(1, 3, 1, 1))  # White
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "ocean":
-                 stops = [
-                     (0.0, torch.tensor([0.0, 0.0, 0.0], device=device).view(1, 3, 1, 1)), # Black
-                     (0.33, torch.tensor([0.0, 0.0, 0.6], device=device).view(1, 3, 1, 1)), # Dark Blue
-                     (0.66, torch.tensor([0.0, 0.6, 1.0], device=device).view(1, 3, 1, 1)), # Light Blue
-                     (1.0, torch.tensor([0.6, 1.0, 1.0], device=device).view(1, 3, 1, 1))  # Cyan
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "terrain":
-                 stops = [
-                     (0.0, torch.tensor([0.2, 0.2, 0.6], device=device).view(1, 3, 1, 1)), # Blue
-                     (0.33, torch.tensor([0.0, 0.8, 0.4], device=device).view(1, 3, 1, 1)), # Green
-                     (0.66, torch.tensor([1.0, 0.8, 0.0], device=device).view(1, 3, 1, 1)), # Yellow
-                     (1.0, torch.tensor([1.0, 1.0, 1.0], device=device).view(1, 3, 1, 1))  # White
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "neon":
-                 stops = [
-                     (0.0, torch.tensor([1.0, 0.0, 1.0], device=device).view(1, 3, 1, 1)), # Magenta
-                     (0.5, torch.tensor([0.0, 1.0, 1.0], device=device).view(1, 3, 1, 1)), # Cyan
-                     (1.0, torch.tensor([1.0, 1.0, 0.0], device=device).view(1, 3, 1, 1))  # Yellow
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
-            elif color_scheme == "fire":
-                 stops = [
-                     (0.0, torch.tensor([0.0, 0.0, 0.0], device=device).view(1, 3, 1, 1)), # Black
-                     (0.25, torch.tensor([1.0, 0.0, 0.0], device=device).view(1, 3, 1, 1)), # Red
-                     (0.6, torch.tensor([1.0, 1.0, 0.0], device=device).view(1, 3, 1, 1)), # Yellow
-                     (1.0, torch.tensor([1.0, 1.0, 1.0], device=device).view(1, 3, 1, 1))  # White
-                 ]
-                 result_r, result_g, result_b = interpolate_colors(stops, normalized_value) # Use fixed value
+
             # --- End of added color schemes ---
             else:
                 # Default color scheme based on velocity components if unknown
@@ -2027,36 +1985,15 @@ def generate_curl_noise_tensor(shader_params, height, width, batch_size=1, devic
     # Extract or use provided target_channels - handle mismatches between parameters and dictionary
     if "target_channels" in shader_params:
         target_channels = shader_params["target_channels"]
-        # print(f"Curl noise using target_channels={target_channels} from shader_params") # Redundant print
     else:
         shader_params["target_channels"] = target_channels  # Add to shader_params
-        # print(f"Setting target_channels={target_channels} in shader_params") # Redundant print
     
     # Get color parameters
     color_scheme = shader_params.get("colorScheme", "none")
     color_intensity = shader_params.get("shaderColorIntensity", shader_params.get("intensity", 0.8))
     
-    # Print target channels for debugging
-    # print(f"Target channels: {target_channels}") # Redundant print
-    
     # Set deterministic seed for this operation
     torch.manual_seed(base_seed if use_temporal_coherence else seed)
-    
-    # --- Removed Redundant Parameter Extraction & Printing ---
-    # The parameters are extracted and printed within get_curl_noise now.
-    # scale = shader_params.get("scale", 1.0)
-    # warp_strength = shader_params.get("warp_strength", 0.5) 
-    # phase_shift = shader_params.get("phase_shift", 0.5)
-    # octaves = shader_params.get("octaves", 3.0)
-    # shape_type = shader_params.get("shape_type", "none")
-    # shape_mask_strength = shader_params.get("shapemaskstrength", 1.0)
-    
-    # Debug output of important parameters - Removed as it's handled in get_curl_noise
-    # print(f"Curl noise using: scale={scale}, warp={warp_strength}, phase={phase_shift}, octaves={octaves}")
-    # print(f"Temporal settings: time={time}, base_seed={base_seed}, coherence={use_temporal_coherence}")
-    # print(f"Shape mask params: type={shape_type}, strength={shape_mask_strength}")
-    # print(f"Color settings: scheme={color_scheme}, intensity={color_intensity}")
-    # print(f"Target channels: {target_channels}")
     
     # Generate curl noise using the CurlNoiseGenerator
     noise_tensor = CurlNoiseGenerator.get_curl_noise(
@@ -2078,7 +2015,7 @@ def generate_curl_noise_tensor(shader_params, height, width, batch_size=1, devic
     
     # Ensure we have the right number of channels for the model
     if noise_tensor.shape[1] != target_channels:
-        print(f"⚠️ Channel count mismatch: got {noise_tensor.shape[1]}, need {target_channels}")
+        # print(f"⚠️ Channel count mismatch: got {noise_tensor.shape[1]}, need {target_channels}")
         # Create a tensor with the correct number of channels
         corrected_tensor = torch.zeros((batch_size, target_channels, height, width), 
                                       device=noise_tensor.device, 
@@ -2099,7 +2036,7 @@ def generate_curl_noise_tensor(shader_params, height, width, batch_size=1, devic
                                                    dtype=noise_tensor.dtype) * std + mean
         
         noise_tensor = corrected_tensor
-        print(f"✅ Adjusted to {target_channels} channels")
+        # print(f"✅ Adjusted to {target_channels} channels")
     
     return noise_tensor
 
@@ -2131,11 +2068,6 @@ def add_curl_noise_to_tensor(tensor_class):
         Returns:
             Noise tensor [batch, height, width, 1]
         """
-        # Debug print to confirm this method is being called with the right params
-        print(f">>> curl_noise method called with scale={scale}, warp={warp_strength}, phase={phase_shift}, octaves={octaves}")
-        print(f">>> Shape params: type={shape_type}, strength={shape_mask_strength}")
-        print(f">>> Color params: scheme={color_scheme}, intensity={color_intensity}")
-        
         # Create parameter dictionary from individual params
         shader_params = {
             "shaderScale": scale,
@@ -2184,9 +2116,6 @@ def add_curl_noise_to_tensor(tensor_class):
         Returns:
             Noise tensor [batch, height, width, 1]
         """
-        print(f">>> curl_noise_with_params called with full params dictionary")
-        print(f">>> Raw params: {shader_params}")
-        
         # Add time to params if not present
         if "time" not in shader_params:
             shader_params["time"] = time
@@ -2225,14 +2154,13 @@ def add_curl_noise_to_tensor(tensor_class):
         # Convert to BHWC format for compatibility with expected outputs
         # Just take the first channel for compatibility with existing methods
         result = noise.permute(0, 2, 3, 1)[:, :, :, 0:1]
-        print(f">>> curl_noise_with_params produced tensor shape: {result.shape}")
         
         return result
     
     # Add the new method to the class
     setattr(tensor_class, 'curl_noise_with_params', classmethod(curl_noise_with_params))
     
-    print("=== Added curl_noise functionality to ShaderToTensor ===") # Added print statement
+    print("=== Added curl_noise functionality to ShaderToTensor ===")
 
     # Update shader_noise_to_tensor to handle curl_noise type
     original_shader_noise_to_tensor = tensor_class.shader_noise_to_tensor
@@ -2244,18 +2172,12 @@ def add_curl_noise_to_tensor(tensor_class):
                                shader_params=None, shape_type="none", shape_mask_strength=1.0,
                                color_scheme="none", color_intensity=0.8):
         """Updated shader_noise_to_tensor with curl_noise support"""
-        print(f"Generating {shader_type} noise with scale={scale}, octaves={octaves}, warp={warp_strength}, phase={phase_shift}")
-        print(f"Shape params: type={shape_type}, strength={shape_mask_strength}")
-        print(f"Color params: scheme={color_scheme}, intensity={color_intensity}")
         
         # Check if we have a shader_params dictionary passed
         has_shader_params = shader_params is not None
-        if has_shader_params:
-            print(f"Full shader_params provided: {shader_params}")
         
         # Handle curl_noise shader type explicitly
         if shader_type == "curl_noise" or shader_type == "curl":
-            print("EXECUTING CURL_NOISE BRANCH")
             
             # If we have the full params dict and the new method, use it
             if has_shader_params and hasattr(cls, 'curl_noise_with_params'):
@@ -2294,15 +2216,10 @@ def add_curl_noise_to_tensor(tensor_class):
                 shape_type, shape_mask_strength, color_scheme, color_intensity
             )
             
-            print(f"Curl noise raw result shape: {result.shape}")
-            
             # Ensure result has the right shape [batch, height, width, 1]
             if len(result.shape) == 3:  # Missing dimension
                 result = result.unsqueeze(-1)
                 
-            # Result should now be in [B, H, W, C] format
-            print(f"Final curl noise shape (BHWC format): {result.shape}")
-            
             return result
         else:
             # Call original method for other shader types
@@ -2325,7 +2242,6 @@ def add_curl_noise_to_tensor(tensor_class):
                                    color_scheme="none", color_intensity=0.8):
             # Handle curl_noise shader type explicitly
             if shader_type == "curl_noise" or shader_type == "curl":
-                print("EXECUTING CURL_NOISE BRANCH")
                 
                 # If we have the full params dict and the new method, use it
                 has_shader_params = shader_params is not None
@@ -2369,8 +2285,6 @@ def add_curl_noise_to_tensor(tensor_class):
                 if len(result.shape) == 3:
                     result = result.unsqueeze(-1)
                     
-                print(f"Final curl noise shape: {result.shape}")
-                
                 return result
             else:
                 # Call existing method for other shader types
@@ -2449,7 +2363,7 @@ def add_temporal_coherent_curl_to_shader_params(shader_params, animation_frame, 
     new_params["shaderColorIntensity"] = color_intensity
     
     # Set these explicitly for cleaner integration
-    print(f"Video frame {animation_frame}/{animation_length}: time={temporal_params['time']:.3f}, seed={temporal_params['seed']}, phase={temporal_params['phase']:.3f}")
-    print(f"Color scheme: {color_scheme}, intensity: {color_intensity}")
+    # print(f"Video frame {animation_frame}/{animation_length}: time={temporal_params['time']:.3f}, seed={temporal_params['seed']}, phase={temporal_params['phase']:.3f}")
+    # print(f"Color scheme: {color_scheme}, intensity: {color_intensity}")
     
-    return new_params 
+    return new_params

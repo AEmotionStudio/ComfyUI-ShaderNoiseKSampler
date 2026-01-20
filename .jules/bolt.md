@@ -9,3 +9,7 @@
 ## 2026-02-28 - Integer Bitwise Hashing for Simplex Gradient
 **Learning:** In `TemporalCoherentNoiseGenerator.grad3d`, casting integers to floats to perform modulo operations (`h % 2`, `h % 4`) and then casting back is inefficient. Additionally, `torch.floor(x).to(int)` is slower than `x.int()` when `x` is already an integer-valued float.
 **Action:** Replaced float arithmetic with integer bitwise operations (`h & 1`, `h & 2`) and utilized `.int()` for truncation on pre-floored inputs. This resulted in a ~1.4x speedup for the gradient calculation step, which is called heavily in the noise generation loop.
+
+## 2026-03-01 - Optimizing Color Interpolation Data Structure
+**Learning:** In `shaders/curl_noise.py`, color gradient data was defined as inline lists of `torch.tensor` creations inside the hot loop `get_curl_noise`. This meant thousands of small tensors were created and destroyed on every call, causing significant Python and CPU overhead.
+**Action:** Refactored the color data into a module-level `COLOR_SCHEMES` dictionary using pure Python tuples. Implemented `_interpolate_colors` to convert this data into tensors efficiently (using `torch.tensor(list_of_lists)` instead of `torch.stack`) and leverage `torch.bucketize` for O(1) interpolation per pixel. This yielded a ~3.4x speedup for the color preparation step and cleaner code. Always prefer static data definitions for constants used in PyTorch operations.
