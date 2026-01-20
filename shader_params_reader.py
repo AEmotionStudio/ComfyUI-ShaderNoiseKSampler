@@ -9,6 +9,29 @@ class ShaderParamsReader:
     Implements the Lt=Sα(N)∘Kβ(t) pattern where shader transforms are applied to noise before sampling
     """
     
+    # Define valid parameter values for security whitelisting
+    VALID_SHADER_TYPES = {
+        "tensor_field", "cellular", "domain_warp", "fractal", "perlin",
+        "waves", "gaussian", "heterogeneous_fbm", "interference_patterns",
+        "spectral", "projection_3d", "curl_noise"
+    }
+
+    VALID_SHAPE_TYPES = {
+        "none", "circle", "square", "radial", "star", "linear",
+        "radial_animated", "spiral", "checkerboard", "spots", "hexgrid",
+        "stripes", "radial_gradient_static", "gradient", "vignette",
+        "cross", "triangles", "concentric", "rays", "zigzag",
+        "gradient_x", "gradient_y", "stars"
+    }
+
+    VALID_COLOR_SCHEMES = {
+        "none", "rgb", "complementary", "monochrome", "gradient",
+        "blue_red", "viridis", "plasma", "inferno", "magma", "turbo",
+        "jet", "rainbow", "cool", "hot", "parula", "hsv", "autumn",
+        "winter", "spring", "summer", "copper", "pink", "bone",
+        "ocean", "terrain", "neon", "fire", "fantasy"
+    }
+
     @staticmethod
     def smoothstep(edge0, edge1, x):
         """
@@ -85,6 +108,47 @@ class ShaderParamsReader:
                     sanitized[key] = val
                 except (ValueError, TypeError):
                     sanitized[key] = 0.0 if "strength" in key or "shift" in key else 1.0
+
+        # 4. Validate String Enums (Shader Type, Shape Type, Color Scheme)
+        # Prevent arbitrary strings from flowing through the system
+        if "shader_type" in sanitized:
+            st = str(sanitized["shader_type"]).lower()
+            # Handle some common aliases before validation
+            if st == "tensorfield": st = "tensor_field"
+            if st == "heterogeneousfbm": st = "heterogeneous_fbm"
+            if st == "projection3d": st = "projection_3d"
+            if st == "curl": st = "curl_noise"
+
+            if st not in ShaderParamsReader.VALID_SHADER_TYPES:
+                print(f"Warning: Invalid shader_type '{st}', defaulting to 'tensor_field'")
+                sanitized["shader_type"] = "tensor_field"
+            else:
+                sanitized["shader_type"] = st
+
+        if "shape_type" in sanitized:
+            # Handle integer inputs for legacy shape types
+            shape_val = sanitized["shape_type"]
+            if isinstance(shape_val, int) or (isinstance(shape_val, str) and shape_val.isdigit()):
+                # Map legacy int types to strings if possible, or allow known ints
+                # For now, convert to string for consistent handling or keep if logic supports it.
+                # The apply_shape_mask function handles 1, 2, 3 ints.
+                # Let's verify if we need to strictly convert them.
+                pass
+            else:
+                st = str(shape_val).lower()
+                if st not in ShaderParamsReader.VALID_SHAPE_TYPES:
+                    print(f"Warning: Invalid shape_type '{st}', defaulting to 'none'")
+                    sanitized["shape_type"] = "none"
+                else:
+                    sanitized["shape_type"] = st
+
+        if "colorScheme" in sanitized:
+            cs = str(sanitized["colorScheme"]).lower()
+            if cs not in ShaderParamsReader.VALID_COLOR_SCHEMES:
+                print(f"Warning: Invalid colorScheme '{cs}', defaulting to 'none'")
+                sanitized["colorScheme"] = "none"
+            else:
+                sanitized["colorScheme"] = cs
 
         return sanitized
 
