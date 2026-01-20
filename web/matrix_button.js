@@ -125,14 +125,20 @@ import { app } from "../../scripts/app.js";
 
         const codeText = preElement.textContent;
         navigator.clipboard.writeText(codeText).then(() => {
-            const originalText = buttonElement.textContent;
             buttonElement.textContent = "Copied!";
             buttonElement.classList.add('copied');
 
-            setTimeout(() => {
-                buttonElement.textContent = originalText;
+            if (buttonElement.dataset.timeoutId) {
+                clearTimeout(parseInt(buttonElement.dataset.timeoutId));
+            }
+
+            const timeoutId = setTimeout(() => {
+                buttonElement.textContent = "Copy";
                 buttonElement.classList.remove('copied');
+                delete buttonElement.dataset.timeoutId;
             }, 2000);
+
+            buttonElement.dataset.timeoutId = timeoutId;
         }).catch(err => {
             console.error('Failed to copy: ', err);
             buttonElement.textContent = "Error";
