@@ -142,9 +142,19 @@ import { app } from "../../scripts/app.js";
         }).catch(err => {
             console.error('Failed to copy: ', err);
             buttonElement.textContent = "Error";
-            setTimeout(() => {
+            // Ensure success class is removed if it was present
+            buttonElement.classList.remove('copied');
+
+            if (buttonElement.dataset.timeoutId) {
+                clearTimeout(parseInt(buttonElement.dataset.timeoutId));
+            }
+
+            const timeoutId = setTimeout(() => {
                 buttonElement.textContent = "Copy";
+                delete buttonElement.dataset.timeoutId;
             }, 2000);
+
+            buttonElement.dataset.timeoutId = timeoutId;
         });
     };
 
