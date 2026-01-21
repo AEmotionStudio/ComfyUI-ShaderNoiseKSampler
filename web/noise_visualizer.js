@@ -80,12 +80,21 @@ if (!window.NoiseVisualizer) {
                 const canvasId = canvasDiv.id;
                 if (!canvasId || !canvasId.startsWith("noise-canvas-")) return;
                 const noiseType = canvasId.substring("noise-canvas-".length);
+                const noiseName = noiseType.split('_').map(word => {
+                    if (word.toLowerCase() === 'fbm') return 'FBM';
+                    if (word.toLowerCase() === '3d') return '3D';
+                    return word.charAt(0).toUpperCase() + word.slice(1);
+                }).join(' ');
                 
                 let canvas = canvasDiv.querySelector('canvas');
                 if (!canvas) {
                     canvas = document.createElement('canvas');
                     canvas.width = 130;
                     canvas.height = 130;
+                    // Accessibility attributes
+                    canvas.setAttribute('role', 'img');
+                    canvas.setAttribute('aria-label', `Visualization of ${noiseName} noise pattern`);
+
                     canvasDiv.innerHTML = '';
                     canvasDiv.appendChild(canvas);
                 }
@@ -100,7 +109,7 @@ if (!window.NoiseVisualizer) {
                     this[renderFunctionName](canvas);
                 } else {
                     console.warn("No renderer function found:", renderFunctionName, "for noise type:", noiseType);
-                    this.renderPlaceholder(canvas, noiseType.replace(/_/g, ' '));
+                    this.renderPlaceholder(canvas, noiseName);
                 }
             });
             
@@ -110,12 +119,17 @@ if (!window.NoiseVisualizer) {
                 const canvasId = canvasDiv.id;
                 if (!canvasId || !canvasId.startsWith("mask-canvas-")) return;
                 const maskType = canvasId.substring("mask-canvas-".length);
+                const maskName = maskType.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
                 
                 let canvas = canvasDiv.querySelector('canvas');
                 if (!canvas) {
                     canvas = document.createElement('canvas');
                     canvas.width = 100;
                     canvas.height = 70;
+                    // Accessibility attributes
+                    canvas.setAttribute('role', 'img');
+                    canvas.setAttribute('aria-label', `Visualization of ${maskName} shape mask`);
+
                     canvasDiv.innerHTML = '';
                     canvasDiv.appendChild(canvas);
                 }
@@ -129,7 +143,7 @@ if (!window.NoiseVisualizer) {
                     this[renderFunctionName](canvas);
                 } else {
                     console.warn("No renderer function found:", renderFunctionName, "for mask type:", maskType);
-                    this.renderMaskPlaceholder(canvas, maskType.replace(/_/g, ' '));
+                    this.renderMaskPlaceholder(canvas, maskName);
                 }
             });
             
@@ -162,6 +176,10 @@ if (!window.NoiseVisualizer) {
                     const containerStyle = getComputedStyle(animationDemoContainer);
                     canvas.width = parseInt(containerStyle.width) || 300; // Default if not specified
                     canvas.height = parseInt(containerStyle.height) || 200; // Default if not specified
+                    // Accessibility attributes
+                    canvas.setAttribute('role', 'img');
+                    canvas.setAttribute('aria-label', 'Interactive animation demonstrating temporal coherence');
+
                     animationDemoContainer.innerHTML = ''; // Clear placeholder text/content
                     animationDemoContainer.appendChild(canvas);
                     animationDemoContainer.style.display = 'block'; // Ensure container is block for canvas
@@ -183,6 +201,10 @@ if (!window.NoiseVisualizer) {
                     const containerStyle = getComputedStyle(introNoiseDemoContainer);
                     canvas.width = parseInt(containerStyle.width) || 300;
                     canvas.height = parseInt(containerStyle.height) || 350; // Match defined height in CSS
+                    // Accessibility attributes
+                    canvas.setAttribute('role', 'img');
+                    canvas.setAttribute('aria-label', 'Interactive visualization of noise patterns');
+
                     introNoiseDemoContainer.innerHTML = ''; // Clear placeholder
                     introNoiseDemoContainer.appendChild(canvas);
                     introNoiseDemoContainer.style.display = 'block';
@@ -971,58 +993,6 @@ if (!window.NoiseVisualizer) {
                     } else {
                         spawnX = pX; spawnY = pY;
                     }
-                } else if (patternType === 'domain_warp') {
-                    const gridSize = 25;
-                    const c = Math.floor(Math.random() * (canvas.width / gridSize));
-                    const r = Math.floor(Math.random() * (canvas.height / gridSize));
-                    const origX = c * gridSize;
-                    const origY = r * gridSize;
-                    const warpScale = 0.015 + (variantSeed % 5) * 0.002;
-                    const warpIntensity = canvas.width * (0.05 + (variantSeed % 3) * 0.02);
-                    const offsetX = Math.sin(origY * warpScale * 1.2 + timeVal * 8 + variantSeed) * warpIntensity;
-                    const offsetY = Math.cos(origX * warpScale * 0.8 - timeVal * 6 + variantSeed) * warpIntensity;
-                    spawnX = origX + offsetX;
-                    spawnY = origY + offsetY;
-                } else if (patternType === 'perlin') {
-                    // Try a few random spots and pick one with mid-range noise intensity
-                    let bestX = spawnX, bestY = spawnY, minDiff = Infinity;
-                    for(let i=0; i<10; i++) {
-                        let sx = Math.random() * canvas.width;
-                        let sy = Math.random() * canvas.height;
-                        let noiseVal = 0;
-                        let freq = 0.015 + (variantSeed % 7) * 0.003; 
-                        let amp = 0.6;
-                        for (let oct = 0; oct < 3; oct++) {
-                            noiseVal += Math.sin(sx * freq + timeVal*10 + variantSeed*0.2) * Math.cos(sy * freq - timeVal*12 - variantSeed*0.1) * amp;
-                            freq *= 1.8 + (variantSeed % 3) * 0.1; 
-                            amp *= 0.45 + (variantSeed % 4) * 0.02; 
-                        }
-                        const currentDiff = Math.abs(noiseVal); // Target noiseVal around 0 (mid-range for bipolar noise)
-                        if (currentDiff < minDiff) {
-                            minDiff = currentDiff;
-                            bestX = sx; bestY = sy;
-                        }
-                    }
-                    spawnX = bestX; spawnY = bestY;
-                } else if (patternType === 'curl_noise') {
-                    // Spawn along a few conceptual streamlines
-                    const numStreamlines = 5;
-                    const streamlineIndex = Math.floor(Math.random() * numStreamlines);
-                    let pX = canvas.width * (streamlineIndex / numStreamlines + Math.random() * 0.1 - 0.05);
-                    let pY = canvas.height * Math.random();
-                    const curlScale = 0.018 + (variantSeed % 5) * 0.002;
-                    const Gx_val = Math.sin(pY*curlScale + timeVal*7 + variantSeed + streamlineIndex*0.1);
-                    const Gy_val = Math.cos(pX*curlScale - timeVal*9 + variantSeed + streamlineIndex*0.1);
-                    const flowX = Gy_val; 
-                    const flowY = -Gx_val;
-                    const norm = Math.hypot(flowX, flowY);
-                    if (norm > 0.01) {
-                        const step = (Math.random() - 0.5) * 50; // Spawn somewhere along the local flow vector
-                        spawnX = pX + (flowX / norm) * step;
-                        spawnY = pY + (flowY / norm) * step;
-                    } else {
-                        spawnX = pX; spawnY = pY;
-                    }
                 } else if (patternType === 'waves_interference') {
                     const numWaveSets = 2 + Math.floor(variantSeed % 2);
                     const ws = Math.floor(Math.random()*numWaveSets); // Pick a wave set
@@ -1605,4 +1575,4 @@ if (!window.NoiseVisualizer) {
             await window.NoiseVisualizer._preloadKofiImage(); 
         });
     }
-} 
+}
