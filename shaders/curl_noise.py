@@ -326,7 +326,6 @@ class CurlNoiseGenerator:
             
             # Helper function for random values based on coords and seed
             def random_val(coords, seed_offset):
-                torch.manual_seed(base_seed + seed_offset)
                 # Use a simple hash-like function based on coordinates
                 hash_val = torch.sin(coords[:, :, :, 0] * (12.9898 + seed_offset) + coords[:, :, :, 1] * (78.233 + seed_offset)) * 43758.5453
                 return torch.frac(hash_val)

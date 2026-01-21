@@ -68,11 +68,6 @@ class ShaderParamsReader:
         Generate a random-like value based on coordinates and seed.
         Matches the random_val helper in CurlNoiseGenerator.
         """
-        # Ensure base_seed and seed_offset are appropriate for torch.manual_seed
-        # torch.manual_seed expects an integer.
-        current_seed = int(base_seed) + int(seed_offset)
-        torch.manual_seed(current_seed)
-        
         # Use a simple hash-like function based on coordinates
         # Ensuring coords are float for calculations
         coords_float = coords.float()
