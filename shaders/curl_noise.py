@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import math
+import functools
 
 # Define color schemes dictionary at module level for O(1) access
 COLOR_SCHEMES = {
@@ -133,6 +134,16 @@ class CurlNoiseGenerator:
     """
     
     @staticmethod
+    @functools.lru_cache(maxsize=32)
+    def _get_color_tensors(stops_tuple, device):
+        """Helper to cache color tensors. Key must be hashable (tuple)."""
+        # boundaries: [S]
+        boundaries = torch.tensor([s[0] for s in stops_tuple], device=device)
+        # colors: [S, 3]
+        colors = torch.tensor([s[1] for s in stops_tuple], device=device)
+        return boundaries, colors
+
+    @staticmethod
     def _interpolate_colors(stops, t):
         """
         Optimized color interpolation using torch.bucketize and gathering.
@@ -147,11 +158,8 @@ class CurlNoiseGenerator:
         device = t.device
         num_stops = len(stops)
 
-        # Prepare boundaries and colors
-        # boundaries: [S]
-        boundaries = torch.tensor([s[0] for s in stops], device=device)
-        # colors: [S, 3]
-        colors = torch.tensor([s[1] for s in stops], device=device)
+        # Retrieve cached tensors. Convert list of stops to tuple for hashability.
+        boundaries, colors = CurlNoiseGenerator._get_color_tensors(tuple(stops), device)
 
         # Find indices where boundaries[i-1] <= t < boundaries[i]
         # This gives us the index of the upper bound for each value in t
@@ -326,8 +334,8 @@ class CurlNoiseGenerator:
             
             # Helper function for random values based on coords and seed
             def random_val(coords, seed_offset):
-                torch.manual_seed(base_seed + seed_offset)
                 # Use a simple hash-like function based on coordinates
+                # Note: No torch.manual_seed needed here as we use deterministic math
                 hash_val = torch.sin(coords[:, :, :, 0] * (12.9898 + seed_offset) + coords[:, :, :, 1] * (78.233 + seed_offset)) * 43758.5453
                 return torch.frac(hash_val)
 
@@ -795,7 +803,7 @@ class CurlNoiseGenerator:
                 for c in range(3, target_channels):
                     # Create a controlled variation seed
                     variation_seed = base_seed + 600 + (c * 100)
-                    torch.manual_seed(variation_seed)
+                    # Note: No torch.manual_seed needed here as get_velocity_field handles it
                     
                     # Use slight parameter variations for controlled diversity
                     time_offset = c * 0.1  # Larger offset for more variation with color
@@ -899,7 +907,7 @@ class CurlNoiseGenerator:
                     # Generate just one extra channel for variation (like the original c=3 logic)
                     # print("Generating structured variation for channel 3 (fast mode base)")
                     variation_seed = base_seed + 500 + (3 * 100)
-                    torch.manual_seed(variation_seed)
+                    # Note: No torch.manual_seed needed here
                     time_offset = 3 * 0.05
                     c_p = p.clone() + torch.sin(torch.tensor([3 * 0.1, 3 * 0.2], device=device).reshape(1, 1, 1, 2))
                     c_velocity = CurlNoiseGenerator.get_velocity_field(c_p, time + time_offset, octaves + (3 * 0.1), device, variation_seed, use_temporal_coherence)
@@ -960,7 +968,7 @@ class CurlNoiseGenerator:
                      # print(f"Generating structured variation for channel {c}")
                      # Create a controlled variation seed derived from base_seed
                      variation_seed = base_seed + 500 + (c * 100)
-                     torch.manual_seed(variation_seed)
+                     # Note: No torch.manual_seed needed here
 
                      # Generate a unique velocity field with controlled parameter variations
                      # Use a slight offset in time, coordinates, and other parameters
