@@ -80,7 +80,11 @@ if (!window.NoiseVisualizer) {
                 const canvasId = canvasDiv.id;
                 if (!canvasId || !canvasId.startsWith("noise-canvas-")) return;
                 const noiseType = canvasId.substring("noise-canvas-".length);
-                const noiseName = noiseType.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                const noiseName = noiseType.split('_').map(word => {
+                    if (word.toLowerCase() === 'fbm') return 'FBM';
+                    if (word.toLowerCase() === '3d') return '3D';
+                    return word.charAt(0).toUpperCase() + word.slice(1);
+                }).join(' ');
                 
                 let canvas = canvasDiv.querySelector('canvas');
                 if (!canvas) {
