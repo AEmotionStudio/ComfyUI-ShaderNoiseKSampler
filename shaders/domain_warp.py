@@ -143,20 +143,30 @@ class DomainWarpGenerator:
             x = c * (1.0 - torch.abs(torch.fmod(h_prime, 2.0) - 1.0))
             m = v - c
             
-            r, g, b = torch.zeros_like(h), torch.zeros_like(h), torch.zeros_like(h)
+            # Optimized HSV to RGB conversion using torch.where instead of masked assignments
+            # Determine sector (0-5)
+            sector = torch.floor(h_prime) % 6
 
-            mask0 = (h_prime < 1.0)
-            r[mask0], g[mask0], b[mask0] = c[mask0], x[mask0], 0.0
-            mask1 = (h_prime >= 1.0) & (h_prime < 2.0)
-            r[mask1], g[mask1], b[mask1] = x[mask1], c[mask1], 0.0
-            mask2 = (h_prime >= 2.0) & (h_prime < 3.0)
-            r[mask2], g[mask2], b[mask2] = 0.0, c[mask2], x[mask2]
-            mask3 = (h_prime >= 3.0) & (h_prime < 4.0)
-            r[mask3], g[mask3], b[mask3] = 0.0, x[mask3], c[mask3]
-            mask4 = (h_prime >= 4.0) & (h_prime < 5.0)
-            r[mask4], g[mask4], b[mask4] = x[mask4], 0.0, c[mask4]
-            mask5 = (h_prime >= 5.0)
-            r[mask5], g[mask5], b[mask5] = c[mask5], 0.0, x[mask5]
+            # R channel
+            # sector 0 or 5 -> c
+            # sector 1 or 4 -> x
+            # else -> 0
+            r = torch.where((sector == 0) | (sector == 5), c,
+                            torch.where((sector == 1) | (sector == 4), x, torch.zeros_like(c)))
+
+            # G channel
+            # sector 1 or 2 -> c
+            # sector 0 or 3 -> x
+            # else -> 0
+            g = torch.where((sector == 1) | (sector == 2), c,
+                            torch.where((sector == 0) | (sector == 3), x, torch.zeros_like(c)))
+
+            # B channel
+            # sector 3 or 4 -> c
+            # sector 2 or 5 -> x
+            # else -> 0
+            b = torch.where((sector == 3) | (sector == 4), c,
+                            torch.where((sector == 2) | (sector == 5), x, torch.zeros_like(c)))
 
             r, g, b = r + m, g + m, b + m
             return r, g, b
@@ -2047,12 +2057,12 @@ def add_domain_warp_to_tensor(tensor, shader_params=None, scale=1.0, warp_streng
                 tensor_norm = tensor * 2.0 - 1.0
                 warp_norm = warp_tensor * 2.0 - 1.0
                 
-                dark_mask = (tensor_norm < 0)
-                light_mask = (tensor_norm >= 0)
+                # Overlay formula: if base < 0.5, 2 * base * blend; else 1 - 2 * (1 - base) * (1 - blend)
+                # Optimized using torch.where to avoid masked assignments
+                res_dark = tensor_norm * (1.0 + warp_norm * blend_factor)
+                res_light = tensor_norm + warp_norm * blend_factor * (1.0 - tensor_norm)
                 
-                result = torch.zeros_like(tensor)
-                result[dark_mask] = (tensor_norm[dark_mask] * (1.0 + warp_norm[dark_mask] * blend_factor))
-                result[light_mask] = tensor_norm[light_mask] + warp_norm[light_mask] * blend_factor * (1.0 - tensor_norm[light_mask])
+                result = torch.where(tensor_norm < 0, res_dark, res_light)
                 
                 result = (result + 1.0) * 0.5
             elif blend_mode == "alpha":
@@ -2110,13 +2120,11 @@ def add_domain_warp_to_tensor(tensor, shader_params=None, scale=1.0, warp_streng
         warp_norm = warp_tensor * 2.0 - 1.0  # Normalize to [-1, 1]
         
         # Overlay formula: if base < 0.5, 2 * base * blend; else 1 - 2 * (1 - base) * (1 - blend)
-        dark_mask = (tensor_norm < 0)
-        light_mask = (tensor_norm >= 0)
+        # Optimized using torch.where to avoid masked assignments
+        res_dark = tensor_norm * (1.0 + warp_norm * blend_factor)
+        res_light = tensor_norm + warp_norm * blend_factor * (1.0 - tensor_norm)
         
-        # Apply overlay formula
-        result = torch.zeros_like(tensor)
-        result[dark_mask] = (tensor_norm[dark_mask] * (1.0 + warp_norm[dark_mask] * blend_factor))
-        result[light_mask] = tensor_norm[light_mask] + warp_norm[light_mask] * blend_factor * (1.0 - tensor_norm[light_mask])
+        result = torch.where(tensor_norm < 0, res_dark, res_light)
         
         # Normalize back to [0, 1]
         result = (result + 1.0) * 0.5
