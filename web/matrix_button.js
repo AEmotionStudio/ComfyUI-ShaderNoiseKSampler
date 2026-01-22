@@ -3167,6 +3167,33 @@ def apply_color_to_noise(noise_tensor, shader_params):
                         modal.appendChild(content);
                         document.body.appendChild(modal);
 
+                        // Accessibility: Focus Trap & Initial Focus
+                        const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+                        modal.addEventListener('keydown', (e) => {
+                            if (e.key === 'Tab') {
+                                const focusableElements = Array.from(modal.querySelectorAll(focusableSelectors))
+                                    .filter(el => el.offsetParent !== null && !el.hasAttribute('disabled')); // Only visible and enabled elements
+
+                                if (focusableElements.length === 0) return;
+
+                                const firstElement = focusableElements[0];
+                                const lastElement = focusableElements[focusableElements.length - 1];
+
+                                if (e.shiftKey) { // Shift + Tab
+                                    if (document.activeElement === firstElement) {
+                                        e.preventDefault();
+                                        lastElement.focus();
+                                    }
+                                } else { // Tab
+                                    if (document.activeElement === lastElement) {
+                                        e.preventDefault();
+                                        firstElement.focus();
+                                    }
+                                }
+                            }
+                        });
+
                         // Accessibility: Set focus to the close button when modal opens
                         // Using a small timeout to ensure DOM insertion is complete and to play nice with screen readers
                         setTimeout(() => {
