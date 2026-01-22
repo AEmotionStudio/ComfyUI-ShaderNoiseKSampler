@@ -888,7 +888,8 @@ class DomainWarpGenerator:
         batch, height, width, dim = p.shape
         
         # Ensure minimum octaves for good structure and convert to integer
-        num_octaves = max(3, int(num_octaves))
+        # CLAMPING: Limit max octaves to 20 to prevent DoS via infinite/long loops
+        num_octaves = min(max(3, int(num_octaves)), 20)
         
         # FIXED: Make sure seed is an integer, not a device
         # If seed is a device object (which could happen due to parameter ordering issues),
@@ -1537,7 +1538,8 @@ class DomainWarpGenerator:
         batch, height, width, dim = p.shape
         
         # Ensure minimum octaves for good structure and convert to integer
-        num_octaves = max(3, int(num_octaves))
+        # CLAMPING: Limit max octaves to 20 to prevent DoS via infinite/long loops
+        num_octaves = min(max(3, int(num_octaves)), 20)
         
         # Handle seed type issues
         if not isinstance(seed, (int, float, torch.Tensor)) or isinstance(seed, torch.device):
