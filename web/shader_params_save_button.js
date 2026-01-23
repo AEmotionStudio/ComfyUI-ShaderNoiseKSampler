@@ -1,6 +1,49 @@
 // Add a button to manually save shader parameters to file
 import { app } from "../../scripts/app.js";
 
+// Helper function to show toast notifications
+function showToast(message, type = 'info') {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('comfy-toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'comfy-toast-container';
+        document.body.appendChild(toastContainer);
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `comfy-toast comfy-toast-${type}`;
+    toast.setAttribute('role', 'alert');
+    toast.textContent = message;
+
+    // Add to container
+    toastContainer.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+
+    // Remove after delay
+    setTimeout(() => {
+        toast.classList.remove('show');
+        // Wait for transition to finish, with fallback
+        const removeToast = () => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+                // Ensure listener is removed if called by fallback
+                toast.removeEventListener('transitionend', removeToast);
+            }
+        };
+
+        toast.addEventListener('transitionend', removeToast, { once: true });
+
+        // Fallback cleanup if transitions are disabled
+        setTimeout(removeToast, 350);
+    }, 3000);
+}
+
 app.registerExtension({
     name: "ShaderParamsSaveButton",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
@@ -236,7 +279,8 @@ app.registerExtension({
                                 console.warn("Could not clean up download link:", cleanupError);
                             }
                             
-                            // if (saveButtonWidget) saveButtonWidget.name = "✗ Parameters Not Saved";
+                            showToast("Parameters saved successfully!", "success");
+
                             setTimeout(() => {
                                 if (saveButtonWidget) saveButtonWidget.name = "💾 Save Shader Parameters";
                                 isSaving = false;
@@ -245,6 +289,7 @@ app.registerExtension({
                         
                     } catch (error) {
                         console.error("Error saving shader parameters:", error);
+                        showToast("Error saving parameters!", "error");
                         if (saveButtonWidget) saveButtonWidget.name = "Error Saving!";
                          setTimeout(() => {
                             if (saveButtonWidget) saveButtonWidget.name = "💾 Save Shader Parameters";
@@ -389,6 +434,52 @@ app.registerExtension({
             .tooltip-container:hover .comfy-tooltip {
                 visibility: visible;
             }
+
+            /* Toast Notification */
+            #comfy-toast-container {
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: none;
+            }
+
+            .comfy-toast {
+                background-color: rgba(40, 40, 40, 0.95);
+                color: #fff;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+                opacity: 0;
+                transform: translateY(-20px);
+                transition: opacity 0.3s ease, transform 0.3s ease;
+                pointer-events: auto;
+                text-align: center;
+                min-width: 250px;
+                border-left: 4px solid #4a9eff;
+            }
+
+            .comfy-toast.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            .comfy-toast-success {
+                border-left-color: #2ecc71;
+            }
+
+            .comfy-toast-error {
+                border-left-color: #e74c3c;
+            }
+
+            .comfy-toast-warning {
+                border-left-color: #f39c12;
+            }
         `;
         document.head.appendChild(style);
         
@@ -443,4 +534,4 @@ app.registerExtension({
             };
         }
     }
-}); 
+});
