@@ -3,7 +3,7 @@ import math
 import comfy.sample
 import contextlib
 from nodes import common_ksampler
-from .shader_params_reader import get_shader_params, generate_noise_tensor
+from .shader_params_reader import get_shader_params, generate_noise_tensor, ShaderParamsReader
 # Add imports for custom sigma handling
 import comfy.samplers
 import comfy.model_sampling
@@ -1283,7 +1283,12 @@ class ShaderNoiseKSampler:
             
             # Extract shader type from parameters - use override if provided
             if shader_params_override is not None:
-                shader_params = shader_params_override
+                if isinstance(shader_params_override, dict):
+                    shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params_override)
+                else:
+                    if debugger.enabled:
+                        print(f"⚠️ Warning: shader_params_override is not a dictionary ({type(shader_params_override)}). Ignoring.")
+                    shader_params = get_shader_params()
             else:
                 shader_params = get_shader_params()
             shader_type = shader_params.get("shader_type", "tensor_field")
@@ -1328,9 +1333,15 @@ class ShaderNoiseKSampler:
         
         # Get the current shader parameters - use override if provided
         if shader_params_override is not None:
-            shader_params = shader_params_override
-            if debugger.enabled:
-                print("🔄 Using provided shader parameters override")
+            # Sanitize override parameters to prevent security bypass
+            if isinstance(shader_params_override, dict):
+                shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params_override)
+                if debugger.enabled:
+                    print("🔄 Using provided shader parameters override")
+            else:
+                if debugger.enabled:
+                    print(f"⚠️ Warning: shader_params_override is not a dictionary ({type(shader_params_override)}). Ignoring.")
+                shader_params = get_shader_params()
         else:
             shader_params = get_shader_params()
         
@@ -1388,6 +1399,9 @@ class ShaderNoiseKSampler:
                         # Re-log parameters if modified
                         if debugger.enabled:
                              debugger.log_parameters({"shader_params_after_mapper": shader_params})
+
+                        # Re-sanitize parameters after mapper modifications to prevent bypass
+                        shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
                     elif debugger.enabled:
                         print("ℹ️ Mapper provided no recommendations.")
                 else:
