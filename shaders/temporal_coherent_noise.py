@@ -1,6 +1,15 @@
 import torch
 import math
-from ..shader_params_reader import ShaderParamsReader
+try:
+    from ..shader_params_reader import ShaderParamsReader
+except ImportError:
+    try:
+        from shader_params_reader import ShaderParamsReader
+    except ImportError:
+        # Fallback/Mock for testing when running standalone
+        class ShaderParamsReader:
+            @staticmethod
+            def apply_shape_mask(*args, **kwargs): return 1.0
 
 class TemporalCoherentNoiseGenerator:
     """
@@ -347,42 +356,65 @@ class TemporalCoherentNoiseGenerator:
         # k2
         k2 = (1 - x_ge_z) + x_ge_z * (1 - x_ge_y)
         
-        # Calculate noise contributions from each corner
-        # 3D noise contributions from simplex corners
-        noise = torch.zeros_like(x0)
-        
-        # Corner 1 - origin of simplex
-        t0 = 0.6 - x0*x0 - y0*y0 - z0*z0
-        mask0 = (t0 >= 0).float()
-        t0 = t0 * t0
-        n0 = mask0 * t0 * t0 * TemporalCoherentNoiseGenerator.grad3d(i, j, k, x0, y0, z0, seed)
-        
-        # Corner 2
+        # Calculate corner positions (in unskewed coordinates)
         x1 = x0 - i1 + G3
         y1 = y0 - j1 + G3
         z1 = z0 - k1 + G3
-        t1 = 0.6 - x1*x1 - y1*y1 - z1*z1
-        mask1 = (t1 >= 0).float()
-        t1 = t1 * t1
-        n1 = mask1 * t1 * t1 * TemporalCoherentNoiseGenerator.grad3d(i + i1, j + j1, k + k1, x1, y1, z1, seed)
         
-        # Corner 3
         x2 = x0 - i2 + 2.0 * G3
         y2 = y0 - j2 + 2.0 * G3
         z2 = z0 - k2 + 2.0 * G3
-        t2 = 0.6 - x2*x2 - y2*y2 - z2*z2
-        mask2 = (t2 >= 0).float()
-        t2 = t2 * t2
-        n2 = mask2 * t2 * t2 * TemporalCoherentNoiseGenerator.grad3d(i + i2, j + j2, k + k2, x2, y2, z2, seed)
         
-        # Corner 4 (last corner of simplex)
         x3 = x0 - 1.0 + 3.0 * G3
         y3 = y0 - 1.0 + 3.0 * G3
         z3 = z0 - 1.0 + 3.0 * G3
+
+        # Convert to integers for hash function (done once here instead of inside grad3d)
+        i_int = i.int()
+        j_int = j.int()
+        k_int = k.int()
+        seed_int = seed.int()
+
+        i1_int = i1.int()
+        j1_int = j1.int()
+        k1_int = k1.int()
+
+        i2_int = i2.int()
+        j2_int = j2.int()
+        k2_int = k2.int()
+
+        # Precompute base hash to avoid redundant multiplications
+        h_base = i_int * 1619 + j_int * 31337 + k_int * 6971 + seed_int * 1013
+
+        # Calculate noise contributions from each corner
+        # Corner 1 - origin of simplex
+        t0 = 0.6 - x0*x0 - y0*y0 - z0*z0
+        # Use clamp (ReLU) instead of creating boolean mask tensor
+        t0 = torch.clamp(t0, min=0.0)
+        t0 *= t0 # t^2
+        h0 = h_base & 15
+        n0 = t0 * t0 * TemporalCoherentNoiseGenerator._grad3d_from_hash(h0, x0, y0, z0)
+
+        # Corner 2
+        t1 = 0.6 - x1*x1 - y1*y1 - z1*z1
+        t1 = torch.clamp(t1, min=0.0)
+        t1 *= t1
+        h1 = (h_base + i1_int * 1619 + j1_int * 31337 + k1_int * 6971) & 15
+        n1 = t1 * t1 * TemporalCoherentNoiseGenerator._grad3d_from_hash(h1, x1, y1, z1)
+
+        # Corner 3
+        t2 = 0.6 - x2*x2 - y2*y2 - z2*z2
+        t2 = torch.clamp(t2, min=0.0)
+        t2 *= t2
+        h2 = (h_base + i2_int * 1619 + j2_int * 31337 + k2_int * 6971) & 15
+        n2 = t2 * t2 * TemporalCoherentNoiseGenerator._grad3d_from_hash(h2, x2, y2, z2)
+
+        # Corner 4 (last corner of simplex)
         t3 = 0.6 - x3*x3 - y3*y3 - z3*z3
-        mask3 = (t3 >= 0).float()
-        t3 = t3 * t3
-        n3 = mask3 * t3 * t3 * TemporalCoherentNoiseGenerator.grad3d(i + 1, j + 1, k + 1, x3, y3, z3, seed)
+        t3 = torch.clamp(t3, min=0.0)
+        t3 *= t3
+        h3 = (h_base + 1619 + 31337 + 6971) & 15
+        n3 = t3 * t3 * TemporalCoherentNoiseGenerator._grad3d_from_hash(h3, x3, y3, z3)
         
         # Sum up noise contributions
         # Scale to stay within [-1,1]
@@ -396,31 +428,11 @@ class TemporalCoherentNoiseGenerator:
         return result.unsqueeze(-1) if len(result.shape) == 3 else result
     
     @staticmethod
-    def grad3d(ix, iy, iz, x, y, z, seed):
+    def _grad3d_from_hash(h, x, y, z):
         """
-        3D gradient function for simplex noise
-        Computes the dot product of a random gradient vector and a distance vector
-        
-        Args:
-            ix, iy, iz: Grid cell coordinates
-            x, y, z: Position relative to grid cell
-            seed: Seed value
-            
-        Returns:
-            Dot product of gradient and distance vectors
+        Helper to compute gradient from hash value.
+        Computes the dot product of a random gradient vector (determined by hash) and a distance vector.
         """
-        # Simple hash for deterministic, repeatable patterns
-        # Convert to integers before applying bitwise operations
-        # Use .int() which is faster than .to(torch.int32)
-        # Note: Inputs are expected to be integer-valued floats (already floored)
-        ix_int = ix.int()
-        iy_int = iy.int()
-        iz_int = iz.int()
-        seed_int = seed.int()
-        
-        # Compute hash (using integer arithmetic)
-        h = (ix_int * 1619 + iy_int * 31337 + iz_int * 6971 + seed_int * 1013) & 15
-        
         # Determine gradients based on hash bits
         # Note: h is an integer tensor here, so comparisons are integer operations
         u = torch.where(h < 8, x, y)
@@ -438,6 +450,28 @@ class TemporalCoherentNoiseGenerator:
         v_sign = 1.0 - (h & 2).float()
         
         return u_sign * u + v_sign * v
+
+    @staticmethod
+    def grad3d(ix, iy, iz, x, y, z, seed):
+        """
+        3D gradient function for simplex noise
+        Computes the dot product of a random gradient vector and a distance vector
+
+        Args:
+            ix, iy, iz: Grid cell coordinates (integer tensors)
+            x, y, z: Position relative to grid cell
+            seed: Seed value (integer tensor)
+
+        Returns:
+            Dot product of gradient and distance vectors
+        """
+        # Simple hash for deterministic, repeatable patterns
+        # Note: Inputs ix, iy, iz, seed are expected to be integer tensors now
+
+        # Compute hash (using integer arithmetic)
+        h = (ix * 1619 + iy * 31337 + iz * 6971 + seed * 1013) & 15
+
+        return TemporalCoherentNoiseGenerator._grad3d_from_hash(h, x, y, z)
 
 def add_temporal_noise_to_shader_params(shader_params, frame_number, base_seed, fps=24, duration=5):
     """
@@ -560,4 +594,4 @@ def integrate_temporal_coherent_noise():
     if hasattr(ShaderToTensor, 'shader_handlers') and isinstance(ShaderToTensor.shader_handlers, dict):
         ShaderToTensor.shader_handlers['temporal_coherent'] = ShaderToTensor.temporal_coherent_noise
     
-    return True 
+    return True
