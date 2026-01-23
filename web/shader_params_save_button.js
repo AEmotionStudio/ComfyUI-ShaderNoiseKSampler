@@ -32,6 +32,8 @@ function showToast(message, type = 'info') {
         const removeToast = () => {
             if (toast.parentNode) {
                 toast.parentNode.removeChild(toast);
+                // Ensure listener is removed if called by fallback
+                toast.removeEventListener('transitionend', removeToast);
             }
         };
 

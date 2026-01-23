@@ -47,8 +47,12 @@
         });
 
         document.getElementById('trigger-error').addEventListener('click', () => {
-             if (window.showShaderToast) {
+            if (window.showShaderToast) {
                 window.showShaderToast("Error saving parameters!", "error");
+            } else if (window.showToast) {
+                window.showToast("Error saving parameters!", "error");
+            } else {
+                console.error("showShaderToast not found on window");
             }
         });
     </script>
