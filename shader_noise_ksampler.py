@@ -3,7 +3,7 @@ import math
 import comfy.sample
 import contextlib
 from nodes import common_ksampler
-from .shader_params_reader import get_shader_params, generate_noise_tensor
+from .shader_params_reader import get_shader_params, generate_noise_tensor, ShaderParamsReader
 # Add imports for custom sigma handling
 import comfy.samplers
 import comfy.model_sampling
@@ -1328,7 +1328,8 @@ class ShaderNoiseKSampler:
         
         # Get the current shader parameters - use override if provided
         if shader_params_override is not None:
-            shader_params = shader_params_override
+            # Sanitize override parameters to prevent security bypass
+            shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params_override)
             if debugger.enabled:
                 print("🔄 Using provided shader parameters override")
         else:
