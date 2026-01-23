@@ -1283,7 +1283,12 @@ class ShaderNoiseKSampler:
             
             # Extract shader type from parameters - use override if provided
             if shader_params_override is not None:
-                shader_params = shader_params_override
+                if isinstance(shader_params_override, dict):
+                    shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params_override)
+                else:
+                    if debugger.enabled:
+                        print(f"⚠️ Warning: shader_params_override is not a dictionary ({type(shader_params_override)}). Ignoring.")
+                    shader_params = get_shader_params()
             else:
                 shader_params = get_shader_params()
             shader_type = shader_params.get("shader_type", "tensor_field")
