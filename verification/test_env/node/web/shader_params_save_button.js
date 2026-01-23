@@ -42,26 +42,31 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+// Expose for verification/debugging (Temporary, will be removed before submit, but needed for verify script to work)
+if (typeof window !== 'undefined') {
+    window.showShaderToast = showToast;
+}
+
 app.registerExtension({
     name: "ShaderParamsSaveButton",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "ShaderNoiseKSampler") {
             // Store original onNodeCreated to maintain the node's behavior
             const origOnNodeCreated = nodeType.prototype.onNodeCreated;
-            
+
             // Add our button to the node
             nodeType.prototype.onNodeCreated = function() {
                 // Call original function to preserve existing behavior
                 if (origOnNodeCreated) {
                     origOnNodeCreated.apply(this, arguments);
                 }
-                
+
                 // Keep track of the node instance
                 const node = this;
-                
+
                 // Track if we're currently saving (to prevent double-clicks)
                 let isSaving = false;
-                
+
                 // Add indicator widget that will show when parameters need saving
                 // Create a custom widget object instead of using the built-in text widget
                 const indicatorWidget = {
@@ -76,24 +81,24 @@ app.registerExtension({
                         // Return fixed height but variable width based on parent node width
                         if (this.parent && this.parent.size) {
                             // Adjust width to match node width with some padding
-                            return [this.parent.size[0] - 30, 20]; 
+                            return [this.parent.size[0] - 30, 20];
                         }
                         return [220, 28]; // Default size if parent not available
                     },
                     // Custom draw method for the widget
                     draw: function(ctx, node, widget_width, y, widget_height) {
                         if (!ctx) return;
-                        
+
                         // Draw background
                         ctx.fillStyle = "rgba(255, 119, 0, 0.1)";
                         ctx.strokeStyle = "#ff7700";
                         ctx.lineWidth = 1;
-                        
+
                         // Draw rounded rectangle for the widget background
                         const radius = 4;
                         const x = 15; // Padding from left edge
                         const width = widget_width - 30; // Subtract padding from both sides
-                        
+
                         ctx.beginPath();
                         ctx.moveTo(x + radius, y);
                         ctx.lineTo(x + width - radius, y);
@@ -105,33 +110,33 @@ app.registerExtension({
                         ctx.lineTo(x, y + radius);
                         ctx.quadraticCurveTo(x, y, x + radius, y);
                         ctx.closePath();
-                        
+
                         ctx.fill();
                         ctx.stroke();
-                        
+
                         // Draw text
                         ctx.fillStyle = "#ff7700";
                         ctx.font = "bold 12px Arial";
                         ctx.textAlign = "center";
                         ctx.fillText(this.name, x + width / 2, y + widget_height / 2 + 4);
-                        
+
                         return widget_height;
                     }
                 };
-                
+
                 // Add widget reference to node
                 indicatorWidget.parent = this;
                 this.widgets.push(indicatorWidget);
-                
+
                 // --- Refactored Save Function ---
                 const saveParameters = () => {
                     if (isSaving) return;
                     isSaving = true;
-                    
+
                     // Change button text to indicate saving
                     if (saveButtonWidget) saveButtonWidget.name = "Saving...";
                     console.log("Starting save process (triggered)...");
-                    
+
                     // Print each widget and its properties for deep debugging
                     if (node.widgets) {
                         console.log("Widget details:");
@@ -139,7 +144,7 @@ app.registerExtension({
                             console.log(`Widget ${index}: name="${widget.name}", type=${widget.type}, value=${widget.value}`);
                         });
                     }
-                    
+
                     // Find the widgets that contain our values
                     // Default values
                     let shaderScale = 1.0;
@@ -151,20 +156,20 @@ app.registerExtension({
                     let shaderType = "tensor_field";
                     let shaderShapeType = "none";
                     let colorScheme = "none";
-                    
+
                     // Try to find widgets by partial name match
                     if (node.widgets) {
                         for (const widget of node.widgets) {
                             // Ensure widget and widget.name exist before accessing
                              if (!widget || typeof widget.name !== 'string') continue;
-                             
+
                             const name = widget.name.toLowerCase();
-                            
+
                             // Use partial name matching for more flexibility
                             if (name.includes("scale") && !name.includes("color")) {
                                 shaderScale = widget.value;
                                 console.log(`Found shader scale: ${widget.value}`);
-                            } 
+                            }
                             else if (name.includes("octaves")) {
                                 shaderOctaves = widget.value;
                                 console.log(`Found octaves: ${widget.value}`);
@@ -199,7 +204,7 @@ app.registerExtension({
                             }
                         }
                     }
-                    
+
                     // Create the properties object with the gathered values
                     const currentProps = {
                         shaderType: shaderType,
@@ -212,13 +217,13 @@ app.registerExtension({
                         colorScheme: colorScheme,
                         shaderColorIntensity: shaderColorIntensity
                     };
-                    
+
                     console.log("Saving shader properties:", currentProps);
-                    
+
                     try {
                         // Serialize with pretty printing
                         const jsonData = JSON.stringify(currentProps, null, 2);
-                        
+
                         // Save to localStorage with size limit and error handling
                         try {
                             // Check if data is too large for localStorage
@@ -227,7 +232,7 @@ app.registerExtension({
                                 console.warn("Shader params data too large for localStorage, skipping localStorage save");
                             } else {
                                 // Remove old shader params first to free space
-                                const oldKeys = Object.keys(localStorage).filter(key => 
+                                const oldKeys = Object.keys(localStorage).filter(key =>
                                     key.startsWith('shader_params') || key.includes('shader')
                                 );
                                 oldKeys.forEach(key => {
@@ -237,7 +242,7 @@ app.registerExtension({
                                         } catch (e) { /* ignore */ }
                                     }
                                 });
-                                
+
                                 localStorage.setItem('shader_params', jsonData);
                                 console.log("Saved to localStorage successfully");
                             }
@@ -252,7 +257,7 @@ app.registerExtension({
                                 console.error("Failed to save to localStorage:", localErr);
                             }
                         }
-                        
+
                         // Send the file directly to the data directory - most reliable method
                         // Create a simple download link to trigger the file save
                         const blob = new Blob([jsonData], {type: 'application/json'});
@@ -262,11 +267,11 @@ app.registerExtension({
                         a.download = 'shader_params.json';
                         document.body.appendChild(a);
                         a.click();
-                        
+
                         // Show instructions in console AFTER download is triggered
                         console.log("%cIMPORTANT: Please save the downloaded file to the following location (overwrite if exists):", "color: red; font-weight: bold");
                         console.log("%ccustom_nodes/ComfyUI-ShaderNoiseKsampler/data/shader_params.json", "color: blue; font-weight: bold");
-                        
+
                         // Clean up and update button state on success
                         setTimeout(() => {
                             try {
@@ -276,7 +281,7 @@ app.registerExtension({
                             } catch (cleanupError) {
                                 console.warn("Could not clean up download link:", cleanupError);
                             }
-                            
+
                             showToast("Parameters saved successfully!", "success");
 
                             setTimeout(() => {
@@ -284,7 +289,7 @@ app.registerExtension({
                                 isSaving = false;
                             }, 2000);
                         }, 500);
-                        
+
                     } catch (error) {
                         console.error("Error saving shader parameters:", error);
                         showToast("Error saving parameters!", "error");
@@ -295,17 +300,17 @@ app.registerExtension({
                         }, 3000);
                     }
                 }; // --- End of Refactored Save Function ---
-                
+
                 // Add save button using the refactored function
                 const saveButtonWidget = this.addWidget("button", " 💾 Save Shader Parameters", null, saveParameters);
-                
+
                 // Extend the widget with a tooltip property that ComfyUI's system recognizes
                 saveButtonWidget.options = saveButtonWidget.options || {};
                 saveButtonWidget.options.className = "save-shader-params";
-                
+
                 // Add tooltip following ComfyUI's pattern
                 saveButtonWidget.tooltip = "Save parameters (Alt+S) -- file must be named shader_params.json -- always overwrite old file -- [Save location: `custom_nodes/ComfyUI-ShaderNoiseKsampler/data/shader_params.json`][WIP]";
-                
+
                 // Move both the indicator and save button widgets to the end of all widgets
                 // This ensures they appear at the bottom of all settings
                 setTimeout(() => {
@@ -316,18 +321,18 @@ app.registerExtension({
                             // Remove it from its current position
                             this.widgets.splice(indicatorIndex, 1);
                         }
-                        
+
                         // Get the save button's current index
                         const buttonIndex = this.widgets.indexOf(saveButtonWidget);
                         if (buttonIndex !== -1) {
                             // Remove it from its current position
                             this.widgets.splice(buttonIndex, 1);
                         }
-                        
+
                         // Add them back at the end, indicator first then save button
                         this.widgets.push(indicatorWidget);
                         this.widgets.push(saveButtonWidget);
-                        
+
                         // Ensure the node is redrawn to show the updated widget positions
                         this.setDirtyCanvas(true, true);
                     }
@@ -358,18 +363,18 @@ app.registerExtension({
 
                 // Attach the event listener to the document
                 document.addEventListener('keydown', handleKeyDown);
-                
+
                 // Store handler reference for removal
-                this.handleKeyDown = handleKeyDown; 
+                this.handleKeyDown = handleKeyDown;
 
                 // Original onRemoved method if it exists
                 const origOnRemoved = this.onRemoved;
-                
+
                 // Add logic to remove the event listener when the node is removed
                 this.onRemoved = function() {
                     console.log("Removing keydown listener for node:", this.id);
                     document.removeEventListener('keydown', this.handleKeyDown);
-                    
+
                     // Call original onRemoved if it existed
                     if (origOnRemoved) {
                         origOnRemoved.apply(this, arguments);
@@ -391,7 +396,7 @@ app.registerExtension({
                 border-radius: 4px;
                 cursor: pointer;
             }
-            
+
             .shader-params-indicator {
                 padding: 4px;
                 font-weight: bold;
@@ -403,13 +408,13 @@ app.registerExtension({
                 pointer-events: none;
                 user-select: none;
             }
-            
+
             /* The tooltip container needs positioning */
             .tooltip-container {
                 position: relative;
                 display: inline-block;
             }
-            
+
             /* Style for ComfyUI-compatible tooltips */
             .comfy-tooltip {
                 visibility: hidden;
@@ -427,7 +432,7 @@ app.registerExtension({
                 font-size: 12px;
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             }
-            
+
             /* Show tooltip on hover */
             .tooltip-container:hover .comfy-tooltip {
                 visibility: visible;
@@ -480,7 +485,7 @@ app.registerExtension({
             }
         `;
         document.head.appendChild(style);
-        
+
         // Hook into the app's widget drawing system to add tooltip support
         // This is done after initial setup to ensure proper integration
         const originalDrawNodeWidgets = LGraphCanvas.prototype.drawNodeWidgets;
@@ -488,7 +493,7 @@ app.registerExtension({
             LGraphCanvas.prototype.drawNodeWidgets = function(node, pos, ctx, active_widget) {
                 // Call the original method first
                 const result = originalDrawNodeWidgets.call(this, node, pos, ctx, active_widget);
-                
+
                 // After rendering widgets, check for our tooltip property
                 if (node && node.widgets) {
                     for (const widget of node.widgets) {
@@ -496,27 +501,27 @@ app.registerExtension({
                         if (widget === active_widget && widget.tooltip) {
                             // Get canvas position
                             const rect = this.canvas.getBoundingClientRect();
-                            
+
                             // Create tooltip if it doesn't exist yet
                             if (!widget._tooltip_elem) {
                                 const tooltipContainer = document.createElement('div');
                                 tooltipContainer.className = 'tooltip-container';
-                                
+
                                 const tooltip = document.createElement('span');
                                 tooltip.className = 'comfy-tooltip';
                                 tooltip.textContent = widget.tooltip;
-                                
+
                                 tooltipContainer.appendChild(tooltip);
                                 document.body.appendChild(tooltipContainer);
-                                
+
                                 widget._tooltip_elem = tooltipContainer;
                             }
-                            
+
                             // Position tooltip
                             if (widget._tooltip_elem) {
-                                const x = pos[0] + rect.left; 
+                                const x = pos[0] + rect.left;
                                 const y = pos[1] + rect.top;
-                                
+
                                 widget._tooltip_elem.style.left = x + 'px';
                                 widget._tooltip_elem.style.top = y - 20 + 'px';
                                 widget._tooltip_elem.style.display = 'block';
@@ -527,7 +532,7 @@ app.registerExtension({
                         }
                     }
                 }
-                
+
                 return result;
             };
         }

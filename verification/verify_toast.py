@@ -65,6 +65,7 @@ def verify_toast():
         sys.exit(1)
     finally:
         server.terminate()
+        server.wait()
 
 if __name__ == "__main__":
     verify_toast()
