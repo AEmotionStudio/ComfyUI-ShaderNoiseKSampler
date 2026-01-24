@@ -95,27 +95,52 @@ class ShaderParamsReader:
                     print(f"Warning: Invalid octaves value '{sanitized[key]}', defaulting to 3")
                     sanitized[key] = 3
 
-        # 2. Scale: Ensure float
+        # 2. Scale: Ensure float and clamp to prevent numerical instability
         if "scale" in sanitized:
             try:
-                sanitized["scale"] = float(sanitized["scale"])
+                val = float(sanitized["scale"])
+                if math.isnan(val) or math.isinf(val):
+                    val = 1.0
+                # Clamp to avoid extremely large values
+                sanitized["scale"] = max(-1000000.0, min(val, 1000000.0))
             except (ValueError, TypeError):
                 sanitized["scale"] = 1.0
 
-        # 3. Intensity/Strength: Ensure float and clamp to 0-1 (usually)
+        # 3. Intensity/Strength: Ensure float and clamp to reasonable range
         # Though some shaders might allow > 1, extremely high values can cause issues
         for key in ["intensity", "shapemaskstrength", "warp_strength", "phase_shift"]:
             if key in sanitized:
                 try:
                     val = float(sanitized[key])
-                    # Optional: Clamp if strictly required, but ensuring float is main safety
-                    # For strength, 0-10 is generous enough while preventing overflow
-                    # sanitized[key] = max(-100.0, min(val, 100.0))
-                    sanitized[key] = val
+                    if math.isnan(val) or math.isinf(val):
+                        val = 0.0 if "strength" in key or "shift" in key else 1.0
+                    # Clamp strictly to reasonable limits (e.g. +/- 1M) to prevent numerical instability
+                    # This prevents DoS via numerical overflow or resource exhaustion
+                    sanitized[key] = max(-1000000.0, min(val, 1000000.0))
                 except (ValueError, TypeError):
                     sanitized[key] = 0.0 if "strength" in key or "shift" in key else 1.0
 
-        # 4. Validate String Enums (Shader Type, Shape Type, Color Scheme)
+        # 4. Validate Seeds: Ensure they are within safe integer range for PyTorch
+        # PyTorch manual_seed expects 64-bit signed integer (approx +/- 9e18)
+        # Using a slightly safer range to avoid boundary issues
+        MAX_SEED = 9000000000000000000
+        MIN_SEED = -9000000000000000000
+        for key in ["seed", "base_seed"]:
+            if key in sanitized:
+                try:
+                    # Check for float inputs first to catch Infinity
+                    if isinstance(sanitized[key], float):
+                        if math.isinf(sanitized[key]) or math.isnan(sanitized[key]):
+                            sanitized[key] = 0
+                            continue
+
+                    val = int(sanitized[key])
+                    # Clamp to safe range to prevent runtime crashes (DoS)
+                    sanitized[key] = max(MIN_SEED, min(val, MAX_SEED))
+                except (ValueError, TypeError, OverflowError):
+                    sanitized[key] = 0
+
+        # 5. Validate String Enums (Shader Type, Shape Type, Color Scheme)
         # Prevent arbitrary strings from flowing through the system
         if "shader_type" in sanitized:
             st = str(sanitized["shader_type"]).lower()
