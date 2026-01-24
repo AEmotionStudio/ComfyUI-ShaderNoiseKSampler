@@ -1270,7 +1270,12 @@ class DomainWarpGenerator:
         # Sum contributions and scale to match 2D output range
         noise = (n0 + n1 + n2 + n3) * 30.0
         
-        return noise.unsqueeze(-1)
+        # Reshape back to original dimensions if needed
+        if len(original_shape) == 3:
+            # Remove the batch dimension we added
+            noise = noise.squeeze(0)
+
+        return noise.unsqueeze(-1) if noise.shape[-1] != 1 else noise
 
     @staticmethod
     def domain_warp(p, warp_type=0, scale=1.0, warp_strength=0.5, time=0.0, octaves=3, device=None, seed=0, use_temporal_coherence=False):
