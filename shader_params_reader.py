@@ -99,7 +99,9 @@ class ShaderParamsReader:
         if "scale" in sanitized:
             try:
                 val = float(sanitized["scale"])
-                # Clamp to avoid Infinity/NaN propagation
+                if math.isnan(val) or math.isinf(val):
+                    val = 1.0
+                # Clamp to avoid extremely large values
                 sanitized["scale"] = max(-1000000.0, min(val, 1000000.0))
             except (ValueError, TypeError):
                 sanitized["scale"] = 1.0
@@ -110,6 +112,8 @@ class ShaderParamsReader:
             if key in sanitized:
                 try:
                     val = float(sanitized[key])
+                    if math.isnan(val) or math.isinf(val):
+                        val = 0.0 if "strength" in key or "shift" in key else 1.0
                     # Clamp strictly to reasonable limits (e.g. +/- 1M) to prevent numerical instability
                     # This prevents DoS via numerical overflow or resource exhaustion
                     sanitized[key] = max(-1000000.0, min(val, 1000000.0))
@@ -124,10 +128,16 @@ class ShaderParamsReader:
         for key in ["seed", "base_seed"]:
             if key in sanitized:
                 try:
+                    # Check for float inputs first to catch Infinity
+                    if isinstance(sanitized[key], float):
+                        if math.isinf(sanitized[key]) or math.isnan(sanitized[key]):
+                            sanitized[key] = 0
+                            continue
+
                     val = int(sanitized[key])
                     # Clamp to safe range to prevent runtime crashes (DoS)
                     sanitized[key] = max(MIN_SEED, min(val, MAX_SEED))
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, OverflowError):
                     sanitized[key] = 0
 
         # 5. Validate String Enums (Shader Type, Shape Type, Color Scheme)
