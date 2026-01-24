@@ -44,6 +44,9 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+// Expose toast function globally
+window.showComfyToast = showToast;
+
 app.registerExtension({
     name: "ShaderParamsSaveButton",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {

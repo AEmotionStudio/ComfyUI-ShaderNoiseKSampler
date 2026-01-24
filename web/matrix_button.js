@@ -125,6 +125,11 @@ import { app } from "../../scripts/app.js";
 
         const codeText = preElement.textContent;
         navigator.clipboard.writeText(codeText).then(() => {
+            // Enhanced UX: Use global toast if available
+            if (window.showComfyToast) {
+                window.showComfyToast("Code copied to clipboard!", "success");
+            }
+
             buttonElement.textContent = "Copied!";
             buttonElement.classList.add('copied');
 
@@ -141,6 +146,12 @@ import { app } from "../../scripts/app.js";
             buttonElement.dataset.timeoutId = timeoutId;
         }).catch(err => {
             console.error('Failed to copy: ', err);
+
+            // Enhanced UX: Error toast
+            if (window.showComfyToast) {
+                window.showComfyToast("Failed to copy code.", "error");
+            }
+
             buttonElement.textContent = "Error";
             // Ensure success class is removed if it was present
             buttonElement.classList.remove('copied');
@@ -308,6 +319,15 @@ import { app } from "../../scripts/app.js";
             --header-font: 'Georgia', serif;
             --body-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             --code-font: 'Courier New', monospace;
+        }
+
+        /* Accessibility: Focus Indicators */
+        .shader-matrix-treatise button:focus-visible,
+        .shader-matrix-treatise .tab:focus-visible,
+        .shader-matrix-treatise .nav-button:focus-visible {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
+            box-shadow: 0 0 8px rgba(138, 43, 226, 0.6);
         }
 
         /* Reset some global styles that might be inherited if body styles are applied directly */
