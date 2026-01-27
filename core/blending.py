@@ -127,17 +127,8 @@ def _match_tensor_shape(
     # Handle 4D tensors (standard image format B,C,H,W)
     result = source.clone()
     
-    # Handle channel dimension mismatches (index 1 for 4D)
-    if source.shape[1] != target.shape[1]:
-        new_result = torch.zeros_like(target)
-        min_channels = min(source.shape[1], target.shape[1])
-        new_result[:, :min_channels] = result[:, :min_channels]
-        result = new_result
-        
-        if debug_enabled and debug_level >= 1:
-            print(f"✅ Matched channel dimensions: {result.shape}")
-    
-    # Handle spatial dimension mismatches with interpolation
+    # FIRST handle spatial dimension mismatches with interpolation
+    # This must happen before channel handling to prevent shape mismatches
     if result.shape[2:] != target.shape[2:]:
         try:
             result = F.interpolate(
@@ -150,10 +141,21 @@ def _match_tensor_shape(
             if debug_enabled:
                 print(f"⚠️ Error during interpolation: {e}")
             # Fall back to zeros if we can't match shapes
-            result = torch.zeros_like(target)
+            return torch.zeros_like(target)
             
         if debug_enabled and debug_level >= 1:
             print(f"✅ Matched spatial dimensions: {result.shape}")
+    
+    # THEN handle channel dimension mismatches (index 1 for 4D)
+    # Now spatial dims match, so channel slicing is safe
+    if result.shape[1] != target.shape[1]:
+        new_result = torch.zeros_like(target)
+        min_channels = min(result.shape[1], target.shape[1])
+        new_result[:, :min_channels] = result[:, :min_channels]
+        result = new_result
+        
+        if debug_enabled and debug_level >= 1:
+            print(f"✅ Matched channel dimensions: {result.shape}")
     
     return result
 
@@ -235,23 +237,8 @@ def _match_video_tensor_shape(
             result_4d = F.interpolate(result_4d, size=(tgt_frames, h * w), mode='bilinear', align_corners=False)
             result = result_4d.reshape(b, c, tgt_frames, h, w)
     
-    # Step 3: Handle channel mismatch
-    current_channels = result.shape[channel_dim]
-    if current_channels != tgt_channels:
-        if debug_enabled and debug_level >= 1:
-            print(f"   Adjusting channels from {current_channels} to {tgt_channels}")
-        
-        new_result = torch.zeros_like(target)
-        min_channels = min(current_channels, tgt_channels)
-        
-        if channel_dim == 1:  # B,C,F,H,W
-            new_result[:, :min_channels] = result[:, :min_channels]
-        else:  # B,F,C,H,W
-            new_result[:, :, :min_channels] = result[:, :, :min_channels]
-        
-        result = new_result
-    
-    # Step 4: Handle spatial dimension mismatch
+    # Step 3: Handle spatial dimension mismatch FIRST
+    # This must happen before channel handling to prevent shape mismatches
     if result.shape[3:] != target.shape[3:]:
         if debug_enabled and debug_level >= 1:
             print(f"   Adjusting spatial dims from {result.shape[3:]} to {target.shape[3:]}")
@@ -287,6 +274,23 @@ def _match_video_tensor_shape(
                 result = torch.stack(frames_list, dim=1)
             else:
                 result = torch.stack(frames_list, dim=2)
+    
+    # Step 4: Handle channel mismatch AFTER spatial dims match
+    # Now that spatial dims match, channel slicing is safe
+    current_channels = result.shape[channel_dim]
+    if current_channels != tgt_channels:
+        if debug_enabled and debug_level >= 1:
+            print(f"   Adjusting channels from {current_channels} to {tgt_channels}")
+        
+        new_result = torch.zeros_like(target)
+        min_channels = min(current_channels, tgt_channels)
+        
+        if channel_dim == 1:  # B,C,F,H,W
+            new_result[:, :min_channels] = result[:, :min_channels]
+        else:  # B,F,C,H,W
+            new_result[:, :, :min_channels] = result[:, :, :min_channels]
+        
+        result = new_result
     
     if debug_enabled and debug_level >= 1:
         print(f"✅ Final matched shape: {result.shape}")

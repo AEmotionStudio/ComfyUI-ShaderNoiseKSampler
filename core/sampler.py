@@ -403,14 +403,8 @@ def _correct_frame_shape(
 ) -> torch.Tensor:
     """Correct frame noise shape to match expected shape."""
     try:
-        # If channel count is wrong, fix it
-        if frame_noise.shape[1] != expected_shape[1]:
-            corrected_frame = torch.zeros(expected_shape, device=device, dtype=dtype)
-            min_c = min(frame_noise.shape[1], expected_shape[1])
-            corrected_frame[:, :min_c] = frame_noise[:, :min_c]
-            frame_noise = corrected_frame
-        
-        # If spatial dimensions are wrong, resize
+        # FIRST fix spatial dimensions with interpolation
+        # This must happen before channel handling to prevent shape mismatches
         if frame_noise.shape[2:] != expected_shape[2:]:
             frame_noise = F.interpolate(
                 frame_noise, 
@@ -418,6 +412,13 @@ def _correct_frame_shape(
                 mode='bilinear', 
                 align_corners=False
             )
+        
+        # THEN fix channel count - now spatial dims match
+        if frame_noise.shape[1] != expected_shape[1]:
+            corrected_frame = torch.zeros(expected_shape, device=device, dtype=dtype)
+            min_c = min(frame_noise.shape[1], expected_shape[1])
+            corrected_frame[:, :min_c] = frame_noise[:, :min_c]
+            frame_noise = corrected_frame
         
         # Final check
         if frame_noise.shape != expected_shape:
@@ -441,12 +442,8 @@ def _correct_image_shape(
 ) -> torch.Tensor:
     """Correct image noise shape to match target shape."""
     try:
-        if noise.shape[1] != channels:
-            corrected_noise = torch.zeros(target_shape, device=device, dtype=dtype)
-            min_c = min(noise.shape[1], channels)
-            corrected_noise[:, :min_c] = noise[:, :min_c]
-            noise = corrected_noise
-        
+        # FIRST fix spatial dimensions with interpolation
+        # This must happen before channel handling to prevent shape mismatches
         if noise.shape[2:] != target_shape[2:]:
             noise = F.interpolate(
                 noise, 
@@ -454,6 +451,13 @@ def _correct_image_shape(
                 mode='bilinear', 
                 align_corners=False
             )
+        
+        # THEN fix channel count - now spatial dims match
+        if noise.shape[1] != channels:
+            corrected_noise = torch.zeros(target_shape, device=device, dtype=dtype)
+            min_c = min(noise.shape[1], channels)
+            corrected_noise[:, :min_c] = noise[:, :min_c]
+            noise = corrected_noise
         
         if noise.shape != target_shape:
             raise ValueError("Shape correction failed")
