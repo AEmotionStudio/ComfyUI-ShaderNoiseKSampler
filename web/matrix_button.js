@@ -11,6 +11,18 @@ import { app } from "../../scripts/app.js";
         const section = modalContent.querySelector('#' + sectionId);
         if (section) {
             section.scrollIntoView({ behavior: 'smooth' });
+
+            // UX Enhancement: Move focus to the section header for accessibility
+            const header = section.querySelector('h1, h2, h3, h4, h5, h6');
+            if (header) {
+                // Ensure the header is focusable programmatically
+                if (!header.hasAttribute('tabindex')) {
+                    header.setAttribute('tabindex', '-1');
+                }
+                // Focus the header to update reading position for keyboard/screen reader users
+                // preventScroll: true prevents the browser from fighting the smooth scroll
+                header.focus({ preventScroll: true });
+            }
         }
     };
 
@@ -99,6 +111,62 @@ import { app } from "../../scripts/app.js";
                 }
             });
         }
+    };
+
+
+    window.copyCodeSection = function(buttonElement) {
+        const headerElement = buttonElement.closest('.code-block-header');
+        if (!headerElement) return;
+        const codeBlockContainer = headerElement.parentNode;
+        if (!codeBlockContainer) return;
+
+        const preElement = codeBlockContainer.querySelector('pre.foldable-content code');
+        if (!preElement) return;
+
+        const codeText = preElement.textContent;
+        navigator.clipboard.writeText(codeText).then(() => {
+            // Enhanced UX: Use global toast if available
+            if (window.showComfyToast) {
+                window.showComfyToast("Code copied to clipboard!", "success");
+            }
+
+            buttonElement.textContent = "Copied!";
+            buttonElement.classList.add('copied');
+
+            if (buttonElement.dataset.timeoutId) {
+                clearTimeout(parseInt(buttonElement.dataset.timeoutId));
+            }
+
+            const timeoutId = setTimeout(() => {
+                buttonElement.textContent = "Copy";
+                buttonElement.classList.remove('copied');
+                delete buttonElement.dataset.timeoutId;
+            }, 2000);
+
+            buttonElement.dataset.timeoutId = timeoutId;
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+
+            // Enhanced UX: Error toast
+            if (window.showComfyToast) {
+                window.showComfyToast("Failed to copy code.", "error");
+            }
+
+            buttonElement.textContent = "Error";
+            // Ensure success class is removed if it was present
+            buttonElement.classList.remove('copied');
+
+            if (buttonElement.dataset.timeoutId) {
+                clearTimeout(parseInt(buttonElement.dataset.timeoutId));
+            }
+
+            const timeoutId = setTimeout(() => {
+                buttonElement.textContent = "Copy";
+                delete buttonElement.dataset.timeoutId;
+            }, 2000);
+
+            buttonElement.dataset.timeoutId = timeoutId;
+        });
     };
 
     window.toggleCodeSection = function(buttonElement) {
@@ -251,6 +319,15 @@ import { app } from "../../scripts/app.js";
             --header-font: 'Georgia', serif;
             --body-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             --code-font: 'Courier New', monospace;
+        }
+
+        /* Accessibility: Focus Indicators */
+        .shader-matrix-treatise button:focus-visible,
+        .shader-matrix-treatise .tab:focus-visible,
+        .shader-matrix-treatise .nav-button:focus-visible {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
+            box-shadow: 0 0 8px rgba(138, 43, 226, 0.6);
         }
 
         /* Reset some global styles that might be inherited if body styles are applied directly */
@@ -890,7 +967,30 @@ import { app } from "../../scripts/app.js";
             font-weight: bold;
         }
 
-        .shader-matrix-treatise .toggle-code-button {
+
+        .shader-matrix-treatise .button-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .shader-matrix-treatise .copy-code-button {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            padding: 0.3rem 0.7rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .shader-matrix-treatise .copy-code-button:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .shader-matrix-treatise .copy-code-button.copied {
+            background-color: var(--quaternary-color);
+            color: #000;
+            font-weight: bold;
+        }
+.shader-matrix-treatise .toggle-code-button {
             background-color: var(--accent-color);
             color: white;
             border: none;
@@ -1363,7 +1463,10 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Perlin Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-perlin" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-perlin" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-perlin" class="foldable-content" style="display: none;"><code class="language-python">def perlin_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters for noise generation
@@ -1425,7 +1528,10 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Cellular Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-cellular" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-cellular" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-cellular" class="foldable-content" style="display: none;"><code class="language-python">def cellular_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -1488,7 +1594,10 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Tensor Field Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-tensor" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-tensor" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-tensor" class="foldable-content" style="display: none;"><code class="language-python">def tensor_field_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -1544,7 +1653,10 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Curl Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-curl" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-curl" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-curl" class="foldable-content" style="display: none;"><code class="language-python">def curl_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -1615,7 +1727,10 @@ import { app } from "../../scripts/app.js";
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Domain Warp Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-domain-warp" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-domain-warp" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-domain-warp" class="foldable-content" style="display: none;"><code class="language-python">def domain_warp_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -1691,7 +1806,10 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Fractal Noise (FBM) Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-fractal" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-fractal" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-fractal" class="foldable-content" style="display: none;"><code class="language-python">def fractal_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -1758,7 +1876,10 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Waves Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-waves" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-waves" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-waves" class="foldable-content" style="display: none;"><code class="language-python">def waves_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -1820,7 +1941,10 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Gaussian Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-gaussian" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-gaussian" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-gaussian" class="foldable-content" style="display: none;"><code class="language-python">def gaussian_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -1875,7 +1999,10 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Heterogeneous FBM Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-heterogeneous-fbm" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-heterogeneous-fbm" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-heterogeneous-fbm" class="foldable-content" style="display: none;"><code class="language-python">def heterogeneous_fbm_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract base parameters
@@ -1953,7 +2080,10 @@ def sample_perlin_like(coords, seed):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Interference Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-interference" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-interference" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-interference" class="foldable-content" style="display: none;"><code class="language-python">def interference_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -2036,7 +2166,10 @@ def sample_fbm_like(coords, octaves, seed, persistence, lacunarity):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Spectral Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-spectral" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-spectral" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-spectral" class="foldable-content" style="display: none;"><code class="language-python">def spectral_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -2126,7 +2259,10 @@ def sample_fbm_like(coords, octaves, seed, persistence, lacunarity):
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>3D Projection Noise Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-projection-3d" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-projection-3d" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-projection-3d" class="foldable-content" style="display: none;"><code class="language-python">def projection_3d_noise_with_params(cls, batch_size, height, width, shader_params, time, device, seed):
     # Extract parameters
@@ -2352,7 +2488,10 @@ def sample_3d_fbm_like(coords_3d, octaves, seed, persistence, lacunarity):
                                     <div class="code-block-container">
                                         <div class="code-block-header">
                                             <span>Conceptual Temporal Noise (Python)</span>
-                                            <button class="toggle-code-button" aria-expanded="false" aria-controls="code-temporal" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-temporal" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                         </div>
                                         <pre id="code-temporal" class="foldable-content" style="display: none;"><code class="language-python">
 import torch
@@ -2498,7 +2637,10 @@ def generate_animated_noise_frame(batch_size, height, width, scale, current_time
                                     <div class="code-block-container">
                                         <div class="code-block-header">
                                             <span>Illustrative Shape Mask Application (Python)</span>
-                                            <button class="toggle-code-button" aria-expanded="false" aria-controls="code-shape-mask" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-shape-mask" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                         </div>
                                         <pre id="code-shape-mask" class="foldable-content" style="display: none;"><code class="language-python">import torch
 
@@ -2708,7 +2850,10 @@ def apply_shape_mask_illustrative(input_field, coords_bhwc, mask_type="radial", 
                                         <div class="code-block-container">
                                             <div class="code-block-header">
                                                 <span>Color Scheme Implementation</span>
-                                                <button class="toggle-code-button" aria-expanded="false" aria-controls="code-color-scheme" onclick="window.toggleCodeSection(this)">Show</button>
+                                                <div class="button-group">
+                                                    <button class="copy-code-button" onclick="window.copyCodeSection(this)" aria-label="Copy code">Copy</button>
+                                                    <button class="toggle-code-button" aria-expanded="false" aria-controls="code-color-scheme" onclick="window.toggleCodeSection(this)">Show</button>
+                                                </div>
                                             </div>
                                             <pre id="code-color-scheme" class="foldable-content" style="display: none;"><code class="language-python">
 # How color schemes are applied in the backend (simplified from curl_noise.py)
@@ -3041,6 +3186,33 @@ def apply_color_to_noise(noise_tensor, shader_params):
                         
                         modal.appendChild(content);
                         document.body.appendChild(modal);
+
+                        // Accessibility: Focus Trap & Initial Focus
+                        const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+                        modal.addEventListener('keydown', (e) => {
+                            if (e.key === 'Tab') {
+                                const focusableElements = Array.from(modal.querySelectorAll(focusableSelectors))
+                                    .filter(el => el.offsetParent !== null && !el.hasAttribute('disabled')); // Only visible and enabled elements
+
+                                if (focusableElements.length === 0) return;
+
+                                const firstElement = focusableElements[0];
+                                const lastElement = focusableElements[focusableElements.length - 1];
+
+                                if (e.shiftKey) { // Shift + Tab
+                                    if (document.activeElement === firstElement) {
+                                        e.preventDefault();
+                                        lastElement.focus();
+                                    }
+                                } else { // Tab
+                                    if (document.activeElement === lastElement) {
+                                        e.preventDefault();
+                                        firstElement.focus();
+                                    }
+                                }
+                            }
+                        });
 
                         // Accessibility: Set focus to the close button when modal opens
                         // Using a small timeout to ensure DOM insertion is complete and to play nice with screen readers

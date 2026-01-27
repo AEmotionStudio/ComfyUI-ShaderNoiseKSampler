@@ -1,5 +1,5 @@
 import comfy.sample
-from .shader_params_reader import get_shader_params
+from .shader_params_reader import get_shader_params, ShaderParamsReader
 from .shader_noise_ksampler import ShaderNoiseKSampler, get_visualizer, set_debug_level
 
 # Define a simple parameter response mapper if needed
@@ -191,6 +191,10 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
         # Visualization type (default to 3/ellipses as in the default parameters)
         shader_params["visualization_type"] = shader_params.get("visualization_type", 3)
 
+        # Apply security validation and sanitization to the overridden parameters
+        # This prevents DoS attacks (e.g. excessive octaves) and ensures parameter safety
+        shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
+
         # --- Handle Parameter Response Mapper Integration ---
         if target_attribute_changes and target_attribute_changes.strip():
             if debugger.enabled:
@@ -211,11 +215,12 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                     mapper = ParameterResponseMapper(model_type=mapper_model_type)
                     
                     # Extract current shader parameters relevant to the mapper
+                    # Use validated values from shader_params instead of raw arguments
                     current_mapper_params = {
-                        "scale": noise_scale,
-                        "octaves": float(octaves),
-                        "warp_strength": warp_strength,
-                        "phase_shift": phase_shift
+                        "scale": shader_params.get("scale", 1.0),
+                        "octaves": float(shader_params.get("octaves", 3.0)),
+                        "warp_strength": shader_params.get("warp_strength", 0.5),
+                        "phase_shift": shader_params.get("phase_shift", 0.0)
                     }
 
                     if debugger.enabled and debugger.debug_level >= 2:
@@ -251,6 +256,10 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                             else:
                                 # For any other parameters
                                 shader_params[param] = value
+
+                        # Re-validate after mapper changes to ensure safety
+                        # This prevents bypasses where mapper logic (e.g. increments) might produce unsafe values
+                        shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
             except Exception as e:
                 print(f"❌ Error processing target_attribute_changes: {e}. Skipping mapper adjustments.")
 
