@@ -685,7 +685,7 @@ def generate_domain_warp_tensor(
     # Convert dict to ShaderParams if needed
     if isinstance(shader_params, dict):
         params = ShaderParams(shader_params)
-    else:
+            else:
         params = shader_params
     
     # Override target_channels if provided in params

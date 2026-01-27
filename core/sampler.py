@@ -18,6 +18,7 @@ from .constants import (
 )
 from .blending import blend_noises
 from .transforms import apply_noise_transform, normalize_noise
+from .params import ShaderParams
 
 
 def calculate_stage_strengths(
@@ -187,7 +188,25 @@ def generate_shader_noise(
     
     # Get channels from target_noise_shape
     if is_video:
-        channel_dim_idx = 3 - frame_dim_idx  # If frame=1, channel=2; if frame=2, channel=1
+        # Handle default frame_dim_idx of -1 by detecting format from shape
+        if frame_dim_idx == -1:
+            # Common latent channel counts vs frame counts
+            common_channels = {4, 8, 12, 16, 32, 64, 128}
+            dim1, dim2 = target_noise_shape[1], target_noise_shape[2]
+            # Heuristic: smaller dimension that looks like channels is the channel dim
+            if dim1 in common_channels and dim2 not in common_channels:
+                channel_dim_idx = 1  # B,C,F,H,W
+                frame_dim_idx = 2
+            elif dim2 in common_channels and dim1 not in common_channels:
+                channel_dim_idx = 2  # B,F,C,H,W
+                frame_dim_idx = 1
+            else:
+                # Default assumption: B,C,F,H,W format
+                channel_dim_idx = 1
+                frame_dim_idx = 2
+        else:
+            # Explicit frame_dim_idx provided
+            channel_dim_idx = 2 if frame_dim_idx == 1 else 1
         channels = target_noise_shape[channel_dim_idx]
     else:
         channels = target_noise_shape[1]
@@ -306,8 +325,9 @@ def _generate_video_noise(
             print(f"   Generating frame {frame_idx} with time={frame_params['time']:.2f}")
         
         # Prepare arguments - use "params" to match BaseNoiseGenerator.generate() signature
+        # Wrap dict in ShaderParams for attribute-style access
         generator_args = {
-            "params": frame_params,
+            "params": ShaderParams(frame_params),
             "height": height,
             "width": width,
             "batch_size": batch_size,
@@ -358,8 +378,9 @@ def _generate_image_noise(
         return torch.randn(target_noise_shape, device=device, dtype=dtype)
     
     # Prepare arguments - use "params" to match BaseNoiseGenerator.generate() signature
+    # Wrap dict in ShaderParams for attribute-style access
     generator_args = {
-        "params": shader_params,
+        "params": ShaderParams(shader_params),
         "height": height,
         "width": width,
         "batch_size": batch_size,

@@ -99,20 +99,17 @@ def get_shader_generator(shader_type: str):
         shader_type: Name of the shader type
         
     Returns:
-        Generator function for the shader type
+        Generator function (static method) for the shader type, or None if not found
     """
     # First try the legacy dict for backward compatibility
     if shader_type in SHADER_GENERATORS:
         return SHADER_GENERATORS[shader_type]
     
-    # Fall back to registry
+    # Fall back to registry - return the static generate method
     generator_class = get_shader(shader_type)
     if generator_class is not None:
-        # Return a wrapper function that uses the class
-        def generator_wrapper(**kwargs):
-            generator = generator_class()
-            return generator.generate(**kwargs)
-        return generator_wrapper
+        # Return the static generate method directly (consistent with shader_noise_ksampler.py)
+        return generator_class.generate
     
     # Return None if not found
     return None

@@ -523,13 +523,13 @@ def generate_tensor_field_tensor(
         shader_params: Dictionary of shader parameters
         height: Height of the output tensor
         width: Width of the output tensor
-        batch_size: Number of images in batch
-        device: Device to create tensor on
-        seed: Random seed
+            batch_size: Number of images in batch
+            device: Device to create tensor on
+            seed: Random seed
         target_channels: Number of output channels
         **kwargs: Additional arguments (ignored)
-        
-    Returns:
+            
+        Returns:
         Tensor with shape [batch_size, target_channels, height, width]
     """
     # Convert dict to ShaderParams if needed
@@ -543,9 +543,9 @@ def generate_tensor_field_tensor(
         target_channels = shader_params["target_channels"]
     
     return TensorFieldGenerator.generate(
-        batch_size=batch_size,
-        height=height,
-        width=width,
+            batch_size=batch_size,
+            height=height,
+            width=width,
         params=params,
         device=torch.device(device),
         seed=seed,

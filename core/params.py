@@ -454,8 +454,12 @@ def load_shader_params(
         if os.path.exists(params_file):
             with open(params_file, 'r') as f:
                 raw_params = json.load(f)
+                # Validate that JSON is a dict before passing to ShaderParams
+                if not isinstance(raw_params, dict):
+                    raise ValueError("JSON file must contain a dictionary")
                 return ShaderParams(raw_params).validate()
-    except (json.JSONDecodeError, IOError):
+    except (json.JSONDecodeError, IOError, ValueError, AttributeError, TypeError):
+        # Handle: invalid JSON, IO errors, non-dict JSON, attribute access on non-dict
         pass
     
     # Return defaults if loading failed
