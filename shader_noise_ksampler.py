@@ -7,100 +7,18 @@ from .shader_params_reader import get_shader_params, generate_noise_tensor, Shad
 # Add imports for custom sigma handling
 import comfy.samplers
 import comfy.model_sampling
-import comfy.model_base # For ModelType enum
-import comfy.latent_formats # For default latent format
+import comfy.model_base  # For ModelType enum
+import comfy.latent_formats  # For default latent format
 
-# Stub visualizer class as replacement for removed visualizer
-class StubVisualizer:
-    """A stub visualizer that implements the same interface but does nothing. Temporary replacement for removed visualizer."""
-    def __init__(self):
-        self.enabled = False
-        
-    def enable(self, seed=None, shader_type=None, additional_metadata=None):
-        """Stub for enable method."""
-        pass
-        
-    def disable(self):
-        """Stub for disable method."""
-        pass
-        
-    def save_latent_visualization(self, tensor, label, stage_info=None, is_sample=False):
-        """Stub for save_latent_visualization method."""
-        pass
-        
-    def save_denoising_step(self, tensor, stage_info, current_step, total_steps):
-        """Stub for save_denoising_step method."""
-        pass
-        
-    def capture_shader_process(self, phase, stage_idx, stage_type, stage_data, base_noise, shader_noise, blended_noise, result):
-        """Stub for capture_shader_process method."""
-        pass
-        
-    def capture_final_result(self, tensor, metadata=None):
-        """Stub for capture_final_result method."""
-        pass
-        
-    def get_ui_image_paths(self):
-        """Stub for get_ui_image_paths method."""
-        return {
-            "base_noise": None,
-            "shader_noise": None,
-            "blended_noise": None,
-            "stage_results": None,
-            "final_result": None,
-            "grids": []
-        }
-
-# Also need a stub for the debugger
-class StubDebugger:
-    """A stub debugger that implements the same interface but does nothing."""
-    def __init__(self):
-        self.enabled = False
-        self.debug_level = 0
-        
-    def reset(self):
-        """Stub for reset method."""
-        pass
-        
-    def time_operation(self, name):
-        """Stub for time_operation method."""
-        return contextlib.nullcontext()
-        
-    def analyze_tensor(self, tensor, name):
-        """Stub for analyze_tensor method."""
-        pass
-        
-    def log_parameters(self, params):
-        """Stub for log_parameters method."""
-        pass
-        
-    def log_stage_start(self, stage_type, stage_idx, params):
-        """Stub for log_stage_start method."""
-        pass
-        
-    def log_stage_end(self, stage_type, stage_idx):
-        """Stub for log_stage_end method."""
-        pass
-        
-    def log_blend_operation(self, base, shader, result, mode, strength):
-        """Stub for log_blend_operation method."""
-        pass
-
-# Functions to get the stub instances
-def get_visualizer():
-    """Return the stub visualizer instance."""
-    return StubVisualizer()
-
-def get_debugger():
-    """Return the stub debugger instance."""
-    return StubDebugger()
-
-def set_debug_level(level):
-    """Return the stub debugger with the specified level."""
-    debugger = get_debugger()
-    debugger.debug_level = level
-    debugger.enabled = level > 0
-    return debugger
+# Import debug utilities from core
+from .core.debug import (
+    StubVisualizer,
+    StubDebugger,
+    get_visualizer,
+    get_debugger,
+    set_debug_level,
+)
+from .core.params import ShaderParams
 
 class CustomSigmaProvider:
     """
@@ -188,25 +106,63 @@ class CustomSigmaModelWrapper:
          else:
              raise NotImplementedError(f"The wrapped model '{type(self.original_model).__name__}' does not have an 'apply_model' method.")
 
-# Define a registry for shader generators
-SHADER_GENERATORS = {}
-# Define a registry for shader generators
-SHADER_GENERATORS = {}
+# Import shader registry from centralized location
+from .shaders.registry import shader_registry
 
 # Function to get the appropriate generator
 def get_shader_generator(shader_type):
-    """Get the appropriate shader generator function based on shader type"""
-    generator = SHADER_GENERATORS.get(shader_type)
-    if generator:
-        return generator
-    else:
-        return generate_noise_tensor
+    """Get the appropriate shader generator function based on shader type.
+    
+    Returns a callable that accepts the standard interface (params, height, width, etc.).
+    Handles both class-based generators (with .generate method) and plain functions.
+    Falls back to generate_noise_tensor if not registered.
+    """
+    registered = shader_registry.get(shader_type)
+    if registered:
+        # Check if it's a class with a generate method or a plain function
+        if hasattr(registered, 'generate') and callable(getattr(registered, 'generate')):
+            # It's a class - return the static generate method
+            return registered.generate
+        elif callable(registered):
+            # It's already a function - return it directly
+            return registered
+        else:
+            # Unknown type, fall back
+            pass
+    
+    # Fallback: wrap generate_noise_tensor to translate params -> shader_params
+    def fallback_wrapper(params, height, width, batch_size, device, seed, target_channels, **kwargs):
+        # Convert ShaderParams to dict if needed for legacy function
+        if hasattr(params, 'to_dict'):
+            shader_params = params.to_dict()
+        else:
+            shader_params = dict(params) if hasattr(params, '__iter__') else {}
+        return generate_noise_tensor(
+            shader_params=shader_params,
+            height=height,
+            width=width,
+            batch_size=batch_size,
+            device=device,
+            seed=seed,
+            target_channels=target_channels,
+            **kwargs
+        )
+    return fallback_wrapper
 
-# Function to register shader generators
-def register_shader_generator(shader_type, generator_function):
-    """Register a shader generator function for a specific shader type"""
-    SHADER_GENERATORS[shader_type] = generator_function
-    return generator_function
+# Function to register shader generators (delegates to centralized registry)
+def register_shader_generator(shader_type, generator_class):
+    """Register a shader generator class for a specific shader type.
+    
+    Registers to both the legacy SHADER_GENERATORS dict (for backward
+    compatibility with __init__.py lookup) and the new centralized registry.
+    """
+    # Also add to module-level SHADER_GENERATORS dict for backward compatibility
+    # This matches the behavior in __init__.py
+    from . import SHADER_GENERATORS as legacy_dict
+    legacy_dict[shader_type] = generator_class
+    # Register to new centralized registry
+    shader_registry.register(shader_type, generator_class)
+    return generator_class
 
 # Create a custom sampling callback class
 class DenoisingStepCallback:
@@ -935,8 +891,9 @@ class ShaderNoiseKSampler:
                 
                 # Prepare arguments based on what the function accepts
                 # Note: The generator usually expects [B, C, H, W] per frame
+                # Use "params" key to match BaseNoiseGenerator.generate() signature
                 generator_args = {
-                    "shader_params": frame_params,
+                    "params": ShaderParams(frame_params).validate(),
                     "height": height, 
                     "width": width, 
                     "batch_size": batch_size,
@@ -999,8 +956,9 @@ class ShaderNoiseKSampler:
             generator_func = get_shader_generator(shader_type)
             
             # Prepare arguments based on what the function accepts
+            # Use "params" key to match BaseNoiseGenerator.generate() signature
             generator_args = {
-                "shader_params": shader_params,
+                "params": ShaderParams(shader_params).validate(),
                 "height": height, 
                 "width": width, 
                 "batch_size": batch_size,
