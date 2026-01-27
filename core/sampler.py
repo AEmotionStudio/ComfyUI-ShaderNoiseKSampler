@@ -321,9 +321,9 @@ def _generate_video_noise(
             print(f"   Generating frame {frame_idx} with time={frame_params['time']:.2f}")
         
         # Prepare arguments - use "params" to match BaseNoiseGenerator.generate() signature
-        # Wrap dict in ShaderParams for attribute-style access
+        # Wrap dict in ShaderParams for attribute-style access and validate
         generator_args = {
-            "params": ShaderParams(frame_params),
+            "params": ShaderParams(frame_params).validate(),
             "height": height,
             "width": width,
             "batch_size": batch_size,
@@ -374,9 +374,9 @@ def _generate_image_noise(
         return torch.randn(target_noise_shape, device=device, dtype=dtype)
     
     # Prepare arguments - use "params" to match BaseNoiseGenerator.generate() signature
-    # Wrap dict in ShaderParams for attribute-style access
+    # Wrap dict in ShaderParams for attribute-style access and validate
     generator_args = {
-        "params": ShaderParams(shader_params),
+        "params": ShaderParams(shader_params).validate(),
         "height": height,
         "width": width,
         "batch_size": batch_size,
@@ -473,31 +473,59 @@ def _correct_noise_shape(
 ) -> torch.Tensor:
     """Final correction of noise shape to match target."""
     print(f"❌ FINAL SHAPE MISMATCH: Noise shape {noise.shape} != Target shape {target_shape}")
-    
+
     try:
-        # Choose interpolation mode based on tensor dimensionality
         if len(noise.shape) == 5:
-            # 5D video tensor - use trilinear interpolation
-            noise = F.interpolate(noise, size=target_shape[2:], mode='trilinear', align_corners=False)
+            # 5D video tensor - handle both B,C,F,H,W and B,F,C,H,W formats
+            # Determine frame dimension from channel_dim_idx
+            frame_dim_idx = 2 if channel_dim_idx == 1 else 1
+
+            # For trilinear interpolation, PyTorch expects (N, C, D, H, W) format
+            # If we have B,F,C,H,W format, we need to convert to B,C,F,H,W first
+            if channel_dim_idx == 2:  # B,F,C,H,W format
+                # Transpose to B,C,F,H,W for interpolation
+                noise = noise.transpose(1, 2).contiguous()
+
+            # Now noise is in B,C,F,H,W format, extract target dimensions
+            # target_shape is in the original format, so extract appropriately
+            if channel_dim_idx == 2:  # Original was B,F,C,H,W
+                tgt_frames = target_shape[1]
+                tgt_channels = target_shape[2]
+            else:  # B,C,F,H,W
+                tgt_channels = target_shape[1]
+                tgt_frames = target_shape[2]
+            tgt_h, tgt_w = target_shape[3], target_shape[4]
+
+            # Use trilinear interpolation for (frames, height, width)
+            noise = F.interpolate(
+                noise,
+                size=(tgt_frames, tgt_h, tgt_w),
+                mode='trilinear',
+                align_corners=False
+            )
+
+            # Handle channel mismatch
+            if noise.shape[1] != tgt_channels:
+                b, c, f, h, w = noise.shape
+                new_noise = torch.zeros((b, tgt_channels, f, h, w), device=device, dtype=dtype)
+                min_c = min(c, tgt_channels)
+                new_noise[:, :min_c] = noise[:, :min_c]
+                noise = new_noise
+
+            # Convert back to original format if needed
+            if channel_dim_idx == 2:  # Original was B,F,C,H,W
+                noise = noise.transpose(1, 2).contiguous()
         else:
             # 4D image tensor - use bilinear interpolation
             noise = F.interpolate(noise, size=target_shape[2:], mode='bilinear', align_corners=False)
-        
-        # If channels are still wrong, adjust
-        if noise.shape[channel_dim_idx] != target_shape[channel_dim_idx]:
-            final_noise = torch.zeros(target_shape, device=device, dtype=dtype)
-            min_c = min(noise.shape[channel_dim_idx], target_shape[channel_dim_idx])
-            
-            # Slicing based on dim order
-            if channel_dim_idx == 1:  # [B, C, F, H, W]
+
+            # Handle channel mismatch
+            if noise.shape[1] != target_shape[1]:
+                final_noise = torch.zeros(target_shape, device=device, dtype=dtype)
+                min_c = min(noise.shape[1], target_shape[1])
                 final_noise[:, :min_c, ...] = noise[:, :min_c, ...]
-            elif channel_dim_idx == 2:  # [B, F, C, H, W]
-                final_noise[:, :, :min_c, ...] = noise[:, :, :min_c, ...]
-            else:  # 4D
-                final_noise[:, :min_c, ...] = noise[:, :min_c, ...]
-            
-            noise = final_noise
-            
+                noise = final_noise
+
     except Exception as e:
         print(f"❌ Final resize attempt failed: {e}")
         # Fallback: for 5D tensors, try frame-by-frame bilinear interpolation
@@ -508,7 +536,7 @@ def _correct_noise_shape(
                 noise = torch.zeros(target_shape, device=device, dtype=dtype)
         else:
             noise = torch.zeros(target_shape, device=device, dtype=dtype)
-    
+
     return noise
 
 

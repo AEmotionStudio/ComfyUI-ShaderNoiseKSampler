@@ -88,29 +88,52 @@ SHADER_GENERATORS = {
 }
 
 
+def _wrap_legacy_generator(legacy_func):
+    """
+    Wrap a legacy generator function to accept the new 'params' keyword argument.
+
+    Legacy functions expect 'shader_params' but the new convention uses 'params'.
+    This wrapper translates between the two conventions.
+
+    Args:
+        legacy_func: Legacy generator function expecting shader_params
+
+    Returns:
+        Wrapped function accepting params
+    """
+    def wrapper(**kwargs):
+        # If 'params' is provided but not 'shader_params', translate it
+        if 'params' in kwargs and 'shader_params' not in kwargs:
+            kwargs['shader_params'] = kwargs.pop('params')
+        return legacy_func(**kwargs)
+    return wrapper
+
+
 def get_shader_generator(shader_type: str):
     """
     Get the appropriate shader generator function based on shader type.
-    
+
     This function provides backward compatibility with the old API
-    while using the new registry system internally.
-    
+    while using the new registry system internally. The returned function
+    accepts both 'params' (new convention) and 'shader_params' (legacy convention).
+
     Args:
         shader_type: Name of the shader type
-        
+
     Returns:
         Generator function (static method) for the shader type, or None if not found
     """
     # First try the legacy dict for backward compatibility
+    # Wrap legacy functions to accept 'params' keyword argument
     if shader_type in SHADER_GENERATORS:
-        return SHADER_GENERATORS[shader_type]
-    
+        return _wrap_legacy_generator(SHADER_GENERATORS[shader_type])
+
     # Fall back to registry - return the static generate method
     generator_class = get_shader(shader_type)
     if generator_class is not None:
         # Return the static generate method directly (consistent with shader_noise_ksampler.py)
         return generator_class.generate
-    
+
     # Return None if not found
     return None
 
