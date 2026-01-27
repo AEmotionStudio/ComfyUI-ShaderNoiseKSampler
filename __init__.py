@@ -92,19 +92,28 @@ def _wrap_legacy_generator(legacy_func):
     """
     Wrap a legacy generator function to accept the new 'params' keyword argument.
 
-    Legacy functions expect 'shader_params' but the new convention uses 'params'.
-    This wrapper translates between the two conventions.
+    Legacy functions expect 'shader_params' as a dict, but the new convention uses
+    'params' which may be a ShaderParams instance. This wrapper translates between
+    the two conventions and converts ShaderParams to dict.
 
     Args:
-        legacy_func: Legacy generator function expecting shader_params
+        legacy_func: Legacy generator function expecting shader_params as dict
 
     Returns:
-        Wrapped function accepting params
+        Wrapped function accepting params (ShaderParams or dict)
     """
     def wrapper(**kwargs):
         # If 'params' is provided but not 'shader_params', translate it
         if 'params' in kwargs and 'shader_params' not in kwargs:
-            kwargs['shader_params'] = kwargs.pop('params')
+            params = kwargs.pop('params')
+            # Convert ShaderParams to dict if needed for legacy function
+            if hasattr(params, 'to_dict'):
+                shader_params = params.to_dict()
+            elif hasattr(params, '__iter__'):
+                shader_params = dict(params)
+            else:
+                shader_params = params
+            kwargs['shader_params'] = shader_params
         return legacy_func(**kwargs)
     return wrapper
 
@@ -121,8 +130,12 @@ def get_shader_generator(shader_type: str):
         shader_type: Name of the shader type
 
     Returns:
-        Generator function (static method) for the shader type, or None if not found
+        Generator function for the shader type. Falls back to generate_noise_tensor
+        if not found (consistent with shader_noise_ksampler.py behavior).
     """
+    # Import here to avoid circular imports
+    from .shader_params_reader import generate_noise_tensor
+    
     # First try the legacy dict for backward compatibility
     # Wrap legacy functions to accept 'params' keyword argument
     if shader_type in SHADER_GENERATORS:
@@ -134,8 +147,27 @@ def get_shader_generator(shader_type: str):
         # Return the static generate method directly (consistent with shader_noise_ksampler.py)
         return generator_class.generate
 
-    # Return None if not found
-    return None
+    # Fallback: wrap generate_noise_tensor to translate params -> shader_params
+    # This matches the behavior in shader_noise_ksampler.py
+    def fallback_wrapper(params, height, width, batch_size, device, seed, target_channels, **kwargs):
+        # Convert ShaderParams to dict if needed for legacy function
+        if hasattr(params, 'to_dict'):
+            shader_params = params.to_dict()
+        elif hasattr(params, '__iter__'):
+            shader_params = dict(params)
+        else:
+            shader_params = {}
+        return generate_noise_tensor(
+            shader_params=shader_params,
+            height=height,
+            width=width,
+            batch_size=batch_size,
+            device=device,
+            seed=seed,
+            target_channels=target_channels,
+            **kwargs
+        )
+    return fallback_wrapper
 
 
 def register_shader_generator(shader_type: str, generator_function):
