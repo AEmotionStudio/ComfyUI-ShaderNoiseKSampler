@@ -9,15 +9,11 @@ import torch
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Tuple
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from utils.color_utils import apply_color_scheme
-from utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
-from utils.noise_utils import create_coordinate_grid
-from core.params import ShaderParams, get_param_value
-from core.constants import DEFAULT_CHANNELS
+from ..utils.color_utils import apply_color_scheme
+from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
+from ..utils.noise_utils import create_coordinate_grid
+from ..core.params import ShaderParams, get_param_value
+from ..core.constants import DEFAULT_CHANNELS
 
 
 class BaseNoiseGenerator(ABC):

@@ -450,7 +450,13 @@ def _correct_noise_shape(
     print(f"❌ FINAL SHAPE MISMATCH: Noise shape {noise.shape} != Target shape {target_shape}")
     
     try:
-        noise = F.interpolate(noise, size=target_shape[2:], mode='bilinear', align_corners=False)
+        # Choose interpolation mode based on tensor dimensionality
+        if len(noise.shape) == 5:
+            # 5D video tensor - use trilinear interpolation
+            noise = F.interpolate(noise, size=target_shape[2:], mode='trilinear', align_corners=False)
+        else:
+            # 4D image tensor - use bilinear interpolation
+            noise = F.interpolate(noise, size=target_shape[2:], mode='bilinear', align_corners=False)
         
         # If channels are still wrong, adjust
         if noise.shape[channel_dim_idx] != target_shape[channel_dim_idx]:
@@ -469,6 +475,66 @@ def _correct_noise_shape(
             
     except Exception as e:
         print(f"❌ Final resize attempt failed: {e}")
-        noise = torch.zeros(target_shape, device=device, dtype=dtype)
+        # Fallback: for 5D tensors, try frame-by-frame bilinear interpolation
+        if len(noise.shape) == 5 and len(target_shape) == 5:
+            try:
+                noise = _interpolate_video_framewise(noise, target_shape, channel_dim_idx, device, dtype)
+            except Exception:
+                noise = torch.zeros(target_shape, device=device, dtype=dtype)
+        else:
+            noise = torch.zeros(target_shape, device=device, dtype=dtype)
     
     return noise
+
+
+def _interpolate_video_framewise(
+    noise: torch.Tensor,
+    target_shape: Tuple[int, ...],
+    channel_dim_idx: int,
+    device: str,
+    dtype: torch.dtype
+) -> torch.Tensor:
+    """Fallback frame-by-frame interpolation for video tensors."""
+    # Determine frame dimension
+    frame_dim = 2 if channel_dim_idx == 1 else 1
+    target_h, target_w = target_shape[3], target_shape[4]
+    
+    frames_list = []
+    num_frames = noise.shape[frame_dim]
+    
+    for i in range(num_frames):
+        if frame_dim == 1:
+            frame = noise[:, i]  # B,C,H,W
+        else:
+            frame = noise[:, :, i]  # B,C,H,W
+        
+        frame_resized = F.interpolate(
+            frame,
+            size=(target_h, target_w),
+            mode='bilinear',
+            align_corners=False
+        )
+        frames_list.append(frame_resized)
+    
+    if frame_dim == 1:
+        result = torch.stack(frames_list, dim=1)
+    else:
+        result = torch.stack(frames_list, dim=2)
+    
+    # Handle frame count mismatch
+    target_frames = target_shape[frame_dim]
+    if result.shape[frame_dim] != target_frames:
+        # Simple repeat/truncate for frame adjustment
+        if result.shape[frame_dim] < target_frames:
+            repeats = (target_frames // result.shape[frame_dim]) + 1
+            if frame_dim == 1:
+                result = result.repeat(1, repeats, 1, 1, 1)[:, :target_frames]
+            else:
+                result = result.repeat(1, 1, repeats, 1, 1)[:, :, :target_frames]
+        else:
+            if frame_dim == 1:
+                result = result[:, :target_frames]
+            else:
+                result = result[:, :, :target_frames]
+    
+    return result

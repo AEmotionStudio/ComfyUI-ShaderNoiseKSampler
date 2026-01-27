@@ -2,8 +2,9 @@
 Blending operations for combining base noise with shader noise.
 """
 import torch
+import torch.nn.functional as F
 import contextlib
-from typing import Optional, Callable
+from typing import Optional, Tuple
 
 from .constants import SUPPORTED_BLEND_MODES
 
@@ -58,6 +59,42 @@ def blend_noises(
     return result
 
 
+def _detect_video_format(tensor: torch.Tensor) -> Tuple[int, int]:
+    """
+    Detect the format of a 5D video tensor and return channel/frame dimension indices.
+    
+    Args:
+        tensor: 5D tensor to analyze
+        
+    Returns:
+        Tuple of (channel_dim, frame_dim) indices
+    """
+    if len(tensor.shape) != 5:
+        raise ValueError(f"Expected 5D tensor, got {len(tensor.shape)}D")
+    
+    # Common channel counts for latent models
+    common_channels = {4, 8, 12, 16, 32, 64, 128}
+    
+    dim1 = tensor.shape[1]
+    dim2 = tensor.shape[2]
+    
+    # If dim1 looks like channels (common count) and dim2 doesn't
+    if dim1 in common_channels and dim2 not in common_channels:
+        return 1, 2  # B,C,F,H,W format
+    # If dim2 looks like channels and dim1 doesn't
+    elif dim2 in common_channels and dim1 not in common_channels:
+        return 2, 1  # B,F,C,H,W format
+    # If both look like channels, prefer larger as frames (heuristic)
+    elif dim1 in common_channels and dim2 in common_channels:
+        if dim1 >= dim2:
+            return 2, 1  # B,F,C,H,W - dim1 is likely frames
+        else:
+            return 1, 2  # B,C,F,H,W - dim2 is likely frames
+    # Default to B,F,C,H,W format (most common in video models)
+    else:
+        return 2, 1
+
+
 def _match_tensor_shape(
     source: torch.Tensor,
     target: torch.Tensor,
@@ -65,6 +102,7 @@ def _match_tensor_shape(
 ) -> torch.Tensor:
     """
     Match the shape of source tensor to target tensor.
+    Handles both 4D image tensors and 5D video tensors with various formats.
     
     Args:
         source: Source tensor to reshape
@@ -80,15 +118,21 @@ def _match_tensor_shape(
     if debug_enabled and debug_level >= 1:
         print(f"⚠️ Shape mismatch for blending: base={target.shape}, shader={source.shape}")
     
-    result = source
+    # Handle 5D video tensors specially
+    is_video = len(source.shape) == 5 and len(target.shape) == 5
     
-    # Handle channel dimension mismatches
+    if is_video:
+        return _match_video_tensor_shape(source, target, debugger)
+    
+    # Handle 4D tensors (standard image format B,C,H,W)
+    result = source.clone()
+    
+    # Handle channel dimension mismatches (index 1 for 4D)
     if source.shape[1] != target.shape[1]:
-        # Create a new tensor with the same shape as target
-        result = torch.zeros_like(target)
-        # Copy over the common channels
+        new_result = torch.zeros_like(target)
         min_channels = min(source.shape[1], target.shape[1])
-        result[:, :min_channels] = source[:, :min_channels]
+        new_result[:, :min_channels] = result[:, :min_channels]
+        result = new_result
         
         if debug_enabled and debug_level >= 1:
             print(f"✅ Matched channel dimensions: {result.shape}")
@@ -96,7 +140,7 @@ def _match_tensor_shape(
     # Handle spatial dimension mismatches with interpolation
     if result.shape[2:] != target.shape[2:]:
         try:
-            result = torch.nn.functional.interpolate(
+            result = F.interpolate(
                 result, 
                 size=target.shape[2:], 
                 mode='bilinear', 
@@ -105,12 +149,8 @@ def _match_tensor_shape(
         except RuntimeError as e:
             if debug_enabled:
                 print(f"⚠️ Error during interpolation: {e}")
-            # Handle video tensors specially
-            if len(source.shape) == 5 and len(target.shape) == 5:
-                result = _match_video_tensor_shape(source, target)
-            else:
-                # Fall back to zeros if we can't match shapes
-                result = torch.zeros_like(target)
+            # Fall back to zeros if we can't match shapes
+            result = torch.zeros_like(target)
             
         if debug_enabled and debug_level >= 1:
             print(f"✅ Matched spatial dimensions: {result.shape}")
@@ -118,30 +158,138 @@ def _match_tensor_shape(
     return result
 
 
-def _match_video_tensor_shape(source: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def _match_video_tensor_shape(
+    source: torch.Tensor, 
+    target: torch.Tensor,
+    debugger: Optional[object] = None
+) -> torch.Tensor:
     """
     Match video tensor shapes by handling frame and channel dimensions.
+    Supports both B,C,F,H,W and B,F,C,H,W formats.
     
     Args:
         source: Source 5D tensor
         target: Target 5D tensor
+        debugger: Optional debugger for logging
         
     Returns:
-        Reshaped source tensor
+        Reshaped source tensor matching target shape
     """
-    b, f, c, h, w = source.shape
-    _, _, target_c, target_h, target_w = target.shape
+    debug_enabled = debugger is not None and getattr(debugger, 'enabled', False)
+    debug_level = getattr(debugger, 'debug_level', 0) if debug_enabled else 0
     
-    if c != target_c:
-        # Handle channel differences
-        new_tensor = torch.zeros_like(target)
-        min_c = min(c, target_c)
-        # Copy each frame separately
-        for i in range(f):
-            new_tensor[:, i, :min_c] = source[:, i, :min_c]
-        return new_tensor
+    # Detect formats for both tensors
+    src_channel_dim, src_frame_dim = _detect_video_format(source)
+    tgt_channel_dim, tgt_frame_dim = _detect_video_format(target)
     
-    return torch.zeros_like(target)
+    if debug_enabled and debug_level >= 2:
+        print(f"   Source format: channel_dim={src_channel_dim}, frame_dim={src_frame_dim}")
+        print(f"   Target format: channel_dim={tgt_channel_dim}, frame_dim={tgt_frame_dim}")
+    
+    # Extract dimensions
+    src_batch = source.shape[0]
+    src_channels = source.shape[src_channel_dim]
+    src_frames = source.shape[src_frame_dim]
+    src_height = source.shape[3]
+    src_width = source.shape[4]
+    
+    tgt_batch = target.shape[0]
+    tgt_channels = target.shape[tgt_channel_dim]
+    tgt_frames = target.shape[tgt_frame_dim]
+    tgt_height = target.shape[3]
+    tgt_width = target.shape[4]
+    
+    # Start with a clone to preserve data
+    result = source.clone()
+    
+    # Step 1: Convert source to target format if different
+    if src_channel_dim != tgt_channel_dim:
+        # Swap dimensions 1 and 2
+        result = result.transpose(1, 2).contiguous()
+        if debug_enabled and debug_level >= 2:
+            print(f"   Transposed to target format: {result.shape}")
+    
+    # After potential transpose, dimensions now align with target format
+    # Get current channel dim based on target format
+    channel_dim = tgt_channel_dim
+    frame_dim = tgt_frame_dim
+    
+    # Step 2: Handle frame count mismatch
+    current_frames = result.shape[frame_dim]
+    if current_frames != tgt_frames:
+        if debug_enabled and debug_level >= 1:
+            print(f"   Adjusting frames from {current_frames} to {tgt_frames}")
+        
+        # Interpolate along frame dimension
+        # Need to reshape for interpolation
+        if frame_dim == 1:  # B,F,C,H,W
+            b, f, c, h, w = result.shape
+            result_2d = result.permute(0, 2, 1, 3, 4).reshape(b * c, f, h * w)
+            result_2d = F.interpolate(result_2d, size=(tgt_frames, h * w), mode='bilinear', align_corners=False)
+            result = result_2d.reshape(b, c, tgt_frames, h, w).permute(0, 2, 1, 3, 4)
+        else:  # B,C,F,H,W (frame_dim == 2)
+            b, c, f, h, w = result.shape
+            result_2d = result.reshape(b * c, f, h * w)
+            result_2d = F.interpolate(result_2d, size=(tgt_frames, h * w), mode='bilinear', align_corners=False)
+            result = result_2d.reshape(b, c, tgt_frames, h, w)
+    
+    # Step 3: Handle channel mismatch
+    current_channels = result.shape[channel_dim]
+    if current_channels != tgt_channels:
+        if debug_enabled and debug_level >= 1:
+            print(f"   Adjusting channels from {current_channels} to {tgt_channels}")
+        
+        new_result = torch.zeros_like(target)
+        min_channels = min(current_channels, tgt_channels)
+        
+        if channel_dim == 1:  # B,C,F,H,W
+            new_result[:, :min_channels] = result[:, :min_channels]
+        else:  # B,F,C,H,W
+            new_result[:, :, :min_channels] = result[:, :, :min_channels]
+        
+        result = new_result
+    
+    # Step 4: Handle spatial dimension mismatch
+    if result.shape[3:] != target.shape[3:]:
+        if debug_enabled and debug_level >= 1:
+            print(f"   Adjusting spatial dims from {result.shape[3:]} to {target.shape[3:]}")
+        
+        try:
+            # Use trilinear interpolation for 5D tensors
+            result = F.interpolate(
+                result,
+                size=(result.shape[2], tgt_height, tgt_width),
+                mode='trilinear',
+                align_corners=False
+            )
+        except RuntimeError:
+            # Fallback: interpolate each frame with bilinear
+            frames_list = []
+            num_frames = result.shape[frame_dim]
+            
+            for i in range(num_frames):
+                if frame_dim == 1:
+                    frame = result[:, i]  # B,C,H,W
+                else:
+                    frame = result[:, :, i]  # B,C,H,W
+                
+                frame_resized = F.interpolate(
+                    frame,
+                    size=(tgt_height, tgt_width),
+                    mode='bilinear',
+                    align_corners=False
+                )
+                frames_list.append(frame_resized)
+            
+            if frame_dim == 1:
+                result = torch.stack(frames_list, dim=1)
+            else:
+                result = torch.stack(frames_list, dim=2)
+    
+    if debug_enabled and debug_level >= 1:
+        print(f"✅ Final matched shape: {result.shape}")
+    
+    return result
 
 
 def _apply_blend_mode(
