@@ -158,36 +158,83 @@ def resize_noise_channels(
     return new_noise
 
 
+def _detect_video_channel_dim(tensor: torch.Tensor) -> int:
+    """
+    Detect the channel dimension index for a 5D video tensor.
+
+    Uses heuristics based on common latent channel counts to determine
+    whether the format is B,C,F,H,W (channel_dim=1) or B,F,C,H,W (channel_dim=2).
+
+    Args:
+        tensor: 5D video tensor
+
+    Returns:
+        Channel dimension index (1 or 2)
+    """
+    if len(tensor.shape) != 5:
+        return 1  # Default for non-5D tensors
+
+    # Common latent channel counts
+    common_channels = {4, 8, 12, 16, 32, 64, 128}
+
+    dim1 = tensor.shape[1]
+    dim2 = tensor.shape[2]
+
+    # If dim1 looks like channels and dim2 doesn't -> B,C,F,H,W
+    if dim1 in common_channels and dim2 not in common_channels:
+        return 1
+    # If dim2 looks like channels and dim1 doesn't -> B,F,C,H,W
+    elif dim2 in common_channels and dim1 not in common_channels:
+        return 2
+    # Default to B,F,C,H,W format (most common in video models)
+    # This must match the default in blending.py and sampler.py
+    else:
+        return 2
+
+
 def match_noise_shape(
     noise: torch.Tensor,
     target_shape: tuple,
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None,
-    is_video: bool = False
+    is_video: bool = False,
+    channel_dim: Optional[int] = None
 ) -> torch.Tensor:
     """
     Match noise tensor to target shape, handling both channel and spatial mismatches.
-    
+
     Args:
         noise: Input noise tensor
         target_shape: Target shape to match
         device: Device for the output tensor
         dtype: Data type for the output tensor
         is_video: Whether this is a video tensor (5D)
-        
+        channel_dim: Optional explicit channel dimension index. If None, will be
+                     auto-detected for video tensors using heuristics.
+
     Returns:
         Reshaped noise tensor
     """
     if noise.shape == target_shape:
         return noise
-    
+
     if device is None:
         device = noise.device
     if dtype is None:
         dtype = noise.dtype
-    
-    channel_dim = 2 if is_video else 1
-    spatial_dims_start = 3 if is_video else 2
+
+    # Determine channel dimension
+    if channel_dim is not None:
+        # Use explicitly provided channel_dim
+        pass
+    elif is_video and len(noise.shape) == 5:
+        # Auto-detect for video tensors
+        channel_dim = _detect_video_channel_dim(noise)
+    else:
+        # Default for image tensors
+        channel_dim = 1
+
+    spatial_dims_start = 3 if (is_video and len(noise.shape) == 5) else 2
     
     result = noise
     
