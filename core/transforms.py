@@ -84,27 +84,81 @@ def resize_noise_spatial(
     Returns:
         Resized noise tensor
     """
+    import torch.nn.functional as F
+    
+    input_dims = len(noise.shape)
     num_spatial_dims = len(target_size)
     
     if mode is None:
-        # Auto-detect interpolation mode based on dimensions
-        if num_spatial_dims == 1:
-            mode = 'linear'
-        elif num_spatial_dims == 2:
+        # Auto-detect interpolation mode based on INPUT tensor dimensionality
+        # This is critical: a 5D tensor needs trilinear or special handling,
+        # even if target_size is only (H, W)
+        if input_dims == 5:
+            # 5D video tensor - need trilinear or frame-by-frame handling
+            if num_spatial_dims == 3:
+                mode = 'trilinear'
+            else:
+                # target_size is (H, W) but input is 5D
+                # We need to handle this specially - resize frame by frame
+                return _resize_5d_tensor_spatial(noise, target_size)
+        elif input_dims == 4:
             mode = 'bilinear'
-        elif num_spatial_dims == 3:
-            mode = 'trilinear'
+        elif input_dims == 3:
+            mode = 'linear'
         else:
             mode = 'nearest'
     
     align_corners = False if mode in ['linear', 'bilinear', 'trilinear'] else None
     
-    return torch.nn.functional.interpolate(
+    return F.interpolate(
         noise,
         size=target_size,
         mode=mode,
         align_corners=align_corners
     )
+
+
+def _resize_5d_tensor_spatial(
+    noise: torch.Tensor,
+    target_size: tuple
+) -> torch.Tensor:
+    """
+    Resize a 5D tensor's spatial dimensions (H, W) using frame-by-frame bilinear.
+    
+    Args:
+        noise: 5D input tensor (B,C,F,H,W or B,F,C,H,W format)
+        target_size: Target spatial dimensions (H, W)
+        
+    Returns:
+        Resized 5D tensor
+    """
+    import torch.nn.functional as F
+    
+    # Detect format using channel heuristics
+    channel_dim = _detect_video_channel_dim(noise)
+    frame_dim = 2 if channel_dim == 1 else 1
+    
+    num_frames = noise.shape[frame_dim]
+    frames_list = []
+    
+    for i in range(num_frames):
+        if frame_dim == 1:
+            frame = noise[:, i]  # B,C,H,W
+        else:
+            frame = noise[:, :, i]  # B,C,H,W
+        
+        frame_resized = F.interpolate(
+            frame,
+            size=target_size,
+            mode='bilinear',
+            align_corners=False
+        )
+        frames_list.append(frame_resized)
+    
+    if frame_dim == 1:
+        return torch.stack(frames_list, dim=1)
+    else:
+        return torch.stack(frames_list, dim=2)
 
 
 def resize_noise_channels(

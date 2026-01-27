@@ -151,7 +151,16 @@ def get_shader_generator(shader_type):
 
 # Function to register shader generators (delegates to centralized registry)
 def register_shader_generator(shader_type, generator_class):
-    """Register a shader generator class for a specific shader type"""
+    """Register a shader generator class for a specific shader type.
+    
+    Registers to both the legacy SHADER_GENERATORS dict (for backward
+    compatibility with __init__.py lookup) and the new centralized registry.
+    """
+    # Also add to module-level SHADER_GENERATORS dict for backward compatibility
+    # This matches the behavior in __init__.py
+    from . import SHADER_GENERATORS as legacy_dict
+    legacy_dict[shader_type] = generator_class
+    # Register to new centralized registry
     shader_registry.register(shader_type, generator_class)
     return generator_class
 
