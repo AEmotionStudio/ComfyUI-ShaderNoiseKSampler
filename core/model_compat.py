@@ -207,7 +207,6 @@ def _check_model_name_patterns(
     
     # Check class names
     model_class_lower = model_class.lower()
-    inner_class_lower = ""
     
     if model_class_lower == 'flux':
         if debug_enabled:

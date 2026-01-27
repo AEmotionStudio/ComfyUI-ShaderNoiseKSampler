@@ -120,12 +120,16 @@ def register_shader_generator(shader_type: str, generator_function):
     Register a shader generator function.
     
     This function provides backward compatibility with the old API.
+    Registers to both the legacy SHADER_GENERATORS dict and the new registry.
     
     Args:
         shader_type: Name of the shader type
-        generator_function: Generator function to register
+        generator_function: Generator function or class to register
     """
+    # Add to legacy dict for backward compatibility
     SHADER_GENERATORS[shader_type] = generator_function
+    # Also register to the new registry so shader_noise_ksampler.py can find it
+    register_shader(shader_type, generator_function)
 
 
 # Node class mappings

@@ -18,6 +18,7 @@ from .core.debug import (
     get_debugger,
     set_debug_level,
 )
+from .core.params import ShaderParams
 
 class CustomSigmaProvider:
     """
@@ -855,8 +856,9 @@ class ShaderNoiseKSampler:
                 
                 # Prepare arguments based on what the function accepts
                 # Note: The generator usually expects [B, C, H, W] per frame
+                # Use "params" key to match BaseNoiseGenerator.generate() signature
                 generator_args = {
-                    "shader_params": frame_params,
+                    "params": ShaderParams(frame_params).validate(),
                     "height": height, 
                     "width": width, 
                     "batch_size": batch_size,
@@ -919,8 +921,9 @@ class ShaderNoiseKSampler:
             generator_func = get_shader_generator(shader_type)
             
             # Prepare arguments based on what the function accepts
+            # Use "params" key to match BaseNoiseGenerator.generate() signature
             generator_args = {
-                "shader_params": shader_params,
+                "params": ShaderParams(shader_params).validate(),
                 "height": height, 
                 "width": width, 
                 "batch_size": batch_size,
