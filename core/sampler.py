@@ -11,13 +11,8 @@ from typing import Optional, Dict, Any, List, Tuple, Callable
 
 import torch.nn.functional as F
 
-from .constants import (
-    SUPPORTED_BLEND_MODES,
-    SUPPORTED_TRANSFORMS,
-    SUPPORTED_DISTRIBUTIONS,
-)
-from .blending import blend_noises
-from .transforms import apply_noise_transform, normalize_noise
+from .constants import SUPPORTED_DISTRIBUTIONS
+from .transforms import normalize_noise
 from .params import ShaderParams
 
 
@@ -201,9 +196,10 @@ def generate_shader_noise(
                 channel_dim_idx = 2  # B,F,C,H,W
                 frame_dim_idx = 1
             else:
-                # Default assumption: B,C,F,H,W format
-                channel_dim_idx = 1
-                frame_dim_idx = 2
+                # Default assumption: B,F,C,H,W format (most common in video models)
+                # This must match the default in blending.py _detect_video_format()
+                channel_dim_idx = 2
+                frame_dim_idx = 1
         else:
             # Explicit frame_dim_idx provided
             channel_dim_idx = 2 if frame_dim_idx == 1 else 1
