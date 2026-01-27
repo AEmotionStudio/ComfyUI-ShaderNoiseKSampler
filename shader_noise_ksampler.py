@@ -106,22 +106,27 @@ class CustomSigmaModelWrapper:
              raise NotImplementedError(f"The wrapped model '{type(self.original_model).__name__}' does not have an 'apply_model' method.")
 
 # Import shader registry from centralized location
-from shaders.registry import shader_registry
+from .shaders.registry import shader_registry
 
 # Function to get the appropriate generator
 def get_shader_generator(shader_type):
-    """Get the appropriate shader generator function based on shader type"""
-    generator = shader_registry.get(shader_type)
-    if generator:
-        return generator
+    """Get the appropriate shader generator function based on shader type.
+    
+    Returns the static generate method of the registered class, or the fallback
+    generate_noise_tensor function if not registered.
+    """
+    generator_class = shader_registry.get(shader_type)
+    if generator_class:
+        # Return the static generate method, not the class itself
+        return generator_class.generate
     else:
         return generate_noise_tensor
 
 # Function to register shader generators (delegates to centralized registry)
-def register_shader_generator(shader_type, generator_function):
-    """Register a shader generator function for a specific shader type"""
-    shader_registry.register(shader_type, generator_function)
-    return generator_function
+def register_shader_generator(shader_type, generator_class):
+    """Register a shader generator class for a specific shader type"""
+    shader_registry.register(shader_type, generator_class)
+    return generator_class
 
 # Create a custom sampling callback class
 class DenoisingStepCallback:

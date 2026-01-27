@@ -124,6 +124,9 @@ class ShaderRegistry:
 # Global registry instance for convenience functions
 _default_registry = ShaderRegistry
 
+# Public alias for the registry (for external imports)
+shader_registry = ShaderRegistry
+
 
 def register_shader(
     name: str,

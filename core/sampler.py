@@ -305,9 +305,9 @@ def _generate_video_noise(
         if debug_enabled and debug_level >= 3:
             print(f"   Generating frame {frame_idx} with time={frame_params['time']:.2f}")
         
-        # Prepare arguments
+        # Prepare arguments - use "params" to match BaseNoiseGenerator.generate() signature
         generator_args = {
-            "shader_params": frame_params,
+            "params": frame_params,
             "height": height,
             "width": width,
             "batch_size": batch_size,
@@ -357,9 +357,9 @@ def _generate_image_noise(
         # Return random noise if no generator
         return torch.randn(target_noise_shape, device=device, dtype=dtype)
     
-    # Prepare arguments
+    # Prepare arguments - use "params" to match BaseNoiseGenerator.generate() signature
     generator_args = {
-        "shader_params": shader_params,
+        "params": shader_params,
         "height": height,
         "width": width,
         "batch_size": batch_size,
