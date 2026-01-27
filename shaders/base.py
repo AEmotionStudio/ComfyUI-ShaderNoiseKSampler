@@ -156,6 +156,9 @@ class BaseNoiseGenerator(ABC):
         # Apply color scheme first (operates on channels)
         noise = BaseNoiseGenerator.apply_color_scheme(noise, params, velocity_field)
         
+        # Apply shape mask using the coords parameter
+        noise = BaseNoiseGenerator.apply_shape_mask(noise, coords, params)
+        
         return noise
     
     @staticmethod

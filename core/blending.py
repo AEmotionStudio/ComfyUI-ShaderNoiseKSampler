@@ -329,24 +329,33 @@ def _apply_blend_mode(
         return 1.0 - (1.0 - base) * (1.0 - shader * strength)
     
     elif mode == "overlay":
-        # Overlay blend mode - Optimized using torch.where for vectorization
-        term1 = 2 * base * (shader * strength)
-        term2 = 1 - 2 * (1 - base) * (1 - shader * strength)
-        return torch.where(base < 0.5, term1, term2)
+        # Overlay blend mode - compute full result then interpolate with base
+        # Standard overlay: 2*base*shader if base < 0.5, else 1 - 2*(1-base)*(1-shader)
+        overlay_result = torch.where(
+            base < 0.5,
+            2 * base * shader,
+            1 - 2 * (1 - base) * (1 - shader)
+        )
+        return base * (1.0 - strength) + overlay_result * strength
     
     elif mode == "soft_light":
         # Soft light blend mode
         return ((1.0 - 2.0 * shader) * base**2 + 2.0 * shader * base) * strength + base * (1.0 - strength)
     
     elif mode == "hard_light":
-        # Hard light blend mode - Optimized using torch.where for vectorization
-        term1 = 2 * base * shader * strength + base * (1 - strength)
-        term2 = 1 - 2 * (1 - base) * (1 - shader) * strength + base * (1 - strength)
-        return torch.where(shader < 0.5, term1, term2)
+        # Hard light blend mode - compute full result then interpolate with base
+        # Standard hard light: 2*base*shader if shader < 0.5, else 1 - 2*(1-base)*(1-shader)
+        hard_light_result = torch.where(
+            shader < 0.5,
+            2 * base * shader,
+            1 - 2 * (1 - base) * (1 - shader)
+        )
+        return base * (1.0 - strength) + hard_light_result * strength
     
     elif mode == "difference":
-        # Difference blend mode
-        return base + (torch.abs(base - shader) * strength)
+        # Difference blend mode - interpolate between base and abs difference
+        diff_result = torch.abs(base - shader)
+        return base * (1.0 - strength) + diff_result * strength
     
     else:
         # Default to normal blend for unknown modes

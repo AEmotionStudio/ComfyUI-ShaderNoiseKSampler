@@ -105,22 +105,22 @@ class CustomSigmaModelWrapper:
          else:
              raise NotImplementedError(f"The wrapped model '{type(self.original_model).__name__}' does not have an 'apply_model' method.")
 
-# Define a registry for shader generators
-SHADER_GENERATORS = {}
+# Import shader registry from centralized location
+from shaders.registry import shader_registry
 
 # Function to get the appropriate generator
 def get_shader_generator(shader_type):
     """Get the appropriate shader generator function based on shader type"""
-    generator = SHADER_GENERATORS.get(shader_type)
+    generator = shader_registry.get(shader_type)
     if generator:
         return generator
     else:
         return generate_noise_tensor
 
-# Function to register shader generators
+# Function to register shader generators (delegates to centralized registry)
 def register_shader_generator(shader_type, generator_function):
     """Register a shader generator function for a specific shader type"""
-    SHADER_GENERATORS[shader_type] = generator_function
+    shader_registry.register(shader_type, generator_function)
     return generator_function
 
 # Create a custom sampling callback class
