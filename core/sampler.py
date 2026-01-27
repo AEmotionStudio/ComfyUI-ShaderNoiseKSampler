@@ -472,7 +472,6 @@ def _correct_noise_shape(
     dtype: torch.dtype
 ) -> torch.Tensor:
     """Final correction of noise shape to match target."""
-    print(f"❌ FINAL SHAPE MISMATCH: Noise shape {noise.shape} != Target shape {target_shape}")
 
     try:
         if len(noise.shape) == 5:
@@ -526,8 +525,7 @@ def _correct_noise_shape(
                 final_noise[:, :min_c, ...] = noise[:, :min_c, ...]
                 noise = final_noise
 
-    except Exception as e:
-        print(f"❌ Final resize attempt failed: {e}")
+    except Exception:
         # Fallback: for 5D tensors, try frame-by-frame bilinear interpolation
         if len(noise.shape) == 5 and len(target_shape) == 5:
             try:
