@@ -113,15 +113,41 @@ from .shaders.registry import shader_registry
 def get_shader_generator(shader_type):
     """Get the appropriate shader generator function based on shader type.
     
-    Returns the static generate method of the registered class, or the fallback
-    generate_noise_tensor function if not registered.
+    Returns a callable that accepts the standard interface (params, height, width, etc.).
+    Handles both class-based generators (with .generate method) and plain functions.
+    Falls back to generate_noise_tensor if not registered.
     """
-    generator_class = shader_registry.get(shader_type)
-    if generator_class:
-        # Return the static generate method, not the class itself
-        return generator_class.generate
-    else:
-        return generate_noise_tensor
+    registered = shader_registry.get(shader_type)
+    if registered:
+        # Check if it's a class with a generate method or a plain function
+        if hasattr(registered, 'generate') and callable(getattr(registered, 'generate')):
+            # It's a class - return the static generate method
+            return registered.generate
+        elif callable(registered):
+            # It's already a function - return it directly
+            return registered
+        else:
+            # Unknown type, fall back
+            pass
+    
+    # Fallback: wrap generate_noise_tensor to translate params -> shader_params
+    def fallback_wrapper(params, height, width, batch_size, device, seed, target_channels, **kwargs):
+        # Convert ShaderParams to dict if needed for legacy function
+        if hasattr(params, 'to_dict'):
+            shader_params = params.to_dict()
+        else:
+            shader_params = dict(params) if hasattr(params, '__iter__') else {}
+        return generate_noise_tensor(
+            shader_params=shader_params,
+            height=height,
+            width=width,
+            batch_size=batch_size,
+            device=device,
+            seed=seed,
+            target_channels=target_channels,
+            **kwargs
+        )
+    return fallback_wrapper
 
 # Function to register shader generators (delegates to centralized registry)
 def register_shader_generator(shader_type, generator_class):
