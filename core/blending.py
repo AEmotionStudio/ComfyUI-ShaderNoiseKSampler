@@ -221,17 +221,19 @@ def _match_video_tensor_shape(
             print(f"   Adjusting frames from {current_frames} to {tgt_frames}")
         
         # Interpolate along frame dimension
-        # Need to reshape for interpolation
+        # F.interpolate requires 4D for bilinear, so reshape appropriately
         if frame_dim == 1:  # B,F,C,H,W
             b, f, c, h, w = result.shape
-            result_2d = result.permute(0, 2, 1, 3, 4).reshape(b * c, f, h * w)
-            result_2d = F.interpolate(result_2d, size=(tgt_frames, h * w), mode='bilinear', align_corners=False)
-            result = result_2d.reshape(b, c, tgt_frames, h, w).permute(0, 2, 1, 3, 4)
+            # Reshape to 4D: (B*C, 1, F, H*W) for bilinear interpolation
+            result_4d = result.permute(0, 2, 1, 3, 4).reshape(b * c, 1, f, h * w)
+            result_4d = F.interpolate(result_4d, size=(tgt_frames, h * w), mode='bilinear', align_corners=False)
+            result = result_4d.reshape(b, c, tgt_frames, h, w).permute(0, 2, 1, 3, 4)
         else:  # B,C,F,H,W (frame_dim == 2)
             b, c, f, h, w = result.shape
-            result_2d = result.reshape(b * c, f, h * w)
-            result_2d = F.interpolate(result_2d, size=(tgt_frames, h * w), mode='bilinear', align_corners=False)
-            result = result_2d.reshape(b, c, tgt_frames, h, w)
+            # Reshape to 4D: (B*C, 1, F, H*W) for bilinear interpolation
+            result_4d = result.reshape(b * c, 1, f, h * w)
+            result_4d = F.interpolate(result_4d, size=(tgt_frames, h * w), mode='bilinear', align_corners=False)
+            result = result_4d.reshape(b, c, tgt_frames, h, w)
     
     # Step 3: Handle channel mismatch
     current_channels = result.shape[channel_dim]
@@ -394,7 +396,8 @@ def _log_blend_stats(
     mean_diff = abs(result_stats["mean"] - base_stats["mean"])
     std_diff = abs(result_stats["std"] - base_stats["std"])
     
-    if mean_diff < 0.001 and std_diff < 0.001:
+    # Gate warning behind debug level to avoid spamming logs in production
+    if mean_diff < 0.001 and std_diff < 0.001 and debug_level >= 1:
         print(f"⚠️ Warning: Blend may not be effective - minimal statistical difference detected")
         print(f"   Base: mean={base_stats['mean']:.4f}, std={base_stats['std']:.4f}")
         print(f"   Result: mean={result_stats['mean']:.4f}, std={result_stats['std']:.4f}")

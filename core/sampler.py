@@ -52,8 +52,13 @@ def calculate_stage_strengths(
             strengths.append(base_strength * factor)
     
     elif distribution == "linear_increase":
+        min_factor = 0.25  # Ensure a minimum shader strength (same as linear_decrease)
         for i in range(num_stages):
             factor = i / (num_stages - 1 if num_stages > 1 else 1)
+            # For single stage, use full strength instead of zero
+            if num_stages == 1:
+                factor = 1.0
+            factor = max(factor, min_factor)
             strengths.append(base_strength * factor)
     
     elif distribution == "gaussian":
@@ -120,7 +125,10 @@ def calculate_step_points(total_steps: int, num_stages: int) -> List[int]:
     Returns:
         List of step points
     """
-    if num_stages <= 1:
+    # Match behavior of calculate_stage_strengths and calculate_step_ranges
+    if num_stages <= 0:
+        return []
+    if num_stages == 1:
         return [0]
         
     step_points = []

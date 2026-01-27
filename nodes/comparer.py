@@ -70,30 +70,34 @@ class AdvancedImageComparer(PreviewImage):
                 # If only image_a is provided, try to fill image_b with most recent images
                 if image_a is not None and image_b is None:
                     # Use the most recently cached images (prefer opposite slot, fallback to same slot)
-                    if self._last_images_b is not None:
+                    # Access class attributes via type(self) to ensure consistency with classmethods
+                    cls = type(self)
+                    if cls._last_images_b is not None:
                         print("[AdvancedImageComparer] Auto-filling slot B with last images B")
-                        image_b = self._last_images_b
-                    elif self._last_images_a is not None:
+                        image_b = cls._last_images_b
+                    elif cls._last_images_a is not None:
                         print("[AdvancedImageComparer] Auto-filling slot B with last images A")
-                        image_b = self._last_images_a
+                        image_b = cls._last_images_a
                 
                 # If only image_b is provided, try to fill image_a with most recent images
                 elif image_b is not None and image_a is None:
                     # Use the most recently cached images (prefer opposite slot, fallback to same slot)
-                    if self._last_images_a is not None:
+                    cls = type(self)
+                    if cls._last_images_a is not None:
                         print("[AdvancedImageComparer] Auto-filling slot A with last images A")
-                        image_a = self._last_images_a
-                    elif self._last_images_b is not None:
+                        image_a = cls._last_images_a
+                    elif cls._last_images_b is not None:
                         print("[AdvancedImageComparer] Auto-filling slot A with last images B")
-                        image_a = self._last_images_b
+                        image_a = cls._last_images_b
             
             elif inputs_provided == 0:
                 print("[AdvancedImageComparer] No inputs provided, using last available images")
                 # If no inputs provided, use the most recent images if available
-                if self._last_images_a is not None:
-                    image_a = self._last_images_a
-                if self._last_images_b is not None:
-                    image_b = self._last_images_b
+                cls = type(self)
+                if cls._last_images_a is not None:
+                    image_a = cls._last_images_a
+                if cls._last_images_b is not None:
+                    image_b = cls._last_images_b
         
         # Process and save image A if provided
         if image_a is not None and len(image_a) > 0:
@@ -108,14 +112,16 @@ class AdvancedImageComparer(PreviewImage):
             
             # Only cache if this was an original input (not auto-filled)
             # This ensures we always cache the latest NEWLY GENERATED images
+            # Use type(self) to access class attributes consistently with classmethods
             if original_image_a is not None:
-                self._last_images_a = image_a.clone() if hasattr(image_a, 'clone') else image_a
+                cls = type(self)
+                cls._last_images_a = image_a.clone() if hasattr(image_a, 'clone') else image_a
                 print("[AdvancedImageComparer] Stored NEW images A for future auto-fill")
                 
                 # IMPORTANT: When we get fresh images in slot A, also update the cache for potential 
                 # auto-fill of slot B in future runs (this ensures latest images are always used)
                 if original_image_b is None and auto_fill:
-                    self._last_images_b = image_a.clone() if hasattr(image_a, 'clone') else image_a
+                    cls._last_images_b = image_a.clone() if hasattr(image_a, 'clone') else image_a
                     print("[AdvancedImageComparer] Updated slot B cache with latest images from A")
         
         # Process and save image B if provided
@@ -131,21 +137,25 @@ class AdvancedImageComparer(PreviewImage):
             
             # Only cache if this was an original input (not auto-filled)
             # This ensures we always cache the latest NEWLY GENERATED images
+            # Use type(self) to access class attributes consistently with classmethods
             if original_image_b is not None:
-                self._last_images_b = image_b.clone() if hasattr(image_b, 'clone') else image_b
+                cls = type(self)
+                cls._last_images_b = image_b.clone() if hasattr(image_b, 'clone') else image_b
                 print("[AdvancedImageComparer] Stored NEW images B for future auto-fill")
                 
                 # IMPORTANT: When we get fresh images in slot B, also update the cache for potential 
                 # auto-fill of slot A in future runs (this ensures latest images are always used)
                 if original_image_a is None and auto_fill:
-                    self._last_images_a = image_b.clone() if hasattr(image_b, 'clone') else image_b
+                    cls._last_images_a = image_b.clone() if hasattr(image_b, 'clone') else image_b
                     print("[AdvancedImageComparer] Updated slot A cache with latest images from B")
         
         # Store prompt and extra_pnginfo for potential future use
+        # Use type(self) to access class attributes consistently with classmethods
+        cls = type(self)
         if prompt is not None:
-            self._last_prompt = prompt
+            cls._last_prompt = prompt
         if extra_pnginfo is not None:
-            self._last_extra_pnginfo = extra_pnginfo
+            cls._last_extra_pnginfo = extra_pnginfo
         
         print(f"[AdvancedImageComparer] Returning {len(result['ui']['images'])} total images")
         return result
