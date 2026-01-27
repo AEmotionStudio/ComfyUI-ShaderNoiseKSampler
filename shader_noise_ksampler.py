@@ -7,100 +7,17 @@ from .shader_params_reader import get_shader_params, generate_noise_tensor
 # Add imports for custom sigma handling
 import comfy.samplers
 import comfy.model_sampling
-import comfy.model_base # For ModelType enum
-import comfy.latent_formats # For default latent format
+import comfy.model_base  # For ModelType enum
+import comfy.latent_formats  # For default latent format
 
-# Stub visualizer class as replacement for removed visualizer
-class StubVisualizer:
-    """A stub visualizer that implements the same interface but does nothing. Temporary replacement for removed visualizer."""
-    def __init__(self):
-        self.enabled = False
-        
-    def enable(self, seed=None, shader_type=None, additional_metadata=None):
-        """Stub for enable method."""
-        pass
-        
-    def disable(self):
-        """Stub for disable method."""
-        pass
-        
-    def save_latent_visualization(self, tensor, label, stage_info=None, is_sample=False):
-        """Stub for save_latent_visualization method."""
-        pass
-        
-    def save_denoising_step(self, tensor, stage_info, current_step, total_steps):
-        """Stub for save_denoising_step method."""
-        pass
-        
-    def capture_shader_process(self, phase, stage_idx, stage_type, stage_data, base_noise, shader_noise, blended_noise, result):
-        """Stub for capture_shader_process method."""
-        pass
-        
-    def capture_final_result(self, tensor, metadata=None):
-        """Stub for capture_final_result method."""
-        pass
-        
-    def get_ui_image_paths(self):
-        """Stub for get_ui_image_paths method."""
-        return {
-            "base_noise": None,
-            "shader_noise": None,
-            "blended_noise": None,
-            "stage_results": None,
-            "final_result": None,
-            "grids": []
-        }
-
-# Also need a stub for the debugger
-class StubDebugger:
-    """A stub debugger that implements the same interface but does nothing."""
-    def __init__(self):
-        self.enabled = False
-        self.debug_level = 0
-        
-    def reset(self):
-        """Stub for reset method."""
-        pass
-        
-    def time_operation(self, name):
-        """Stub for time_operation method."""
-        return contextlib.nullcontext()
-        
-    def analyze_tensor(self, tensor, name):
-        """Stub for analyze_tensor method."""
-        pass
-        
-    def log_parameters(self, params):
-        """Stub for log_parameters method."""
-        pass
-        
-    def log_stage_start(self, stage_type, stage_idx, params):
-        """Stub for log_stage_start method."""
-        pass
-        
-    def log_stage_end(self, stage_type, stage_idx):
-        """Stub for log_stage_end method."""
-        pass
-        
-    def log_blend_operation(self, base, shader, result, mode, strength):
-        """Stub for log_blend_operation method."""
-        pass
-
-# Functions to get the stub instances
-def get_visualizer():
-    """Return the stub visualizer instance."""
-    return StubVisualizer()
-
-def get_debugger():
-    """Return the stub debugger instance."""
-    return StubDebugger()
-
-def set_debug_level(level):
-    """Return the stub debugger with the specified level."""
-    debugger = get_debugger()
-    debugger.debug_level = level
-    debugger.enabled = level > 0
-    return debugger
+# Import debug utilities from core
+from .core.debug import (
+    StubVisualizer,
+    StubDebugger,
+    get_visualizer,
+    get_debugger,
+    set_debug_level,
+)
 
 class CustomSigmaProvider:
     """
@@ -188,8 +105,6 @@ class CustomSigmaModelWrapper:
          else:
              raise NotImplementedError(f"The wrapped model '{type(self.original_model).__name__}' does not have an 'apply_model' method.")
 
-# Define a registry for shader generators
-SHADER_GENERATORS = {}
 # Define a registry for shader generators
 SHADER_GENERATORS = {}
 
