@@ -322,6 +322,27 @@ class AdvancedImageComparerWidget {
     animationFrame: ReturnType<typeof setInterval> | null = null;
     autoPlayEnabled = false;
     autoPlaySpeed = 2000;
+
+    /**
+     * Calculate scaled dimensions for an image to fit within usable area while maintaining aspect ratio.
+     * @param img - The image element with naturalWidth and naturalHeight
+     * @param usableWidth - The maximum width available
+     * @param usableHeight - The maximum height available
+     * @returns Object with target width (tw) and height (th)
+     */
+    private calculateScaledDimensions(
+        img: HTMLImageElement,
+        usableWidth: number,
+        usableHeight: number
+    ): { tw: number; th: number } {
+        const imgAspect = img.naturalWidth / img.naturalHeight;
+        const usableAspect = usableWidth / usableHeight;
+        if (imgAspect > usableAspect) {
+            return { tw: usableWidth, th: usableWidth / imgAspect };
+        } else {
+            return { tw: usableHeight * imgAspect, th: usableHeight };
+        }
+    }
     currentBatchPage = 0;
     pairsPerPage = 3;
     maxBatchPages = 0;
@@ -502,9 +523,7 @@ class AdvancedImageComparerWidget {
         if (!imageData?.img?.naturalWidth) return;
         const img = imageData.img, pad = 3;
         const uw = nodeWidth - pad * 2, uh = availableHeight - pad * 2;
-        const ia = img.naturalWidth / img.naturalHeight, ua = uw / uh;
-        let tw: number, th: number;
-        if (ia > ua) { tw = uw; th = uw / ia; } else { th = uh; tw = uh * ia; }
+        const { tw, th } = this.calculateScaledDimensions(img, uw, uh);
         const dx = pad + (uw - tw) / 2, dy = y + pad + (uh - th) / 2;
         ctx.save();
         ctx.beginPath(); ctx.rect(pad, y + pad, uw, uh); ctx.clip();
@@ -525,9 +544,7 @@ class AdvancedImageComparerWidget {
         if (!imageData?.img?.naturalWidth) return;
         const img = imageData.img, hw = nodeWidth / 2, pad = 3, sep = 1;
         const uw = hw - pad - sep / 2, uh = availableHeight - pad * 2;
-        const ia = img.naturalWidth / img.naturalHeight, ua = uw / uh;
-        let tw: number, th: number;
-        if (ia > ua) { tw = uw; th = uw / ia; } else { th = uh; tw = uh * ia; }
+        const { tw, th } = this.calculateScaledDimensions(img, uw, uh);
         const dx = imageIndex === 0 ? pad + (uw - tw) / 2 : hw + sep / 2 + pad + (uw - tw) / 2;
         const dy = y + pad + (uh - th) / 2;
         ctx.save();
@@ -547,9 +564,7 @@ class AdvancedImageComparerWidget {
         if (!imageData?.img?.naturalWidth) return;
         const img = imageData.img, hh = availableHeight / 2, pad = 3, sep = 1;
         const uw = nodeWidth - pad * 2, uh = hh - pad - sep / 2;
-        const ia = img.naturalWidth / img.naturalHeight, ua = uw / uh;
-        let tw: number, th: number;
-        if (ia > ua) { tw = uw; th = uw / ia; } else { th = uh; tw = uh * ia; }
+        const { tw, th } = this.calculateScaledDimensions(img, uw, uh);
         const dx = pad + (uw - tw) / 2;
         const dy = imageIndex === 0 ? y + pad + (uh - th) / 2 : y + hh + sep / 2 + pad + (uh - th) / 2;
         ctx.save();
@@ -568,9 +583,7 @@ class AdvancedImageComparerWidget {
     drawImageInCell(ctx: CanvasRenderingContext2D, imageData: ProcessedImage, y: number, x: number, cw: number, ch: number, label: string): void {
         if (!imageData?.img?.naturalWidth) return;
         const img = imageData.img, pad = 2, uw = cw - pad * 2, uh = ch - pad * 2;
-        const ia = img.naturalWidth / img.naturalHeight, ca = uw / uh;
-        let tw: number, th: number;
-        if (ia > ca) { tw = uw; th = uw / ia; } else { th = uh; tw = uh * ia; }
+        const { tw, th } = this.calculateScaledDimensions(img, uw, uh);
         const dx = x + pad + (uw - tw) / 2, dy = y + pad + (uh - th) / 2;
         ctx.save(); ctx.beginPath(); ctx.rect(x + pad, y + pad, uw, uh); ctx.clip();
         ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 1; ctx.strokeRect(x + pad, y + pad, uw, uh);
@@ -583,9 +596,7 @@ class AdvancedImageComparerWidget {
     drawImageInPair(ctx: CanvasRenderingContext2D, imageData: ProcessedImage, y: number, x: number, pw: number, ph: number, imageIndex: number): void {
         if (!imageData?.img?.naturalWidth) return;
         const img = imageData.img, pad = 3, uw = pw - pad * 2, uh = ph - pad * 2;
-        const ia = img.naturalWidth / img.naturalHeight, pa = uw / uh;
-        let tw: number, th: number;
-        if (ia > pa) { tw = uw; th = uw / ia; } else { th = uh; tw = uh * ia; }
+        const { tw, th } = this.calculateScaledDimensions(img, uw, uh);
         const dx = x + pad + (uw - tw) / 2, dy = y + pad + (uh - th) / 2;
         ctx.save(); ctx.beginPath(); ctx.rect(x + pad, y + pad, uw, uh); ctx.clip();
         ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, dx, dy, tw, th);
