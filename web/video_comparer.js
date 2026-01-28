@@ -4,8 +4,8 @@
  */
 // @ts-ignore - Runtime ComfyUI import
 import { app } from "../../../scripts/app.js";
-import { drawGradientTitle } from "./golden_eyeball";
-import { imageDataToUrl } from "./comfy_utils";
+import { drawGradientTitle } from "./golden_eyeball.js";
+import { imageDataToUrl } from "./comfy_utils.js";
 console.log("VideoComparer module loaded");
 // === CACHE FOR RENDERING OPTIMIZATION ===
 const CACHE = {

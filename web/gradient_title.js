@@ -137,27 +137,21 @@ function drawGradientTitle(node, ctx) {
         ctx.restore();
         return;
     }
-    // Draw background that fills the entire node
+    // Draw background that fills the entire node (non-collapsed state, reached after early return above)
     ctx.fillStyle = gradient;
     // Use rounded rectangle for the background with rounded corners at the bottom
-    if (!node.flags.collapsed) {
-        const cornerRadius = 8; // Adjust radius as needed
-        // Create path for rounded rectangle
-        ctx.beginPath();
-        ctx.moveTo(0, 0); // Top-left corner (no rounding)
-        ctx.lineTo(width, 0); // Top-right corner (no rounding)
-        ctx.lineTo(width, fullHeight - cornerRadius); // Right edge before bottom-right corner
-        ctx.arcTo(width, fullHeight, width - cornerRadius, fullHeight, cornerRadius); // Bottom-right rounded corner
-        ctx.lineTo(cornerRadius, fullHeight); // Bottom edge before bottom-left corner
-        ctx.arcTo(0, fullHeight, 0, fullHeight - cornerRadius, cornerRadius); // Bottom-left rounded corner
-        ctx.lineTo(0, 0); // Left edge back to top
-        ctx.closePath();
-        ctx.fill();
-    }
-    else {
-        // Keep regular rectangle for collapsed state
-        ctx.fillRect(0, 0, width, fullHeight); // No extra padding
-    }
+    const cornerRadius = 8; // Adjust radius as needed
+    // Create path for rounded rectangle
+    ctx.beginPath();
+    ctx.moveTo(0, 0); // Start at top-left
+    ctx.lineTo(width, 0); // Top edge
+    ctx.lineTo(width, fullHeight - cornerRadius); // Right edge before bottom-right corner
+    ctx.arcTo(width, fullHeight, width - cornerRadius, fullHeight, cornerRadius); // Bottom-right rounded corner
+    ctx.lineTo(cornerRadius, fullHeight); // Bottom edge before bottom-left corner
+    ctx.arcTo(0, fullHeight, 0, fullHeight - cornerRadius, cornerRadius); // Bottom-left rounded corner
+    ctx.lineTo(0, 0); // Left edge back to top
+    ctx.closePath();
+    ctx.fill();
     // Draw etched shadow
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.font = 'italic 14px Arial'; // Smaller font for equation

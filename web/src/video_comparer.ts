@@ -5,12 +5,10 @@
 
 // @ts-ignore - Runtime ComfyUI import
 import { app } from "../../../scripts/app.js";
-// @ts-ignore - Runtime ComfyUI import
-import { api } from "../../../scripts/api.js";
 import type { ComfyApp, ComfyExtension, ComfyNodeData } from "../types/comfyui";
 import type { LGraphNode, IWidget, ContextMenuItem } from "../types/litegraph";
-import { drawGradientTitle, AnimationCache } from "./golden_eyeball";
-import { imageDataToUrl } from "./comfy_utils";
+import { drawGradientTitle, AnimationCache } from "./golden_eyeball.js";
+import { imageDataToUrl } from "./comfy_utils.js";
 
 export { };
 
