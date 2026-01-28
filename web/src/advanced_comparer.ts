@@ -60,7 +60,6 @@ interface ComparerNode extends LGraphNode {
     batchNextButton?: IWidget;
     batchPageInfoWidget?: IWidget;
     onionSkinOpacitySlider?: IWidget;
-    clearCacheButton?: IWidget;
     updateControlsVisibility: () => void;
     setIsPointerDown: (down?: boolean) => void;
     setSize: (size: [number, number]) => void;
@@ -286,21 +285,18 @@ function drawGradientTitle(node: ComparerNode, ctx: CanvasRenderingContext2D): v
 
     ctx.fillStyle = gradient;
 
-    if (!node.flags.collapsed) {
-        const cornerRadius = 8;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(width, 0);
-        ctx.lineTo(width, fullHeight - cornerRadius);
-        ctx.arcTo(width, fullHeight, width - cornerRadius, fullHeight, cornerRadius);
-        ctx.lineTo(cornerRadius, fullHeight);
-        ctx.arcTo(0, fullHeight, 0, fullHeight - cornerRadius, cornerRadius);
-        ctx.lineTo(0, 0);
-        ctx.closePath();
-        ctx.fill();
-    } else {
-        ctx.fillRect(0, 0, width, fullHeight);
-    }
+    // Draw rounded rectangle background (we're in non-collapsed state here)
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(width, 0);
+    ctx.lineTo(width, fullHeight - cornerRadius);
+    ctx.arcTo(width, fullHeight, width - cornerRadius, fullHeight, cornerRadius);
+    ctx.lineTo(cornerRadius, fullHeight);
+    ctx.arcTo(0, fullHeight, 0, fullHeight - cornerRadius, cornerRadius);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fill();
 
     drawGoldenEyeball(ctx, width / 2, eyeballY, eyeballSize, shimmerPosition);
     ctx.restore();
@@ -764,11 +760,6 @@ class AdvancedImageComparerWidget {
                 this.properties.onionSkinOpacity = value;
                 self.setDirtyCanvas(true, false);
             }, { min: 0.0, max: 1.0, step: 0.01 });
-
-            self.clearCacheButton = self.addWidget("button", "Clear Cache", null, () => {
-                console.log("[AdvancedImageComparer] Clearing image cache");
-            });
-            self.clearCacheButton.hidden = true;
 
             this.comparerWidget = self.addCustomWidget(new AdvancedImageComparerWidget("advanced_comparer", this));
             this.updateControlsVisibility();
