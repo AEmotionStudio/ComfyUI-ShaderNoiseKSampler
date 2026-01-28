@@ -315,7 +315,6 @@ class AdvancedImageComparerWidget {
     imgs: HTMLImageElement[];
     options = { serialize: false };
     y = 0;
-    last_y = 0;
     imagesA: ProcessedImage[] = [];
     imagesB: ProcessedImage[] = [];
     currentPairIndex = 0;
@@ -406,7 +405,6 @@ class AdvancedImageComparerWidget {
 
     draw(ctx: CanvasRenderingContext2D, node: ComparerNode, width: number, y: number, height: number): void {
         this.y = y;
-        this.last_y = y;
         const [, nodeHeight] = node.size;
         const availableHeight = Math.max(200, nodeHeight - y - 10);
         const mode = node.properties?.comparer_mode || "Slider";

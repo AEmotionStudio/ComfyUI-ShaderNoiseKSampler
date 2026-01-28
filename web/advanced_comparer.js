@@ -196,7 +196,6 @@ class AdvancedImageComparerWidget {
         this.type = "custom";
         this.options = { serialize: false };
         this.y = 0;
-        this.last_y = 0;
         this.imagesA = [];
         this.imagesB = [];
         this.currentPairIndex = 0;
@@ -276,7 +275,6 @@ class AdvancedImageComparerWidget {
     }
     draw(ctx, node, width, y, height) {
         this.y = y;
-        this.last_y = y;
         const [, nodeHeight] = node.size;
         const availableHeight = Math.max(200, nodeHeight - y - 10);
         const mode = node.properties?.comparer_mode || "Slider";

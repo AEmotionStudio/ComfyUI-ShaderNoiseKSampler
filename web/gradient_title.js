@@ -8,11 +8,8 @@ const CACHE = {
     frameSkip: 2, // Only update animation every X frames
 };
 // Import app from ComfyUI at runtime (this import is resolved by the browser)
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - ComfyUI provides this at runtime
-import { app as comfyApp } from '../../scripts/app.js';
-// Use the runtime import
-const appInstance = comfyApp;
+import { app } from '../../scripts/app.js';
 // Define the extension
 const extension = {
     name: 'ShaderNoiseKSampler.GradientTitle',
@@ -43,7 +40,7 @@ const extension = {
     },
 };
 // Register the extension
-appInstance.registerExtension(extension);
+app.registerExtension(extension);
 /**
  * Draws a gradient title directly on the canvas
  * @param node - The node to apply the gradient to

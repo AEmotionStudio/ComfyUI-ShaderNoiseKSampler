@@ -32,16 +32,9 @@ const CACHE: RenderCache = {
     frameSkip: 2, // Only update animation every X frames
 };
 
-// Declare the app variable that will be imported at runtime from ComfyUI
-declare const app: ComfyApp;
-
 // Import app from ComfyUI at runtime (this import is resolved by the browser)
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - ComfyUI provides this at runtime
-import { app as comfyApp } from '../../scripts/app.js';
-
-// Use the runtime import
-const appInstance: ComfyApp = comfyApp;
+import { app } from '../../scripts/app.js';
 
 // Define the extension
 const extension: ComfyExtension = {
@@ -86,7 +79,7 @@ const extension: ComfyExtension = {
 };
 
 // Register the extension
-appInstance.registerExtension(extension);
+app.registerExtension(extension);
 
 /**
  * Draws a gradient title directly on the canvas
