@@ -9,7 +9,8 @@ import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 import type { ComfyApp, ComfyExtension, ComfyNodeData } from "../types/comfyui";
 import type { LGraphNode, IWidget, ContextMenuItem } from "../types/litegraph";
-import { drawGradientTitle } from "./golden_eyeball";
+import { drawGradientTitle, AnimationCache } from "./golden_eyeball";
+import { imageDataToUrl } from "./comfy_utils";
 
 export { };
 
@@ -75,46 +76,12 @@ interface ComparerNode extends LGraphNode {
     setSize?(size: [number, number]): void;
 }
 
-interface RenderCache {
-    titleCanvas: HTMLCanvasElement | null;
-    titleCtx: CanvasRenderingContext2D | null;
-    lastWidth: number;
-    lastHeight: number;
-    lastTime: number;
-    frameCount: number;
-    frameSkip: number;
-    collapsed: {
-        canvas: HTMLCanvasElement | null;
-        ctx: CanvasRenderingContext2D | null;
-        lastWidth: number;
-    };
-}
-
 // === CACHE FOR RENDERING OPTIMIZATION ===
-const CACHE: RenderCache = {
-    titleCanvas: null,
-    titleCtx: null,
-    lastWidth: 0,
-    lastHeight: 0,
+const CACHE: AnimationCache = {
     lastTime: 0,
     frameCount: 0,
     frameSkip: 2,
-    collapsed: {
-        canvas: null,
-        ctx: null,
-        lastWidth: 0
-    }
 };
-
-// === HELPER FUNCTIONS ===
-
-function imageDataToUrl(data: FrameData): string {
-    if (!data || !data.filename) {
-        console.error("[VideoComparer] Invalid image data", data);
-        return "";
-    }
-    return (api as any).apiURL(`/view?filename=${encodeURIComponent(data.filename)}&type=${encodeURIComponent(data.type || "")}&subfolder=${encodeURIComponent(data.subfolder || "")}${(app as any).getPreviewFormatParam()}${(app as any).getRandParam()}`);
-}
 
 // === VIDEO COMPARER WIDGET CLASS ===
 
@@ -870,8 +837,7 @@ class VideoComparerWidget implements IWidget {
         nodeType.prototype.onRemoved = function (this: ComparerNode) {
             if (origOnRemoved) origOnRemoved.apply(this, arguments);
             if (this.videoComparerWidget) this.videoComparerWidget.onRemoved();
-            CACHE.titleCanvas = null;
-            CACHE.titleCtx = null;
+            // CACHE only holds animation timing state, no cleanup needed
         };
 
         const origOnNodeCreated = nodeType.prototype.onNodeCreated;

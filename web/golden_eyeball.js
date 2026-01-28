@@ -12,7 +12,7 @@
  * @param shimmerPosition - Animation position (0-1) for shimmer effect
  * @param rayCount - Number of rays around the eyeball (default: 8)
  */
-export function drawGoldenEyeball(ctx, centerX, centerY, size, shimmerPosition, rayCount = 8) {
+function drawGoldenEyeball(ctx, centerX, centerY, size, shimmerPosition, rayCount = 8) {
     const eyeWidth = size * 1.6;
     const eyeHeight = size * 1.0;
     const irisRadius = size * 0.35;

@@ -4,9 +4,8 @@
  */
 // @ts-ignore - Runtime ComfyUI import
 import { app } from "../../../scripts/app.js";
-// @ts-ignore - Runtime ComfyUI import  
-import { api } from "../../../scripts/api.js";
 import { drawGradientTitle } from "./golden_eyeball";
+import { imageDataToUrl } from "./comfy_utils";
 console.log("AdvancedImageComparer module loaded");
 // ============================
 // Animation Cache
@@ -16,16 +15,6 @@ const CACHE = {
     frameCount: 0,
     frameSkip: 2,
 };
-// ============================
-// Helper Functions
-// ============================
-function imageDataToUrl(data) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const apiObj = api;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const appObj = app;
-    return apiObj.apiURL(`/view?filename=${encodeURIComponent(data.filename)}&type=${encodeURIComponent(data.type || "")}&subfolder=${encodeURIComponent(data.subfolder || "")}${appObj.getPreviewFormatParam()}${appObj.getRandParam()}`);
-}
 // ============================
 // Widget Class
 // ============================

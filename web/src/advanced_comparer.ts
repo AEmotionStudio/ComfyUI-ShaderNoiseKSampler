@@ -9,8 +9,9 @@ import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 
 import type { ComfyApp, ComfyExtension, ComfyNodeData } from "../types/comfyui";
-import type { LGraphNode, IWidget } from "../types/litegraph";
-import { drawGradientTitle, type AnimationCache } from "./golden_eyeball";
+import type { LGraphNode, IWidget, ContextMenuItem } from "../types/litegraph";
+import { drawGradientTitle, AnimationCache } from "./golden_eyeball";
+import { imageDataToUrl } from "./comfy_utils";
 
 export { };
 
@@ -76,20 +77,6 @@ const CACHE: AnimationCache = {
     frameCount: 0,
     frameSkip: 2,
 };
-
-// ============================
-// Helper Functions
-// ============================
-
-function imageDataToUrl(data: ImageInfo): string {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const apiObj = api as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const appObj = app as any;
-    return apiObj.apiURL(
-        `/view?filename=${encodeURIComponent(data.filename)}&type=${encodeURIComponent(data.type || "")}&subfolder=${encodeURIComponent(data.subfolder || "")}${appObj.getPreviewFormatParam()}${appObj.getRandParam()}`
-    );
-}
 
 // ============================
 // Widget Class

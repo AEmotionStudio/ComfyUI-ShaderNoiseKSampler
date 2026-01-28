@@ -4,33 +4,15 @@
  */
 // @ts-ignore - Runtime ComfyUI import
 import { app } from "../../../scripts/app.js";
-// @ts-ignore - Runtime ComfyUI import
-import { api } from "../../../scripts/api.js";
 import { drawGradientTitle } from "./golden_eyeball";
+import { imageDataToUrl } from "./comfy_utils";
 console.log("VideoComparer module loaded");
 // === CACHE FOR RENDERING OPTIMIZATION ===
 const CACHE = {
-    titleCanvas: null,
-    titleCtx: null,
-    lastWidth: 0,
-    lastHeight: 0,
     lastTime: 0,
     frameCount: 0,
     frameSkip: 2,
-    collapsed: {
-        canvas: null,
-        ctx: null,
-        lastWidth: 0
-    }
 };
-// === HELPER FUNCTIONS ===
-function imageDataToUrl(data) {
-    if (!data || !data.filename) {
-        console.error("[VideoComparer] Invalid image data", data);
-        return "";
-    }
-    return api.apiURL(`/view?filename=${encodeURIComponent(data.filename)}&type=${encodeURIComponent(data.type || "")}&subfolder=${encodeURIComponent(data.subfolder || "")}${app.getPreviewFormatParam()}${app.getRandParam()}`);
-}
 // === VIDEO COMPARER WIDGET CLASS ===
 class VideoComparerWidget {
     constructor(name, node) {
@@ -750,8 +732,7 @@ app.registerExtension({
                 origOnRemoved.apply(this, arguments);
             if (this.videoComparerWidget)
                 this.videoComparerWidget.onRemoved();
-            CACHE.titleCanvas = null;
-            CACHE.titleCtx = null;
+            // CACHE only holds animation timing state, no cleanup needed
         };
         const origOnNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {

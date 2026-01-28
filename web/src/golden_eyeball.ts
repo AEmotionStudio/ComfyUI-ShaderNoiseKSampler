@@ -22,7 +22,7 @@ export interface AnimationCache {
  * @param shimmerPosition - Animation position (0-1) for shimmer effect
  * @param rayCount - Number of rays around the eyeball (default: 8)
  */
-export function drawGoldenEyeball(
+function drawGoldenEyeball(
     ctx: CanvasRenderingContext2D,
     centerX: number,
     centerY: number,
