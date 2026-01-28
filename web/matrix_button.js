@@ -5,7 +5,6 @@
 // @ts-ignore - Runtime ComfyUI import
 import { app } from "../../../scripts/app.js";
 // === INITIALIZATION ===
-console.log("MatrixButton module loaded");
 (function () {
     // Define utility functions on window object to be accessible by treatiseHTML
     window.scrollToSection = function (sectionId) {

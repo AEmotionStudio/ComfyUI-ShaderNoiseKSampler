@@ -4,7 +4,6 @@
  */
 // @ts-ignore - Runtime ComfyUI import
 import { app } from "../../../scripts/app.js";
-console.log("ShaderRenderer module loaded");
 // ============================
 // Helper Functions
 // ============================

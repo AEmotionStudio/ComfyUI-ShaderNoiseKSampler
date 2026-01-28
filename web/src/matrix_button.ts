@@ -42,8 +42,6 @@ interface ButtonWidget extends IWidget {
 
 // === INITIALIZATION ===
 
-console.log("MatrixButton module loaded");
-
 (function (): void {
     // Define utility functions on window object to be accessible by treatiseHTML
     window.scrollToSection = function (sectionId: string): void {

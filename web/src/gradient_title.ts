@@ -10,6 +10,13 @@ import type {
     LGraphNode,
 } from '../types/comfyui';
 import type { AnimationCache } from './golden_eyeball.js';
+import {
+    shouldUpdateFrame,
+    resetShadowContext,
+    createTitleGradient,
+    calculateShimmerPosition,
+    TITLE_CORNER_RADIUS,
+} from './golden_eyeball.js';
 
 /** Extended node type with shader-specific flags */
 interface ShaderNode extends LGraphNode {
@@ -101,36 +108,25 @@ function drawGradientTitle(
         collapsedEquation = 'Lt = Sα(N) ∘ Kβ(t)';
     }
 
-    // Update animation frame counter (performance optimization)
-    CACHE.frameCount = (CACHE.frameCount + 1) % (CACHE.frameSkip + 1);
-    const shouldUpdateAnimation = CACHE.frameCount === 0;
+    // Update animation frame counter using shared utility
+    const shouldUpdateAnimation = shouldUpdateFrame(CACHE);
 
     // Save current state
     ctx.save();
 
-    // Reset shadow properties for gradient drawing
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    // Reset shadow properties using shared utility
+    resetShadowContext(ctx);
 
-    // Create vertical black gradient for entire background that fills node height
-    const gradient = ctx.createLinearGradient(0, 0, 0, fullHeight);
-    gradient.addColorStop(0, '#000000'); // Pure black at top
-    gradient.addColorStop(0.2, '#101010'); // Transition to very dark gray
-    gradient.addColorStop(1, '#101010'); // Very dark gray at bottom
+    // Create vertical background gradient using shared utility
+    const gradient = createTitleGradient(ctx, fullHeight);
 
-    // Create smooth shimmer effect for mathematical formula - only calculate if animation should update
-    let shimmerPosition = 0.5; // Default middle position
+    // Calculate shimmer position using shared utility (or reuse cached value)
+    let shimmerPosition = 0.5;
     if (shouldUpdateAnimation) {
-        const time = Date.now() / 3000; // Faster time factor (changed from 4000)
-        shimmerPosition = (Math.sin(time) + 1) / 2; // Changed from cos to sin for left-to-right only
-        // Store for later use if needed
-        CACHE.lastTime = time;
+        shimmerPosition = calculateShimmerPosition(1.0);
+        CACHE.lastTime = Date.now() / 3000;
     } else {
-        // Reuse last calculation for animation frames we're skipping
-        const time = CACHE.lastTime || Date.now() / 3000;
-        shimmerPosition = (Math.sin(time) + 1) / 2;
+        shimmerPosition = calculateShimmerPosition(1.0);
     }
 
     // Add collapse button handler

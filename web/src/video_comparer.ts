@@ -12,7 +12,6 @@ import { imageDataToUrl } from "./comfy_utils.js";
 
 export { };
 
-console.log("VideoComparer module loaded");
 
 // === TYPE DEFINITIONS ===
 
@@ -125,13 +124,11 @@ class VideoComparerWidget implements IWidget {
     private canvasUpdateTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(name: string, node: ComparerNode) {
-        console.log("[VideoComparer] Widget constructor called");
         this.name = name;
         this.node = node;
     }
 
     set value(v: VideoWidgetValue) {
-        console.log("[VideoComparer] Widget value setter called");
         this.isPlaying = false;
         this.currentFrameIndex = 0;
         this.stopPlayback();
@@ -981,6 +978,5 @@ class VideoComparerWidget implements IWidget {
             });
         };
 
-        console.log("[VideoComparer] Node setup complete");
     }
 } as ComfyExtension);

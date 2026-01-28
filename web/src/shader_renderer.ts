@@ -11,7 +11,6 @@ import type { LGraphNode, IWidget } from "../types/litegraph";
 
 export { };
 
-console.log("ShaderRenderer module loaded");
 
 // ============================
 // Type Definitions

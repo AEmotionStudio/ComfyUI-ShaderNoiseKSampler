@@ -6,7 +6,6 @@
 import { app } from "../../../scripts/app.js";
 import { drawGradientTitle } from "./golden_eyeball.js";
 import { imageDataToUrl } from "./comfy_utils.js";
-console.log("AdvancedImageComparer module loaded");
 // Shared modes array used in widget and context menu
 const COMPARER_MODES = ["Slider", "Click", "Side-by-Side", "Stacked", "Grid", "Carousel", "Batch", "Onion Skin"];
 // ============================
@@ -748,7 +747,6 @@ app.registerExtension({
                 }
             });
         };
-        console.log("AdvancedImageComparer node setup complete");
     }
 });
 //# sourceMappingURL=advanced_comparer.js.map

@@ -6,7 +6,6 @@
 import { app } from "../../../scripts/app.js";
 import { drawGradientTitle } from "./golden_eyeball.js";
 import { imageDataToUrl } from "./comfy_utils.js";
-console.log("VideoComparer module loaded");
 // === CACHE FOR RENDERING OPTIMIZATION ===
 const CACHE = {
     lastTime: 0,
@@ -46,12 +45,10 @@ class VideoComparerWidget {
         this.lastFrameTime = 0;
         this._drawCallCount = 0;
         this.canvasUpdateTimer = null;
-        console.log("[VideoComparer] Widget constructor called");
         this.name = name;
         this.node = node;
     }
     set value(v) {
-        console.log("[VideoComparer] Widget value setter called");
         this.isPlaying = false;
         this.currentFrameIndex = 0;
         this.stopPlayback();
@@ -875,7 +872,6 @@ app.registerExtension({
                 }
             });
         };
-        console.log("[VideoComparer] Node setup complete");
     }
 });
 //# sourceMappingURL=video_comparer.js.map

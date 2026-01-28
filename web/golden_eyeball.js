@@ -3,6 +3,56 @@
  * Shared rendering utilities for golden eyeball and gradient title animations
  * Used by both advanced_comparer and video_comparer widgets
  */
+// === Shared Animation Utilities ===
+/** Standard background gradient colors used across all animated titles */
+export const TITLE_GRADIENT_COLORS = {
+    top: "#000000",
+    transition: "#101010",
+    bottom: "#101010",
+};
+/** Standard corner radius for rounded title backgrounds */
+export const TITLE_CORNER_RADIUS = 8;
+/**
+ * Calculates shimmer position for text animations
+ * @param widthFactor - Multiplier for the shimmer width (default 1.0)
+ * @returns Current shimmer position (0 to widthFactor)
+ */
+export function calculateShimmerPosition(widthFactor = 1.0) {
+    const time = Date.now() / 3000;
+    return ((Math.sin(time) + 1) / 2) * widthFactor;
+}
+/**
+ * Advances the animation frame counter and returns whether to update
+ * @param cache - Animation cache to update
+ * @returns true if animation should update this frame
+ */
+export function shouldUpdateFrame(cache) {
+    cache.frameCount = (cache.frameCount + 1) % (cache.frameSkip + 1);
+    return cache.frameCount === 0;
+}
+/**
+ * Resets context shadow properties for clean gradient rendering
+ * @param ctx - Canvas context to reset
+ */
+export function resetShadowContext(ctx) {
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+}
+/**
+ * Creates the standard vertical background gradient
+ * @param ctx - Canvas context
+ * @param fullHeight - Height of the gradient
+ * @returns The gradient object
+ */
+export function createTitleGradient(ctx, fullHeight) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, fullHeight);
+    gradient.addColorStop(0, TITLE_GRADIENT_COLORS.top);
+    gradient.addColorStop(0.2, TITLE_GRADIENT_COLORS.transition);
+    gradient.addColorStop(1, TITLE_GRADIENT_COLORS.bottom);
+    return gradient;
+}
 /**
  * Draws a golden eyeball with shimmer animation
  * @param ctx - Canvas rendering context
@@ -140,26 +190,17 @@ export function drawGradientTitle(node, ctx, cache, rayCount = 8) {
     const fullHeight = node.size[1];
     const eyeballY = node.flags.collapsed ? titleHeight / 2 : 25;
     const eyeballSize = node.flags.collapsed ? 6 : 10;
-    cache.frameCount = (cache.frameCount + 1) % (cache.frameSkip + 1);
-    const shouldUpdateAnimation = cache.frameCount === 0;
+    const shouldUpdateAnimation = shouldUpdateFrame(cache);
     ctx.save();
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    const gradient = ctx.createLinearGradient(0, 0, 0, fullHeight);
-    gradient.addColorStop(0, "#000000");
-    gradient.addColorStop(0.2, "#101010");
-    gradient.addColorStop(1, "#101010");
+    resetShadowContext(ctx);
+    const gradient = createTitleGradient(ctx, fullHeight);
     let shimmerPosition = 0.5;
     if (shouldUpdateAnimation) {
-        const time = Date.now() / 3000;
-        shimmerPosition = (Math.sin(time) + 1) / 2;
-        cache.lastTime = time;
+        shimmerPosition = calculateShimmerPosition(1.0);
+        cache.lastTime = Date.now() / 3000;
     }
     else {
-        const time = cache.lastTime || Date.now() / 3000;
-        shimmerPosition = (Math.sin(time) + 1) / 2;
+        shimmerPosition = calculateShimmerPosition(1.0);
     }
     if (node.flags.collapsed) {
         ctx.fillStyle = gradient;

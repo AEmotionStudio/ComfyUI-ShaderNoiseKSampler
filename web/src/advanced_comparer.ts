@@ -13,7 +13,6 @@ import { imageDataToUrl } from "./comfy_utils.js";
 
 export { };
 
-console.log("AdvancedImageComparer module loaded");
 
 // ============================
 // Type Definitions
@@ -698,6 +697,5 @@ class AdvancedImageComparerWidget {
             });
         };
 
-        console.log("AdvancedImageComparer node setup complete");
     }
 } as ComfyExtension);
