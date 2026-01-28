@@ -120,13 +120,10 @@ function drawGradientTitle(
     // Create vertical background gradient using shared utility
     const gradient = createTitleGradient(ctx, fullHeight);
 
-    // Calculate shimmer position using shared utility (or reuse cached value)
-    let shimmerPosition = 0.5;
+    // Calculate shimmer position (always compute for smooth animation)
+    const shimmerPosition = calculateShimmerPosition(1.0);
     if (shouldUpdateAnimation) {
-        shimmerPosition = calculateShimmerPosition(1.0);
         CACHE.lastTime = Date.now() / 3000;
-    } else {
-        shimmerPosition = calculateShimmerPosition(1.0);
     }
 
     // Add collapse button handler
@@ -203,16 +200,13 @@ function drawGradientTitle(
     ctx.fillStyle = gradient;
 
     // Use rounded rectangle for the background with rounded corners at the bottom
-    const cornerRadius = 8; // Adjust radius as needed
-
-    // Create path for rounded rectangle
     ctx.beginPath();
     ctx.moveTo(0, 0); // Start at top-left
     ctx.lineTo(width, 0); // Top edge
-    ctx.lineTo(width, fullHeight - cornerRadius); // Right edge before bottom-right corner
-    ctx.arcTo(width, fullHeight, width - cornerRadius, fullHeight, cornerRadius); // Bottom-right rounded corner
-    ctx.lineTo(cornerRadius, fullHeight); // Bottom edge before bottom-left corner
-    ctx.arcTo(0, fullHeight, 0, fullHeight - cornerRadius, cornerRadius); // Bottom-left rounded corner
+    ctx.lineTo(width, fullHeight - TITLE_CORNER_RADIUS); // Right edge before bottom-right corner
+    ctx.arcTo(width, fullHeight, width - TITLE_CORNER_RADIUS, fullHeight, TITLE_CORNER_RADIUS); // Bottom-right rounded corner
+    ctx.lineTo(TITLE_CORNER_RADIUS, fullHeight); // Bottom edge before bottom-left corner
+    ctx.arcTo(0, fullHeight, 0, fullHeight - TITLE_CORNER_RADIUS, TITLE_CORNER_RADIUS); // Bottom-left rounded corner
     ctx.lineTo(0, 0); // Left edge back to top
     ctx.closePath();
     ctx.fill();

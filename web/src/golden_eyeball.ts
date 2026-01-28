@@ -259,12 +259,10 @@ export function drawGradientTitle(
 
     const gradient = createTitleGradient(ctx, fullHeight);
 
-    let shimmerPosition = 0.5;
+    // Calculate shimmer position (always compute for smooth animation)
+    const shimmerPosition = calculateShimmerPosition(1.0);
     if (shouldUpdateAnimation) {
-        shimmerPosition = calculateShimmerPosition(1.0);
         cache.lastTime = Date.now() / 3000;
-    } else {
-        shimmerPosition = calculateShimmerPosition(1.0);
     }
 
     if (node.flags.collapsed) {
@@ -277,15 +275,13 @@ export function drawGradientTitle(
 
     ctx.fillStyle = gradient;
 
-    // Draw rounded rectangle background (we're in non-collapsed state here)
-    const cornerRadius = 8;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(width, 0);
-    ctx.lineTo(width, fullHeight - cornerRadius);
-    ctx.arcTo(width, fullHeight, width - cornerRadius, fullHeight, cornerRadius);
-    ctx.lineTo(cornerRadius, fullHeight);
-    ctx.arcTo(0, fullHeight, 0, fullHeight - cornerRadius, cornerRadius);
+    ctx.lineTo(width, fullHeight - TITLE_CORNER_RADIUS);
+    ctx.arcTo(width, fullHeight, width - TITLE_CORNER_RADIUS, fullHeight, TITLE_CORNER_RADIUS);
+    ctx.lineTo(TITLE_CORNER_RADIUS, fullHeight);
+    ctx.arcTo(0, fullHeight, 0, fullHeight - TITLE_CORNER_RADIUS, TITLE_CORNER_RADIUS);
     ctx.lineTo(0, 0);
     ctx.closePath();
     ctx.fill();
