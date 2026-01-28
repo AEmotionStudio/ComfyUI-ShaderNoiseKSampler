@@ -5,7 +5,7 @@
  */
 // === Shared Animation Utilities ===
 /** Standard background gradient colors used across all animated titles */
-export const TITLE_GRADIENT_COLORS = {
+const TITLE_GRADIENT_COLORS = {
     top: "#000000",
     transition: "#101010",
     bottom: "#101010",
