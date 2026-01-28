@@ -108,9 +108,9 @@ export interface MockLGraphNode {
     graph: unknown;
     setDirtyCanvas: ReturnType<typeof vi.fn>;
     triggerSlot: ReturnType<typeof vi.fn>;
-    addWidget: ReturnType<typeof vi.fn>;
-    addCustomWidget: ReturnType<typeof vi.fn>;
-    computeSize: ReturnType<typeof vi.fn>;
+    addWidget: ReturnType<typeof vi.fn<[type: string, name: string, value: unknown], { name: string; type: string; value: unknown; y: number }>>;
+    addCustomWidget: ReturnType<typeof vi.fn<[widget: unknown], unknown>>;
+    computeSize: ReturnType<typeof vi.fn<[], [number, number]>>;
     onNodeCreated?: () => void;
     onRemoved?: () => void;
     onConfigure?: (info: unknown) => void;

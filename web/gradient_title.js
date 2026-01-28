@@ -3,18 +3,9 @@
  */
 // Cache for rendering optimization
 const CACHE = {
-    titleCanvas: null,
-    titleCtx: null,
-    lastWidth: 0,
-    lastHeight: 0,
     lastTime: 0,
     frameCount: 0,
     frameSkip: 2, // Only update animation every X frames
-    collapsed: {
-        canvas: null,
-        ctx: null,
-        lastWidth: 0,
-    },
 };
 // Import app from ComfyUI at runtime (this import is resolved by the browser)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -46,11 +37,7 @@ const extension = {
                 if (origOnRemoved) {
                     origOnRemoved.call(this);
                 }
-                // Clear cached canvases to prevent memory leaks
-                CACHE.titleCanvas = null;
-                CACHE.titleCtx = null;
-                CACHE.collapsed.canvas = null;
-                CACHE.collapsed.ctx = null;
+                // Note: CACHE only holds animation timing state, no cleanup needed
             };
         }
     },

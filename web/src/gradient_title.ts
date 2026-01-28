@@ -13,18 +13,9 @@ import type {
 
 /** Cache structure for rendering optimization */
 interface RenderCache {
-    titleCanvas: HTMLCanvasElement | null;
-    titleCtx: CanvasRenderingContext2D | null;
-    lastWidth: number;
-    lastHeight: number;
     lastTime: number;
     frameCount: number;
     frameSkip: number;
-    collapsed: {
-        canvas: HTMLCanvasElement | null;
-        ctx: CanvasRenderingContext2D | null;
-        lastWidth: number;
-    };
 }
 
 /** Extended node type with shader-specific flags */
@@ -36,18 +27,9 @@ interface ShaderNode extends LGraphNode {
 
 // Cache for rendering optimization
 const CACHE: RenderCache = {
-    titleCanvas: null,
-    titleCtx: null,
-    lastWidth: 0,
-    lastHeight: 0,
     lastTime: 0,
     frameCount: 0,
     frameSkip: 2, // Only update animation every X frames
-    collapsed: {
-        canvas: null,
-        ctx: null,
-        lastWidth: 0,
-    },
 };
 
 // Declare the app variable that will be imported at runtime from ComfyUI
@@ -97,12 +79,7 @@ const extension: ComfyExtension = {
                 if (origOnRemoved) {
                     origOnRemoved.call(this);
                 }
-
-                // Clear cached canvases to prevent memory leaks
-                CACHE.titleCanvas = null;
-                CACHE.titleCtx = null;
-                CACHE.collapsed.canvas = null;
-                CACHE.collapsed.ctx = null;
+                // Note: CACHE only holds animation timing state, no cleanup needed
             };
         }
     },

@@ -7,23 +7,14 @@ import { app } from "../../../scripts/app.js";
 // @ts-ignore - Runtime ComfyUI import  
 import { api } from "../../../scripts/api.js";
 console.log("AdvancedImageComparer module loaded");
-// ============================
-// Cache and Helpers
-// ============================
 const CACHE = {
-    titleCanvas: null,
-    titleCtx: null,
-    lastWidth: 0,
-    lastHeight: 0,
     lastTime: 0,
     frameCount: 0,
     frameSkip: 2,
-    collapsed: {
-        canvas: null,
-        ctx: null,
-        lastWidth: 0
-    }
 };
+// ============================
+// Helper Functions
+// ============================
 function imageDataToUrl(data) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const apiObj = api;
@@ -752,10 +743,7 @@ app.registerExtension({
         nodeType.prototype.onRemoved = function () {
             if (origOnRemoved)
                 origOnRemoved.call(this);
-            CACHE.titleCanvas = null;
-            CACHE.titleCtx = null;
-            CACHE.collapsed.canvas = null;
-            CACHE.collapsed.ctx = null;
+            // Note: CACHE only holds animation timing state, no cleanup needed
         };
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {

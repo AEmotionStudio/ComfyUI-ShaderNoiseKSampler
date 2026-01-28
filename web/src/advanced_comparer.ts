@@ -38,21 +38,6 @@ interface WidgetValue {
     images: (ImageInfo | ProcessedImage)[];
 }
 
-interface RenderCache {
-    titleCanvas: HTMLCanvasElement | null;
-    titleCtx: CanvasRenderingContext2D | null;
-    lastWidth: number;
-    lastHeight: number;
-    lastTime: number;
-    frameCount: number;
-    frameSkip: number;
-    collapsed: {
-        canvas: HTMLCanvasElement | null;
-        ctx: CanvasRenderingContext2D | null;
-        lastWidth: number;
-    };
-}
-
 type ComparerMode = "Slider" | "Click" | "Side-by-Side" | "Stacked" | "Grid" | "Carousel" | "Batch" | "Onion Skin";
 
 interface ComparerNode extends LGraphNode {
@@ -83,23 +68,24 @@ interface ComparerNode extends LGraphNode {
 }
 
 // ============================
-// Cache and Helpers
+// Animation Cache (only used properties)
 // ============================
 
-const CACHE: RenderCache = {
-    titleCanvas: null,
-    titleCtx: null,
-    lastWidth: 0,
-    lastHeight: 0,
+interface AnimationCache {
+    lastTime: number;
+    frameCount: number;
+    frameSkip: number;
+}
+
+const CACHE: AnimationCache = {
     lastTime: 0,
     frameCount: 0,
     frameSkip: 2,
-    collapsed: {
-        canvas: null,
-        ctx: null,
-        lastWidth: 0
-    }
 };
+
+// ============================
+// Helper Functions
+// ============================
 
 function imageDataToUrl(data: ImageInfo): string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -730,8 +716,7 @@ class AdvancedImageComparerWidget {
         const origOnRemoved = nodeType.prototype.onRemoved;
         nodeType.prototype.onRemoved = function (this: ComparerNode) {
             if (origOnRemoved) origOnRemoved.call(this);
-            CACHE.titleCanvas = null; CACHE.titleCtx = null;
-            CACHE.collapsed.canvas = null; CACHE.collapsed.ctx = null;
+            // Note: CACHE only holds animation timing state, no cleanup needed
         };
 
         const onNodeCreated = nodeType.prototype.onNodeCreated;
