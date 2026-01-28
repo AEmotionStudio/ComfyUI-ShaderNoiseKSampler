@@ -154,6 +154,19 @@ console.log("MatrixButton module loaded");
     };
 
 
+    // Helper to reset copy button state after timeout
+    const resetButtonTimeout = (button: HTMLElement): void => {
+        if (button.dataset.timeoutId) {
+            clearTimeout(parseInt(button.dataset.timeoutId));
+        }
+        const timeoutId = setTimeout(() => {
+            button.textContent = "Copy";
+            button.classList.remove('copied');
+            delete button.dataset.timeoutId;
+        }, 2000);
+        button.dataset.timeoutId = String(timeoutId);
+    };
+
     window.copyCodeSection = function (buttonElement: HTMLElement): void {
         const headerElement = buttonElement.closest('.code-block-header');
         if (!headerElement) return;
@@ -168,41 +181,16 @@ console.log("MatrixButton module loaded");
             if (window.showComfyToast) {
                 window.showComfyToast("Code copied to clipboard!", "success");
             }
-
             buttonElement.textContent = "Copied!";
             buttonElement.classList.add('copied');
-
-            if (buttonElement.dataset.timeoutId) {
-                clearTimeout(parseInt(buttonElement.dataset.timeoutId));
-            }
-
-            const timeoutId = setTimeout(() => {
-                buttonElement.textContent = "Copy";
-                buttonElement.classList.remove('copied');
-                delete buttonElement.dataset.timeoutId;
-            }, 2000);
-
-            buttonElement.dataset.timeoutId = String(timeoutId);
+            resetButtonTimeout(buttonElement);
         }).catch(err => {
             console.error('Failed to copy: ', err);
-
             if (window.showComfyToast) {
                 window.showComfyToast("Failed to copy code.", "error");
             }
-
             buttonElement.textContent = "Error";
-            buttonElement.classList.remove('copied');
-
-            if (buttonElement.dataset.timeoutId) {
-                clearTimeout(parseInt(buttonElement.dataset.timeoutId));
-            }
-
-            const timeoutId = setTimeout(() => {
-                buttonElement.textContent = "Copy";
-                delete buttonElement.dataset.timeoutId;
-            }, 2000);
-
-            buttonElement.dataset.timeoutId = String(timeoutId);
+            resetButtonTimeout(buttonElement);
         });
     };
 

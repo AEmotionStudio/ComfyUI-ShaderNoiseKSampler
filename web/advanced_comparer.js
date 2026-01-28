@@ -471,9 +471,6 @@ class AdvancedImageComparerWidget {
             case "Stacked":
                 height = Math.max(700, width * 1.5);
                 break;
-            case "Side-by-Side":
-                height = Math.max(500, width);
-                break;
             case "Grid":
                 const p = Math.min(this.maxPairs || 1, 64), c = Math.ceil(Math.sqrt(p * 2)), r = Math.ceil((p * 2) / c);
                 height = Math.max(500, (width / c) * r + 100);
