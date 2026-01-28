@@ -1,7 +1,6 @@
 /**
  * gradient_title.ts - Adds a custom gradient title to ShaderNoiseKSampler node
  */
-
 // Type imports from our local type definitions
 import type {
     ComfyApp,
@@ -10,13 +9,7 @@ import type {
     NodeTypeConstructor,
     LGraphNode,
 } from '../types/comfyui';
-
-/** Cache structure for rendering optimization */
-interface RenderCache {
-    lastTime: number;
-    frameCount: number;
-    frameSkip: number;
-}
+import type { AnimationCache } from './golden_eyeball.js';
 
 /** Extended node type with shader-specific flags */
 interface ShaderNode extends LGraphNode {
@@ -25,8 +18,8 @@ interface ShaderNode extends LGraphNode {
     };
 }
 
-// Cache for rendering optimization
-const CACHE: RenderCache = {
+// Cache for rendering optimization (uses shared AnimationCache interface)
+const CACHE: AnimationCache = {
     lastTime: 0,
     frameCount: 0,
     frameSkip: 2, // Only update animation every X frames

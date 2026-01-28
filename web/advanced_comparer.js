@@ -7,6 +7,8 @@ import { app } from "../../../scripts/app.js";
 import { drawGradientTitle } from "./golden_eyeball.js";
 import { imageDataToUrl } from "./comfy_utils.js";
 console.log("AdvancedImageComparer module loaded");
+// Shared modes array used in widget and context menu
+const COMPARER_MODES = ["Slider", "Click", "Side-by-Side", "Stacked", "Grid", "Carousel", "Batch", "Onion Skin"];
 // ============================
 // Animation Cache
 // ============================
@@ -525,7 +527,7 @@ app.registerExtension({
         if (nodeData.name !== "AdvancedImageComparer")
             return;
         nodeType.prototype.properties = nodeType.prototype.properties || { comparer_mode: "Slider", onionSkinOpacity: 0.5 };
-        nodeType["@comparer_mode"] = { type: "combo", values: ["Slider", "Click", "Side-by-Side", "Stacked", "Grid", "Carousel", "Batch", "Onion Skin"] };
+        nodeType["@comparer_mode"] = { type: "combo", values: COMPARER_MODES };
         const origOnDrawForeground = nodeType.prototype.onDrawForeground;
         nodeType.prototype.onDrawForeground = function (ctx) {
             if (origOnDrawForeground)
@@ -553,7 +555,7 @@ app.registerExtension({
                 this.properties.comparer_mode = value;
                 this.updateControlsVisibility();
                 self.setDirtyCanvas(true, false);
-            }, { values: ["Slider", "Click", "Side-by-Side", "Stacked", "Grid", "Carousel", "Batch", "Onion Skin"] });
+            }, { values: COMPARER_MODES });
             self.batchSelectorWidget = self.addWidget("combo", "View Pair", "1", (value) => {
                 const idx = parseInt(value) - 1;
                 if (this.comparerWidget && idx >= 0 && idx < this.comparerWidget.maxPairs) {
@@ -711,6 +713,43 @@ app.registerExtension({
             else if (this.properties.comparer_mode === "Click")
                 this.imageIndex = pos[0] > this.size[0] / 2 ? 1 : 0;
             return true;
+        };
+        // Context menu options
+        const origGetExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
+        nodeType.prototype.getExtraMenuOptions = function (_, options) {
+            if (origGetExtraMenuOptions)
+                origGetExtraMenuOptions.apply(this, arguments);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const self = this;
+            options.push(null); // Separator
+            const currentMode = this.properties.comparer_mode || "Slider";
+            options.push({
+                content: "Layout Mode",
+                has_submenu: true,
+                submenu: {
+                    options: COMPARER_MODES.map(mode => ({
+                        content: mode === currentMode ? `✓ ${mode}` : mode,
+                        callback: () => {
+                            this.properties.comparer_mode = mode;
+                            if (self.layoutWidget)
+                                self.layoutWidget.value = mode;
+                            this.updateControlsVisibility();
+                            self.setDirtyCanvas(true, false);
+                        }
+                    }))
+                }
+            });
+            options.push({
+                content: "Reset to Default Size",
+                callback: () => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const selfAny = this;
+                    selfAny.properties.user_resized = false;
+                    if (selfAny.setSize && selfAny.computeSize)
+                        selfAny.setSize(selfAny.computeSize());
+                    selfAny.setDirtyCanvas(true, false);
+                }
+            });
         };
         console.log("AdvancedImageComparer node setup complete");
     }

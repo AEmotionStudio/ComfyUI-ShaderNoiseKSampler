@@ -1,7 +1,4 @@
-/**
- * gradient_title.ts - Adds a custom gradient title to ShaderNoiseKSampler node
- */
-// Cache for rendering optimization
+// Cache for rendering optimization (uses shared AnimationCache interface)
 const CACHE = {
     lastTime: 0,
     frameCount: 0,
