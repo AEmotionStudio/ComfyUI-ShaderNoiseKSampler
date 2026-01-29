@@ -1,0 +1,39 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "lib": [
+            "ES2020",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "strict": true,
+        "noImplicitAny": true,
+        "strictNullChecks": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "noFallthroughCasesInSwitch": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "declaration": false,
+        "sourceMap": true,
+        "outDir": "./dist",
+        "rootDir": "./web",
+        "baseUrl": ".",
+        "typeRoots": [
+            "./web/types",
+            "./node_modules/@types"
+        ]
+    },
+    "include": [
+        "web/src/**/*.ts",
+        "web/types/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "web/tests/**/*.ts"
+    ]
+}

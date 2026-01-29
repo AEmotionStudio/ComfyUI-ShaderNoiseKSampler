@@ -1,0 +1,25 @@
+{
+    "name": "comfyui-shadernoiseksampler-web",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "TypeScript frontend for ComfyUI ShaderNoiseKSampler custom nodes",
+    "scripts": {
+        "build": "tsc && cp dist/src/*.js web/",
+        "watch": "tsc --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "typecheck": "tsc --noEmit",
+        "clean": "rm -rf dist/"
+    },
+    "devDependencies": {
+        "typescript": "^5.3.3",
+        "vitest": "^1.2.2",
+        "@vitest/coverage-v8": "^1.2.2",
+        "jsdom": "^24.0.0",
+        "@types/node": "^20.11.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

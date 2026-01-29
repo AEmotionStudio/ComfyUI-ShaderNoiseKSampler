@@ -175,3 +175,15 @@ user/
 
 # Local cache
 .cache/
+
+# Node.js / TypeScript
+node_modules/
+*.tsbuildinfo
+*.d.ts.map
+pnpm-lock.yaml
+
+# TypeScript build output
+dist/
+
+# Test coverage reports
+coverage/
