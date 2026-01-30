@@ -1,8 +1,8 @@
 {
   "shaderType": "domain_warp",
-  "shaderScale": 1,
-  "shaderOctaves": 1,
-  "shaderWarpStrength": 0.5,
+  "shaderScale": 8.967586818908208,
+  "shaderOctaves": 5.105222904880407,
+  "shaderWarpStrength": 4.1250627798392605,
   "shaderShapeType": "none",
   "shaderShapeStrength": 1,
   "shaderPhaseShift": 0.5,

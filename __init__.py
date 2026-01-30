@@ -76,6 +76,17 @@ add_tensor_field_to_tensor(ShaderToTensor)
 add_curl_noise_to_tensor(ShaderToTensor)
 integrate_temporal_coherent_noise()
 
+# Register API routes for server-side parameter saving
+try:
+    from server import PromptServer
+    from .api_routes import setup_routes
+    setup_routes(PromptServer.instance)
+except ImportError:
+    # PromptServer not available (e.g., running tests without ComfyUI)
+    pass
+except Exception as e:
+    print(f"[ShaderNoiseKSampler] Warning: Could not register API routes: {e}")
+
 # Legacy SHADER_GENERATORS dict for backward compatibility
 # Maps shader type names to generator functions
 SHADER_GENERATORS = {

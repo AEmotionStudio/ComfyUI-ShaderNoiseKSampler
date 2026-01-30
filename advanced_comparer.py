@@ -118,8 +118,8 @@ class AdvancedImageComparer(PreviewImage):
             if "ui" in images_b and "images" in images_b["ui"]:
                 for img in images_b["ui"]["images"]:
                     if isinstance(img, dict) and "filename" in img:
-                        # Add flag to identify this as image B
-                        img["is_image_b"] = True
+                        # Add flag to identify this as image B (using is_image_a=False for frontend compatibility)
+                        img["is_image_a"] = False
                         result["ui"]["images"].append(img)
             
             # Only cache if this was an original input (not auto-filled)

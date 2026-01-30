@@ -7,6 +7,9 @@ import numpy as np
 import time
 import gc
 import sys
+import os
+import random
+import folder_paths
 
 class VideoComparer:
     # Improved cache with better auto-fill retention
@@ -23,6 +26,7 @@ class VideoComparer:
         "max_memory_mb": 200,  # Increased for larger videos
         "auto_fill_history": [],  # New: Keep track of recent videos for auto-fill
         "last_cleanup_time": 0,
+        "session_id": None,  # Unique ID for temp file naming
     }
     
     @classmethod
@@ -91,8 +95,14 @@ class VideoComparer:
             "max_dimension": max_dimension
         }
 
-    def tensor_to_base64(self, image_tensor, quality=60, max_dimension=512):
-        """Ultra-compressed frame conversion"""
+    def get_session_id(self):
+        """Get or create a unique session ID for temp file naming"""
+        if self._video_cache["session_id"] is None:
+            self._video_cache["session_id"] = ''.join(random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(8))
+        return self._video_cache["session_id"]
+
+    def save_frame_to_file(self, image_tensor, video_id, frame_index, quality=60, max_dimension=512):
+        """Save frame to temp file and return file info for /view endpoint"""
         try:
             i = 255. * image_tensor.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
@@ -103,16 +113,55 @@ class VideoComparer:
                 new_size = (int(img.width * ratio), int(img.height * ratio))
                 img = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            buffer = io.BytesIO()
-            
-            # Always use JPEG for maximum compression
+            # Convert RGBA to RGB for JPEG
             if img.mode == 'RGBA':
-                # Convert RGBA to RGB for JPEG
                 background = Image.new('RGB', img.size, (255, 255, 255))
                 background.paste(img, mask=img.split()[-1])
                 img = background
             
-            # Use aggressive JPEG compression
+            # Get temp directory and create subfolder
+            temp_dir = folder_paths.get_temp_directory()
+            subfolder = "video_comparer"
+            full_output_folder = os.path.join(temp_dir, subfolder)
+            os.makedirs(full_output_folder, exist_ok=True)
+            
+            # Generate unique filename with session ID
+            session_id = self.get_session_id()
+            filename = f"vc_{session_id}_{video_id}_{frame_index:05d}.jpg"
+            filepath = os.path.join(full_output_folder, filename)
+            
+            # Save as JPEG with quality setting
+            img.save(filepath, format='JPEG', quality=quality, optimize=True)
+            
+            # Return file info for /view endpoint (same format as PreviewImage)
+            return {
+                "filename": filename,
+                "subfolder": subfolder,
+                "type": "temp"
+            }
+                
+        except Exception as e:
+            print(f"[VideoComparer] Error saving frame to file: {e}")
+            return None
+
+    def tensor_to_base64(self, image_tensor, quality=60, max_dimension=512):
+        """DEPRECATED: Keep for backward compatibility, but prefer save_frame_to_file"""
+        try:
+            i = 255. * image_tensor.cpu().numpy()
+            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+            
+            if img.width > max_dimension or img.height > max_dimension:
+                ratio = min(max_dimension / img.width, max_dimension / img.height)
+                new_size = (int(img.width * ratio), int(img.height * ratio))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+            
+            buffer = io.BytesIO()
+            
+            if img.mode == 'RGBA':
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[-1])
+                img = background
+            
             img.save(buffer, format='JPEG', quality=quality, optimize=True)
             img_str = base64.b64encode(buffer.getvalue()).decode()
             return f"data:image/jpeg;base64,{img_str}"
@@ -148,8 +197,8 @@ class VideoComparer:
         
         return candidates
 
-    def process_video_to_frames(self, video_tensor, fps):
-        """Process video without frame limits"""
+    def process_video_to_frames(self, video_tensor, fps, video_id="video"):
+        """Process video and save frames as temp files (not base64 to avoid localStorage quota issues)"""
         if video_tensor is None or len(video_tensor) == 0:
             return None
         
@@ -166,7 +215,7 @@ class VideoComparer:
         frames = []
         total_size_mb = 0
         
-        print(f"[VideoComparer] Processing {len(frame_indices)} frames from {len(video_tensor)} total (no limits)")
+        print(f"[VideoComparer] Processing {len(frame_indices)} frames from {len(video_tensor)} total -> temp files")
         
         for i, frame_idx in enumerate(frame_indices):
             if frame_idx >= len(video_tensor):
@@ -175,15 +224,20 @@ class VideoComparer:
             frame = video_tensor[frame_idx]
             estimated_size = self.estimate_frame_size(frame)
             
-            data_url = self.tensor_to_base64(
-                frame, 
+            # Save frame to temp file instead of base64
+            file_info = self.save_frame_to_file(
+                frame,
+                video_id,
+                i,
                 settings["quality"], 
                 settings["max_dimension"]
             )
             
-            if data_url:
+            if file_info:
                 frames.append({
-                    "data_url": data_url,
+                    "filename": file_info["filename"],
+                    "subfolder": file_info["subfolder"],
+                    "type": file_info["type"],
                     "frame_index": i,
                     "original_index": frame_idx
                 })
@@ -191,9 +245,9 @@ class VideoComparer:
                 
                 # Progress logging for large videos
                 if i > 0 and i % 20 == 0:
-                    print(f"[VideoComparer] Processed {i}/{len(frame_indices)} frames, size: {total_size_mb:.2f}MB")
+                    print(f"[VideoComparer] Processed {i}/{len(frame_indices)} frames")
         
-        print(f"[VideoComparer] Generated {len(frames)} frames, total size: {total_size_mb:.2f}MB")
+        print(f"[VideoComparer] Saved {len(frames)} frames as temp files, estimated size: {total_size_mb:.2f}MB")
         
         return {
             "frames": frames,
@@ -202,7 +256,8 @@ class VideoComparer:
             "original_frame_count": len(video_tensor),
             "tensor_shape": list(video_tensor.shape),
             "estimated_size_mb": total_size_mb,
-            "auto_settings": settings
+            "auto_settings": settings,
+            "use_file_urls": True  # Flag to tell frontend to load via /view endpoint
         }
 
     def cleanup_memory(self, force=False):
@@ -525,7 +580,10 @@ class VideoComparer:
             return first_video, second_video
 
     def compare_videos(self, fps, auto_fill=True, video_a=None, video_b=None, prompt=None, extra_pnginfo=None):
-        print(f"[VideoComparer] Starting comparison (execution #{self._video_cache['execution_count'] + 1}) with auto_fill={auto_fill}, unlimited frames")
+        # Reset session_id for fresh temp files each execution
+        self._video_cache["session_id"] = None
+        
+        print(f"[VideoComparer] Starting comparison (execution #{self._video_cache['execution_count'] + 1}) with auto_fill={auto_fill}, saving to temp files")
         
         # Apply auto-fill logic BEFORE updating cache (important!)
         final_video_a, final_video_b = self.get_auto_filled_videos(video_a, video_b, auto_fill)
@@ -539,7 +597,7 @@ class VideoComparer:
         # Process videos with ultra-conservative settings
         if final_video_a is not None and len(final_video_a) > 0:
             print(f"[VideoComparer] Processing video A: {len(final_video_a)} frames")
-            video_a_data = self.process_video_to_frames(final_video_a, fps)
+            video_a_data = self.process_video_to_frames(final_video_a, fps, "a")
             if video_a_data:
                 video_data.append({
                     "name": "video_a",
@@ -554,7 +612,7 @@ class VideoComparer:
 
         if final_video_b is not None and len(final_video_b) > 0:
             print(f"[VideoComparer] Processing video B: {len(final_video_b)} frames")
-            video_b_data = self.process_video_to_frames(final_video_b, fps)
+            video_b_data = self.process_video_to_frames(final_video_b, fps, "b")
             if video_b_data:
                 video_data.append({
                     "name": "video_b",

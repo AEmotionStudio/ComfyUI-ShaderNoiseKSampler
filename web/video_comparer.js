@@ -88,7 +88,20 @@ class VideoComparerWidget {
         this.node.setDirtyCanvas(true, false);
     }
     get value() {
-        return this._value || { video_data: [] };
+        // Return minimal data for serialization to avoid localStorage quota issues
+        // The actual frame data is stored in videosA/videosB properties, not here
+        if (!this._value)
+            return { video_data: [] };
+        // Return only essential metadata without frame URLs
+        const minimalVideoData = (this._value.video_data || []).map((video, idx) => ({
+            name: video.name,
+            fps: video.fps,
+            frame_count: video.frames?.length || 0,
+            index: idx,
+            // Don't include frames array - it's already loaded in videosA/videosB
+            frames: []
+        }));
+        return { video_data: minimalVideoData };
     }
     preloadInitialFrames() {
         this.isInitialLoading = true;
@@ -120,8 +133,9 @@ class VideoComparerWidget {
             return cache[cacheKey];
         if (cache[cacheKey]?.isLoading || cache[cacheKey]?.queued)
             return cache[cacheKey];
-        if (Object.keys(cache).length > 10)
-            this.cleanupFrameCache(cache);
+        // Increased cache size to 100 frames to support smooth playback
+        if (Object.keys(cache).length > 100)
+            this.cleanupFrameCache(cache, frameData.frame_index);
         if (!this.loadingQueue.find(item => item.cacheKey === cacheKey)) {
             this.loadingQueue.push({ frameData, videoId, cacheKey, retryCount: 0 });
         }
@@ -190,16 +204,22 @@ class VideoComparerWidget {
             }
             setTimeout(() => this.processLoadingQueue(), 10);
         };
-        setTimeout(() => {
-            if (!img.failed) {
-                img.src = frameData.data_url || imageDataToUrl(frameData);
-            }
-        }, 50);
+        // Load immediately without delay - 50ms delay was causing blank frames during playback
+        if (!img.failed) {
+            img.src = frameData.data_url || imageDataToUrl(frameData);
+        }
         cache[cacheKey] = img;
     }
-    cleanupFrameCache(cache) {
+    cleanupFrameCache(cache, currentFrameIndex = 0) {
         const keys = Object.keys(cache);
-        const toRemove = keys.slice(0, Math.floor(keys.length / 2));
+        // Sort by distance from current frame, keeping frames near current position
+        const sortedKeys = keys.sort((a, b) => {
+            const frameA = parseInt(a.split('_')[1]) || 0;
+            const frameB = parseInt(b.split('_')[1]) || 0;
+            return Math.abs(frameA - currentFrameIndex) - Math.abs(frameB - currentFrameIndex);
+        });
+        // Remove frames farthest from current position (keep first 50)
+        const toRemove = sortedKeys.slice(50);
         toRemove.forEach(key => {
             if (cache[key] && !cache[key].isLoading)
                 delete cache[key];
@@ -652,7 +672,29 @@ class VideoComparerWidget {
         if (totalFrames === 0)
             return;
         this.currentFrameIndex = (this.currentFrameIndex + 1) % totalFrames;
+        // Preload upcoming frames for smooth playback (look-ahead buffer)
+        this.preloadUpcomingFrames(10);
         this.node.setDirtyCanvas(true, false);
+    }
+    preloadUpcomingFrames(count) {
+        const totalFramesA = this.framesA.length;
+        const totalFramesB = this.framesB.length;
+        for (let i = 1; i <= count; i++) {
+            // Preload A frames
+            if (totalFramesA > 0) {
+                const frameIdx = (this.currentFrameIndex + i) % totalFramesA;
+                if (this.framesA[frameIdx]) {
+                    this.loadFrame(this.framesA[frameIdx], "A");
+                }
+            }
+            // Preload B frames
+            if (totalFramesB > 0) {
+                const frameIdx = (this.currentFrameIndex + i) % totalFramesB;
+                if (this.framesB[frameIdx]) {
+                    this.loadFrame(this.framesB[frameIdx], "B");
+                }
+            }
+        }
     }
     previousFrame() {
         const totalFrames = Math.max(this.framesA.length, this.framesB.length);

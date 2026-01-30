@@ -233,35 +233,35 @@ const extension = {
                                 console.error('Failed to save to localStorage:', localErr);
                             }
                         }
-                        // Send the file directly to the data directory - most reliable method
-                        // Create a simple download link to trigger the file save
-                        const blob = new Blob([jsonData], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'shader_params.json';
-                        document.body.appendChild(a);
-                        a.click();
-                        // Show instructions in console AFTER download is triggered
-                        console.log('%cIMPORTANT: Please save the downloaded file to the following location (overwrite if exists):', 'color: red; font-weight: bold');
-                        console.log('%ccustom_nodes/ComfyUI-ShaderNoiseKsampler/data/shader_params.json', 'color: blue; font-weight: bold');
-                        // Clean up and update button state on success
-                        setTimeout(() => {
-                            try {
-                                document.body.removeChild(a);
-                                URL.revokeObjectURL(url);
-                                console.log('Shader params JSON download link removed.');
+                        // Send parameters to server API for automatic save
+                        fetch('/shader_noise_ksampler/save_params', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: jsonData
+                        })
+                            .then(response => response.json())
+                            .then(result => {
+                            if (result.status === 'success') {
+                                console.log('Shader params saved successfully to server');
+                                showToast('Parameters saved successfully!', 'success');
                             }
-                            catch (cleanupError) {
-                                console.warn('Could not clean up download link:', cleanupError);
+                            else {
+                                throw new Error(result.message || 'Unknown error');
                             }
-                            showToast('Parameters saved successfully!', 'success');
+                        })
+                            .catch(error => {
+                            console.error('Error saving shader parameters to server:', error);
+                            showToast('Error saving parameters!', 'error');
+                            if (saveButtonWidget)
+                                saveButtonWidget.name = 'Error Saving!';
+                        })
+                            .finally(() => {
                             setTimeout(() => {
                                 if (saveButtonWidget)
                                     saveButtonWidget.name = '💾 Save Shader Parameters';
                                 isSaving = false;
-                            }, 2000);
-                        }, 500);
+                            }, 500);
+                        });
                     }
                     catch (error) {
                         console.error('Error saving shader parameters:', error);
