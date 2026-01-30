@@ -761,7 +761,7 @@ class VideoComparerWidget implements IWidget {
     nextFrame(): void { this.advanceFrame(); }
 
     mouse(event: MouseEvent, pos: [number, number], node: LGraphNode): boolean {
-        if (event.type !== "mousedown") return false;
+        // Note: onMouseDown handler only calls this for mousedown/pointerdown events
 
         const mode = (node as ComparerNode).properties?.comparer_mode;
         if (mode === "Sync Compare") {

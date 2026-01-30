@@ -10,17 +10,13 @@ import math
 import logging
 from typing import Dict, Any, Optional, Tuple
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from .base import BaseNoiseGenerator
 from .registry import shader_generator
-from utils.color_utils import apply_color_scheme, interpolate_colors, COLOR_SCHEMES
-from utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
-from utils.noise_utils import create_coordinate_grid
-from core.params import ShaderParams, get_param_value
-from core.constants import DEFAULT_CHANNELS
+from ..utils.color_utils import apply_color_scheme, interpolate_colors, COLOR_SCHEMES
+from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
+from ..utils.noise_utils import create_coordinate_grid
+from ..core.params import ShaderParams, get_param_value
+from ..core.constants import DEFAULT_CHANNELS
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +301,7 @@ class TensorFieldGenerator(BaseNoiseGenerator):
             # Hyperstreamlines
             angle = torch.atan2(v1[..., 1:2], v1[..., 0:1])
             result = torch.sin(angle * 4.0 + time)
-            else:
+        else:
             # Eigenvector direction
             result = v1[..., 0:1] * v1[..., 1:2] * 2.0
         
@@ -523,13 +519,13 @@ def generate_tensor_field_tensor(
         shader_params: Dictionary of shader parameters
         height: Height of the output tensor
         width: Width of the output tensor
-            batch_size: Number of images in batch
-            device: Device to create tensor on
-            seed: Random seed
+        batch_size: Number of images in batch
+        device: Device to create tensor on
+        seed: Random seed
         target_channels: Number of output channels
         **kwargs: Additional arguments (ignored)
-            
-        Returns:
+        
+    Returns:
         Tensor with shape [batch_size, target_channels, height, width]
     """
     # Convert dict to ShaderParams if needed
@@ -543,9 +539,9 @@ def generate_tensor_field_tensor(
         target_channels = shader_params["target_channels"]
     
     return TensorFieldGenerator.generate(
-            batch_size=batch_size,
-            height=height,
-            width=width,
+        batch_size=batch_size,
+        height=height,
+        width=width,
         params=params,
         device=torch.device(device),
         seed=seed,

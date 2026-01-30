@@ -663,8 +663,7 @@ class VideoComparerWidget {
     }
     nextFrame() { this.advanceFrame(); }
     mouse(event, pos, node) {
-        if (event.type !== "mousedown")
-            return false;
+        // Note: onMouseDown handler only calls this for mousedown/pointerdown events
         const mode = node.properties?.comparer_mode;
         if (mode === "Sync Compare") {
             node.selectedVideo = node.selectedVideo === "A" ? "B" : "A";

@@ -11,17 +11,13 @@ import math
 import logging
 from typing import Dict, Any, Optional, Tuple
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from .base import BaseNoiseGenerator
 from .registry import shader_generator
-from utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colors, COLOR_SCHEMES
-from utils.shape_masks import apply_shape_mask, apply_mask_to_tensor, smoothstep
-from utils.noise_utils import create_coordinate_grid
-from core.params import ShaderParams, get_param_value
-from core.constants import DEFAULT_CHANNELS, HIGH_CHANNEL_THRESHOLD
+from ..utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colors, COLOR_SCHEMES
+from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor, smoothstep
+from ..utils.noise_utils import create_coordinate_grid
+from ..core.params import ShaderParams, get_param_value
+from ..core.constants import DEFAULT_CHANNELS, HIGH_CHANNEL_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +174,7 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         vmag = torch.sqrt(vx**2 + vy**2)
         vmag = vmag / (vmag.max() + 1e-8)
         
-            vangle = torch.atan2(vy, vx)
+        vangle = torch.atan2(vy, vx)
         vangle = (vangle + math.pi) / (2 * math.pi)
         
         # Use first channel as normalized value for color mapping
@@ -189,11 +185,11 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
             r, g, b = interpolate_colors(stops, normalized, device)
         elif color_scheme == "rainbow":
             r, g, b = hsv_to_rgb(vangle, torch.ones_like(vangle) * 0.8, vmag)
-            elif color_scheme == "heatmap":
+        elif color_scheme == "heatmap":
             r = torch.pow(normalized, 0.5)
             g = torch.pow(normalized, 1.5)
             b = torch.pow(normalized, 3.0)
-            elif color_scheme == "vorticity":
+        elif color_scheme == "vorticity":
             curl_mag = torch.abs(vx - vy)
             curl_norm = curl_mag / (curl_mag.max() + 1e-8)
             pos_mask = (vx > vy).float()
@@ -206,11 +202,11 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
             r = 0.5 + 0.5 * torch.sin(vangle * 6.28318 + time_t)
             g = 0.5 + 0.5 * torch.sin(vangle * 6.28318 + normalized * 3.14159 + time_t * 2.0)
             b = 0.5 + 0.5 * torch.cos(vangle * 3.14159 + normalized * 6.28318 + time_t * 3.0)
-            else:
+        else:
             r, g, b = vx, vy, vmag
         
         # Apply intensity
-            if color_intensity < 1.0:
+        if color_intensity < 1.0:
             grayscale = (r + g + b) / 3.0
             r = r * color_intensity + grayscale * (1 - color_intensity)
             g = g * color_intensity + grayscale * (1 - color_intensity)
@@ -219,7 +215,7 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         result = torch.cat([r, g, b], dim=1)
         
         # Add extra channels if needed
-            if target_channels > 3:
+        if target_channels > 3:
             extra = vmag.repeat(1, target_channels - 3, 1, 1)
             result = torch.cat([result, extra], dim=1)
         
@@ -239,7 +235,7 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         use_temporal_coherence: bool
     ) -> torch.Tensor:
         """Generate channels without color scheme."""
-            vmag = torch.sqrt(vx**2 + vy**2)
+        vmag = torch.sqrt(vx**2 + vy**2)
         vmag = vmag / (vmag.max() + 1e-8)
         
         fast_mode = params.get("fast_high_channel_noise", False)
@@ -249,39 +245,39 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
             base = torch.cat([vx, vy, vmag, advected], dim=1)
             num_repeats = math.ceil(target_channels / base.shape[1])
             result = torch.cat([base] * num_repeats, dim=1)[:, :target_channels]
-                else:
+        else:
             # Normal mode: generate structured channels
             channels = [advected, vx, vy, vmag]
             
-                 for c in range(4, target_channels):
+            for c in range(4, target_channels):
                 variation_seed = seed + 500 + (c * 100)
-                     torch.manual_seed(variation_seed)
+                torch.manual_seed(variation_seed)
 
                 time_offset = c * 0.05
                 octaves = params.octaves
                 time = params.time
                 
-                     c_velocity = CurlNoiseGenerator.get_velocity_field(
+                c_velocity = CurlNoiseGenerator.get_velocity_field(
                     coords, time + time_offset, int(octaves + c * 0.1), device, variation_seed, use_temporal_coherence
                 )
                 
                 component_idx = c % 2
                 if c_velocity.shape[-1] > component_idx:
                     component = c_velocity[..., component_idx:component_idx+1]
-                         else:
-                             component = c_velocity[..., 0:1]
+                else:
+                    component = c_velocity[..., 0:1]
                 
                 # Apply transformation
-                     if c % 3 == 0:
-                         component = torch.sin(component * 3.14159)
-                     elif c % 3 == 1:
-                         component = torch.abs(component) * 2.0 - 1.0
+                if c % 3 == 0:
+                    component = torch.sin(component * 3.14159)
+                elif c % 3 == 1:
+                    component = torch.abs(component) * 2.0 - 1.0
 
                 extra = component.permute(0, 3, 1, 2)
                 extra = (extra - extra.mean()) / (extra.std() + 1e-8)
                 channels.append(extra)
             
-                     result = torch.cat(channels, dim=1)
+            result = torch.cat(channels, dim=1)
         
         return result
     
@@ -355,10 +351,10 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         """
         # Simple advection: sample noise at displaced position
         advected_p = p + velocity * dt
-            
-            if use_temporal_coherence:
+        
+        if use_temporal_coherence:
             result = CurlNoiseGenerator._simplex_3d(advected_p * scale, seed + 999, time * 0.3)
-            else:
+        else:
             result = CurlNoiseGenerator._simplex_2d(advected_p * scale, seed + 999)
         
         return result
@@ -380,18 +376,18 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         i = torch.floor(x + s)
         j = torch.floor(y + s)
         
-            t = (i + j) * G2
+        t = (i + j) * G2
         x0 = x - (i - t)
         y0 = y - (j - t)
         
         i1 = (x0 > y0).float()
         j1 = 1.0 - i1
         
-            x1 = x0 - i1 + G2
-            y1 = y0 - j1 + G2
-            x2 = x0 - 1.0 + 2.0 * G2
-            y2 = y0 - 1.0 + 2.0 * G2
-            
+        x1 = x0 - i1 + G2
+        y1 = y0 - j1 + G2
+        x2 = x0 - 1.0 + 2.0 * G2
+        y2 = y0 - 1.0 + 2.0 * G2
+        
         def hash_coord(ix, iy):
             h = ix * 1619 + iy * 31337 + seed * 2459
             return torch.fmod(h * h * h, 1013)
@@ -517,7 +513,6 @@ def generate_curl_noise_tensor(
         width=width,
         params=params,
         device=torch.device(device),
-            seed=seed,
-            target_channels=target_channels
-        )
-        
+        seed=seed,
+        target_channels=target_channels
+    )

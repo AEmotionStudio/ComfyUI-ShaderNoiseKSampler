@@ -187,3 +187,6 @@ dist/
 
 # Test coverage reports
 coverage/
+
+# Other
+ComfyUI_Errors.md
