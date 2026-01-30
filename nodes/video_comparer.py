@@ -257,9 +257,14 @@ class VideoComparer:
                         del self._video_cache[video_key]
                         self._video_cache[video_key] = None
                         
-                        # Clear corresponding metadata
-                        meta_key = video_key.replace("video", "metadata")
-                        if meta_key.replace("most_recent_metadata", "most_recent_metadata") in self._video_cache:
+                        # Clear corresponding metadata using proper key mapping
+                        meta_key_mapping = {
+                            "last_video_a": "cache_metadata_a",
+                            "last_video_b": "cache_metadata_b",
+                            "most_recent_video": "most_recent_metadata"
+                        }
+                        meta_key = meta_key_mapping.get(video_key)
+                        if meta_key and meta_key in self._video_cache:
                             self._video_cache[meta_key] = None
         
         # Reset memory counter
@@ -279,13 +284,14 @@ class VideoComparer:
             memory_mb = process.memory_info().rss / 1024 / 1024
             
             # Higher thresholds to accommodate larger videos
-            if memory_mb > 12000:  # 12GB threshold for selective cleanup
-                print(f"[VideoComparer] High memory usage detected: {memory_mb:.2f}MB, performing selective cleanup...")
-                self.cleanup_memory(force=False)  # Selective cleanup
-                return True
-            elif memory_mb > 16000:  # 16GB threshold for force cleanup
+            # Check critical threshold (16GB) FIRST, then high threshold (12GB)
+            if memory_mb > 16000:  # 16GB threshold for force cleanup
                 print(f"[VideoComparer] Critical memory usage detected: {memory_mb:.2f}MB, forcing cleanup...")
                 self.cleanup_memory(force=True)  # Force cleanup
+                return True
+            elif memory_mb > 12000:  # 12GB threshold for selective cleanup
+                print(f"[VideoComparer] High memory usage detected: {memory_mb:.2f}MB, performing selective cleanup...")
+                self.cleanup_memory(force=False)  # Selective cleanup
                 return True
         except ImportError:
             # Less frequent periodic cleanup for larger videos
