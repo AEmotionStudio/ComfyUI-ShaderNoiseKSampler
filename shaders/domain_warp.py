@@ -11,17 +11,13 @@ import math
 import logging
 from typing import Dict, Any, Optional, Union
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from .base import BaseNoiseGenerator
 from .registry import shader_generator
-from utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colors, COLOR_SCHEMES
-from utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
-from utils.noise_utils import create_coordinate_grid
-from core.params import ShaderParams, get_param_value
-from core.constants import DEFAULT_CHANNELS, MODEL_CHANNEL_COUNTS
+from ..utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colors, COLOR_SCHEMES
+from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
+from ..utils.noise_utils import create_coordinate_grid
+from ..core.params import ShaderParams, get_param_value
+from ..core.constants import DEFAULT_CHANNELS, MODEL_CHANNEL_COUNTS
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +190,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
             # Use centralized color schemes
             stops = [(s[0], s[1]) for s in COLOR_SCHEMES[color_scheme]]
             r, g, b = interpolate_colors(stops, normalized, device)
-                    elif color_scheme == "rainbow":
+        elif color_scheme == "rainbow":
             # Rainbow using HSV
             hue = normalized
             sat = torch.ones_like(hue) * 0.8
@@ -352,7 +348,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         elif warp_type == 2:
             # Turbulent FBM
             result = torch.abs(DomainWarpGenerator.fbm_noise(warped_p, octaves_int, time, device, seed))
-            else:
+        else:
             # Domain warp FBM
             result = DomainWarpGenerator.fbm_noise_domain_warp(warped_p, octaves_int, time, device, seed)
         
@@ -685,7 +681,7 @@ def generate_domain_warp_tensor(
     # Convert dict to ShaderParams if needed
     if isinstance(shader_params, dict):
         params = ShaderParams(shader_params)
-            else:
+    else:
         params = shader_params
     
     # Override target_channels if provided in params

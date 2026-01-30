@@ -13,7 +13,7 @@ if (!window.NoiseVisualizer) {
             if (this.kofiImageLoadAttempted)
                 return;
             this.kofiImageLoadAttempted = true;
-            const absolutePath = '/extensions/ComfyUI-ShaderNoiseKsampler/images/kofi_symbol.svg';
+            const absolutePath = '/extensions/comfyui-shadernoiseksampler/images/kofi_symbol.svg';
             // Attempt 1: Direct Image load
             try {
                 console.log('Attempting Ko-fi SVG load using new Image() with direct path (Primary Attempt)...');

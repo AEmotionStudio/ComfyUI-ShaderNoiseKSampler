@@ -5,6 +5,7 @@
     "description": "TypeScript frontend for ComfyUI ShaderNoiseKSampler custom nodes",
     "scripts": {
         "build": "tsc && cp dist/src/*.js web/",
+        "dev": "tsc --watch & (while true; do sleep 2; cp dist/src/*.js web/ 2>/dev/null; done)",
         "watch": "tsc --watch",
         "test": "vitest run",
         "test:watch": "vitest",

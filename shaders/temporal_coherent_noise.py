@@ -10,16 +10,12 @@ import math
 import logging
 from typing import Dict, Any, Optional
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from .base import BaseNoiseGenerator
 from .registry import shader_generator
-from utils.shape_masks import apply_shape_mask
-from utils.noise_utils import create_coordinate_grid
-from core.params import ShaderParams, get_param_value
-from core.constants import DEFAULT_CHANNELS
+from ..utils.shape_masks import apply_shape_mask
+from ..utils.noise_utils import create_coordinate_grid
+from ..core.params import ShaderParams, get_param_value
+from ..core.constants import DEFAULT_CHANNELS
 
 logger = logging.getLogger(__name__)
 
