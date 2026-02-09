@@ -160,6 +160,16 @@ interface ButtonWidget extends IWidget {
         const timeoutId = setTimeout(() => {
             button.textContent = "Copy";
             button.classList.remove('copied');
+
+            // Restore aria-label
+            const originalLabel = button.dataset.originalAriaLabel;
+            if (originalLabel) {
+                button.setAttribute('aria-label', originalLabel);
+                delete button.dataset.originalAriaLabel;
+            } else {
+                button.setAttribute('aria-label', 'Copy code'); // Fallback
+            }
+
             delete button.dataset.timeoutId;
         }, 2000);
         button.dataset.timeoutId = String(timeoutId);
@@ -179,8 +189,16 @@ interface ButtonWidget extends IWidget {
             if (window.showComfyToast) {
                 window.showComfyToast("Code copied to clipboard!", "success");
             }
+
+            // Store original label if not already stored
+            if (!buttonElement.dataset.originalAriaLabel) {
+                buttonElement.dataset.originalAriaLabel = buttonElement.getAttribute('aria-label') || 'Copy code';
+            }
+
             buttonElement.textContent = "Copied!";
             buttonElement.classList.add('copied');
+            buttonElement.setAttribute('aria-label', 'Copied'); // Update for screen readers
+
             resetButtonTimeout(buttonElement);
         }).catch(err => {
             console.error('Failed to copy: ', err);
@@ -298,6 +316,12 @@ interface ButtonWidget extends IWidget {
                             }
                             if (handleEscPress) {
                                 document.removeEventListener('keydown', handleEscPress);
+                            }
+
+                            // UX Enhancement: Restore focus to the main canvas
+                            const appCanvas = (app as any).canvas?.canvas; // Access the DOM <canvas> element
+                            if (appCanvas instanceof HTMLElement) {
+                                appCanvas.focus();
                             }
                         };
 
