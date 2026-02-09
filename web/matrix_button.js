@@ -121,9 +121,6 @@ import { app } from "../../../scripts/app.js";
                 button.setAttribute('aria-label', originalLabel);
                 delete button.dataset.originalAriaLabel;
             }
-            else {
-                button.setAttribute('aria-label', 'Copy code'); // Fallback
-            }
             delete button.dataset.timeoutId;
         }, 2000);
         button.dataset.timeoutId = String(timeoutId);

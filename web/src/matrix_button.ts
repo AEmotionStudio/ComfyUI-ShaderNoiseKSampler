@@ -166,8 +166,6 @@ interface ButtonWidget extends IWidget {
             if (originalLabel) {
                 button.setAttribute('aria-label', originalLabel);
                 delete button.dataset.originalAriaLabel;
-            } else {
-                button.setAttribute('aria-label', 'Copy code'); // Fallback
             }
 
             delete button.dataset.timeoutId;
