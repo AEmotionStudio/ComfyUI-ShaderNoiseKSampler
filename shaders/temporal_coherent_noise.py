@@ -6,6 +6,7 @@ between animation frames by treating time as a proper 4th dimension.
 """
 
 import torch
+import torch.nn.functional as F
 import math
 import logging
 from typing import Dict, Any, Optional
@@ -18,6 +19,14 @@ from ..core.params import ShaderParams, get_param_value
 from ..core.constants import DEFAULT_CHANNELS
 
 logger = logging.getLogger(__name__)
+
+
+# Precomputed gradients for 3D Simplex noise to avoid runtime branching
+SIMPLEX_GRADIENTS = torch.tensor([
+    [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
+    [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
+    [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]
+], dtype=torch.float32)
 
 
 @shader_generator("temporal_coherent", metadata={"description": "Temporally coherent noise for smooth animations"})
@@ -233,6 +242,9 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         batch, height, width, dim = coords.shape
         device = coords.device
         
+        # Ensure gradients are on the correct device
+        gradients = SIMPLEX_GRADIENTS.to(device)
+
         x = coords[..., 0]
         y = coords[..., 1]
         z = coords[..., 2] if dim > 2 else torch.zeros_like(x)
@@ -263,15 +275,17 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         j2 = x_ge_y * (1 - x_ge_z) + (1 - x_ge_y)
         k2 = (1 - x_ge_z) + x_ge_z * (1 - x_ge_y)
         
-        # Calculate contributions
-        def grad3d(ix, iy, iz, gx, gy, gz):
+        # Optimized gradient calculation using embedding lookup
+        def grad3d_optimized(ix, iy, iz, gx, gy, gz):
             h = (ix * 1619 + iy * 31337 + iz * 6971 + seed * 2459)
             h = torch.fmod(h * h * h, 1013)
             h_int = h.long() % 12
             
-            u = torch.where(h_int < 8, gx, gy)
-            v = torch.where(h_int < 4, gy, torch.where((h_int == 12) | (h_int == 14), gx, gz))
-            return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
+            # Lookup gradients from precomputed table
+            grads = F.embedding(h_int, gradients)
+
+            # Dot product
+            return grads[..., 0] * gx + grads[..., 1] * gy + grads[..., 2] * gz
         
         noise = torch.zeros_like(x0)
         
@@ -279,7 +293,7 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         t0 = 0.6 - x0*x0 - y0*y0 - z0*z0
         mask0 = (t0 >= 0).float()
         t0 = t0 * t0
-        noise = noise + mask0 * t0 * t0 * grad3d(i, j, k, x0, y0, z0)
+        noise = noise + mask0 * t0 * t0 * grad3d_optimized(i, j, k, x0, y0, z0)
         
         # Corner 1
         x1 = x0 - i1 + G3
@@ -288,7 +302,7 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         t1 = 0.6 - x1*x1 - y1*y1 - z1*z1
         mask1 = (t1 >= 0).float()
         t1 = t1 * t1
-        noise = noise + mask1 * t1 * t1 * grad3d(i + i1, j + j1, k + k1, x1, y1, z1)
+        noise = noise + mask1 * t1 * t1 * grad3d_optimized(i + i1, j + j1, k + k1, x1, y1, z1)
         
         # Corner 2
         x2 = x0 - i2 + 2.0 * G3
@@ -297,7 +311,7 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         t2 = 0.6 - x2*x2 - y2*y2 - z2*z2
         mask2 = (t2 >= 0).float()
         t2 = t2 * t2
-        noise = noise + mask2 * t2 * t2 * grad3d(i + i2, j + j2, k + k2, x2, y2, z2)
+        noise = noise + mask2 * t2 * t2 * grad3d_optimized(i + i2, j + j2, k + k2, x2, y2, z2)
         
         # Corner 3
         x3 = x0 - 1.0 + 3.0 * G3
@@ -306,7 +320,7 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         t3 = 0.6 - x3*x3 - y3*y3 - z3*z3
         mask3 = (t3 >= 0).float()
         t3 = t3 * t3
-        noise = noise + mask3 * t3 * t3 * grad3d(i + 1, j + 1, k + 1, x3, y3, z3)
+        noise = noise + mask3 * t3 * t3 * grad3d_optimized(i + 1, j + 1, k + 1, x3, y3, z3)
         
         result = noise * 32.0
         return result.unsqueeze(-1)
