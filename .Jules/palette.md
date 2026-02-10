@@ -13,3 +13,7 @@
 ## 2025-05-25 - Modal Focus Trapping
 **Learning:** Custom DOM modals often lack keyboard focus trapping, allowing users to tab out of the modal into the obscured background content. This is critical for keyboard and screen reader accessibility.
 **Action:** Implement a 'keydown' listener on the modal container to intercept Tab/Shift+Tab. Dynamically query visible focusable elements (`offsetParent !== null`) to handle changing content (like tabs) and loop focus between the first and last elements.
+
+## 2025-05-26 - Focus Restoration in ComfyUI Extensions
+**Learning:** ComfyUI extensions often launch modals from canvas-based widgets (which are not DOM elements). When these modals close, focus is lost to the document body because the triggering "element" doesn't exist in the DOM.
+**Action:** In close handlers for custom modals, explicitly restore focus to the main canvas element (e.g., `app.canvas.canvas.focus()`) to preserve keyboard navigation context.
