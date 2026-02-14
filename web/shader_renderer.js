@@ -1062,7 +1062,9 @@ const SHADER_SOURCES = {
                         }
                         else if (patternType == 2) {
                             // Flow lines visualization
-                            float stream = sin(dot(particlePos, normalize(velocity)) * 10.0 + time);
+                            float vLen = length(velocity);
+                            vec2 safeDir = vLen > 0.001 ? normalize(velocity) : vec2(1.0, 0.0);
+                            float stream = sin(dot(particlePos, safeDir) * 10.0 + time);
                             result = stream;
                         }
                         else {
@@ -1076,9 +1078,10 @@ const SHADER_SOURCES = {
                     
                     // Apply the warp control to intensify curl
                     vec2 applyWarpIntensity(vec2 velocity, float warp) {
-                        float length = max(length(velocity), 0.001);
-                        float logScale = log(length * 9.0 + 1.0) * warp;
-                        return normalize(velocity) * logScale;
+                        float vLen = max(length(velocity), 0.001);
+                        float logScale = log(vLen * 9.0 + 1.0) * warp;
+                        vec2 safeDir = vLen > 0.001 ? normalize(velocity) : vec2(0.0);
+                        return safeDir * logScale;
                     }
                     
                     float fbm(vec2 p) {
@@ -1333,9 +1336,11 @@ app.registerExtension({
             gl.linkProgram(program);
             if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
                 console.error('Shader program link error:', gl.getProgramInfoLog(program));
+                gl.deleteProgram(program);
+                gl.deleteShader(vertexShader);
+                gl.deleteShader(fragmentShader);
                 return null;
             }
-            console.log('Shader program compiled and linked successfully');
             return program;
         };
         nodeType.prototype.loadShader = function (shaderType) {
@@ -1364,7 +1369,6 @@ app.registerExtension({
             }
             this.loadingShader = true;
             const shaderType = this.pendingShaders.shift();
-            console.log('Loading shader:', shaderType);
             this.shaderPrograms[shaderType] = this.createShaderProgram(this.vertexShaderSource, this.fragmentShaderHeader + this.shaderSources[shaderType] + this.fragmentShaderFooter);
             setTimeout(() => { this.processNextShader(); }, 10);
         };
