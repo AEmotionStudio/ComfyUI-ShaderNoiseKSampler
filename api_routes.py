@@ -7,6 +7,7 @@ Provides server-side endpoints for saving shader parameters from the frontend.
 from aiohttp import web
 import json
 import os
+from .shader_params_reader import ShaderParamsReader
 
 # Get extension directory
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,8 +27,12 @@ async def save_shader_params(request):
         # Ensure data directory exists
         os.makedirs(os.path.dirname(params_file), exist_ok=True)
         
+        # Validate and sanitize input data before saving
+        # This prevents storing potentially malicious or malformed data
+        sanitized_data = ShaderParamsReader.validate_and_sanitize_params(data)
+
         with open(params_file, 'w') as f:
-            json.dump(data, f, indent=2)
+            json.dump(sanitized_data, f, indent=2)
         
         print(f"[ShaderNoiseKSampler] Saved shader params to {params_file}")
         return web.json_response({"status": "success"})
@@ -46,4 +51,3 @@ def setup_routes(server):
     if hasattr(server, 'app') and hasattr(server.app, 'router'):
         server.app.router.add_post("/shader_noise_ksampler/save_params", save_shader_params)
         print("[ShaderNoiseKSampler] Registered API route: POST /shader_noise_ksampler/save_params")
-
