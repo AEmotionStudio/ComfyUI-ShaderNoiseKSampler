@@ -283,7 +283,7 @@ const FRAGMENT_SHADER_HEADER = `
                             float stripes = sin(rotated.x * freq + u_time);
                             
                             // Create binary stripes with smoothed edges
-                            return smoothstep(0.0, 0.1, stripes) * smoothstep(0.0, -0.1, -stripes);
+                            return smoothstep(0.0, 0.1, stripes) * (1.0 - smoothstep(0.0, 0.1, -stripes));
                         } else if (type == 8) { // gradient
                             // Animated moving gradient
                             float angle = u_time * 0.2;
@@ -323,9 +323,9 @@ const FRAGMENT_SHADER_HEADER = `
                             
                             // Create horizontal and vertical bars
                             float h_bar = smoothstep(0.5 - thickness, 0.5 - thickness + 0.02, rotated.y) * 
-                                         smoothstep(0.5 + thickness, 0.5 + thickness - 0.02, rotated.y);
+                                         (1.0 - smoothstep(0.5 + thickness - 0.02, 0.5 + thickness, rotated.y));
                             float v_bar = smoothstep(0.5 - thickness, 0.5 - thickness + 0.02, rotated.x) * 
-                                         smoothstep(0.5 + thickness, 0.5 + thickness - 0.02, rotated.x);
+                                         (1.0 - smoothstep(0.5 + thickness - 0.02, 0.5 + thickness, rotated.x));
                             
                             return max(h_bar, v_bar);
                         } else if (type == 11) { // stars
@@ -409,7 +409,7 @@ const FRAGMENT_SHADER_HEADER = `
                             float rings = sin(dist * freq + phase);
                             
                             // Create binary rings with smoothed edges
-                            return smoothstep(0.0, 0.1, rings) * smoothstep(0.0, -0.1, -rings);
+                            return smoothstep(0.0, 0.1, rings) * (1.0 - smoothstep(0.0, 0.1, -rings));
                         } else if (type == 14) { // rays
                             // Animated rays from center
                             vec2 center = vec2(0.5) + vec2(
@@ -639,7 +639,7 @@ const FRAGMENT_SHADER_HEADER = `
                         }
                         else if (colorScheme == 12) { // hsv
                             // HSV color wheel implemented directly
-                            float h = normalized * 6.0;
+                            float h = clamp(normalized, 0.0, 0.9999) * 6.0;
                             int i = int(floor(h));
                             float f = h - float(i);
                             
