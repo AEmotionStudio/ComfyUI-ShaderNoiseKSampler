@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-02-14
+
+### Fixed
+- **Complete GLSL Shader Restoration**: Restored all v260 shader code lost during TypeScript refactor — header grew from 17K→37K chars, with full FBM implementations, 16 shape masks, 24 color schemes, 4 domain warp modes, tensor field eigenvector visualization, and curl noise advection/particle simulation.
+- **Chromium/Brave Shader Compatibility**: Fixed blank shader canvas in Chromium by adding `preserveDrawingBuffer: true` to WebGL context; fixed "basic-looking" shaders by upgrading fragment shader precision from `mediump` to `highp` with `#ifdef` fallback (Chromium's ANGLE enforces strict 16-bit mediump, losing noise detail).
+- **GLSL Spec Compliance**: Fixed undefined `smoothstep` behavior where `edge0 >= edge1` in stripes, cross, and concentric shape masks — caused inconsistent rendering across GPU drivers.
+- **HSV Color Scheme Discontinuity**: Fixed hue wrapping at `normalized=1.0` where `i=6` fell into wrong else branch, creating a visible color jump.
+- **WebGL Resource Leak**: Added `gl.deleteProgram()` and `gl.deleteShader()` cleanup on shader link failure.
+- **GLSL Normalize Safety**: Added zero-vector checks before `normalize(velocity)` in curl noise flow visualization and `applyWarpIntensity` to prevent undefined GLSL behavior.
+- **Shader Debug Logs**: Removed `console.log` statements from shader compilation and loading that spammed the browser console.
+
+### Security
+- **API Input Validation Fix**: `validate_and_sanitize_params` now validates both camelCase frontend keys (`shaderScale`, `shaderType`, `shaderShapeType`, `shaderWarpStrength`, `shaderPhaseShift`) and snake_case internal keys — previously most validation was silently skipped because the frontend sends camelCase but validation only checked snake_case.
+
+### Improved
+- **Temporal Noise Optimization**: Optimized temporal coherent noise generation for better animation performance.
+- **Accessibility**: Improved accessibility for shader matrix modal and copy button.
+
 ## [1.3.0] - 2026-01-30
 
 ### Added
