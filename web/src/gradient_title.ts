@@ -57,13 +57,13 @@ const extension: ComfyExtension = {
                 this: ShaderNode,
                 ctx: CanvasRenderingContext2D
             ): void {
-                // Call the original onDrawForeground if it exists
+                // Draw gradient title FIRST so it acts as background layer
+                drawGradientTitle(this, ctx);
+
+                // Call the original onDrawForeground after, so shader renders on top
                 if (origOnDrawForeground) {
                     origOnDrawForeground.call(this, ctx);
                 }
-
-                // Draw a custom gradient title
-                drawGradientTitle(this, ctx);
             };
 
             // Clean up resources when node is removed
