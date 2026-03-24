@@ -1465,6 +1465,9 @@ app.registerExtension({
         nodeType.prototype.onDrawForeground = function (ctx) {
             if (this.properties?.shaderVisible && this.shaderCanvas && !this.flags?.collapsed) {
                 this.isShaderActive = true;
+                // Call origOnDrawForeground FIRST so gradient title acts as background
+                if (origOnDrawForeground)
+                    origOnDrawForeground.call(this, ctx);
                 // Render shader synchronously before drawing to ensure fresh content
                 this.renderShader();
                 if (!this.animationFrameId) {
@@ -1481,12 +1484,11 @@ app.registerExtension({
                 const baseSize = origComputeSize ? origComputeSize.call(this, [this.size[0], 0]) : [this.size[0], 0];
                 const shaderY = baseSize[1];
                 const shaderHeight = Math.max(50, this.size[1] - shaderY);
+                // Draw shader canvas AFTER origOnDrawForeground so it renders on top of the gradient
                 try {
                     ctx.drawImage(this.shaderCanvas, 0, shaderY, this.size[0], shaderHeight);
                 }
                 catch (e) { /* ignore */ }
-                if (origOnDrawForeground)
-                    origOnDrawForeground.call(this, ctx);
             }
             else {
                 if (origOnDrawForeground)
