@@ -172,6 +172,7 @@ user/
 .tracking
 .bolt/
 .jules/
+.jules
 
 # Local cache
 .cache/
