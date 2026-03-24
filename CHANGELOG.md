@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.3] - 2026-03-24
+
+### Fixed
+- **Shader Display Draw Order (Load-Order Independent)**: Fixed gradient title rendering over the shader display on page refresh. Made `onDrawForeground` chain load-order independent — both `gradient_title.ts` and `shader_renderer.ts` now ensure the gradient always draws as background and the shader canvas always renders on top, regardless of which extension registers first.
+
+## [1.3.2] - 2026-03-24
+
+### Fixed
+- **Shader Display Draw Order**: Fixed gradient title background painting over the shader WebGL canvas by swapping the draw order in `gradient_title.ts` — gradient now renders before `origOnDrawForeground` so the shader sits on top.
+
 ## [1.3.1] - 2026-02-14
 
 ### Fixed
