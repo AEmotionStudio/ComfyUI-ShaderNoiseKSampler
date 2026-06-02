@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.4] - 2026-06-02
+
+### Security
+- **Vitest Dependency (GHSA-5xrq-8626-4rwp / CVE-2026-47429)**: Bumped the `vitest` and `@vitest/coverage-v8` dev dependencies from `^1.2.2` (resolved `1.6.1`) to `^4.1.0` (resolved `4.1.8`) to address a critical (CVSS 9.8) arbitrary file read/write/execute vulnerability in the Vitest UI server for versions `< 4.1.0`. Dev-only dependency; the regenerated lockfile pulls `vite@8`. All 85 tests, typecheck, and coverage verified passing on the new major version.
+
 ## [1.3.3] - 2026-03-24
 
 ### Fixed
