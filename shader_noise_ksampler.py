@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import math
 import comfy.sample
 import contextlib
@@ -975,10 +976,7 @@ class ShaderNoiseKSampler:
                             frame_noise = corrected_frame
                         
                         # If spatial dimensions are wrong, resize
-                        # This requires importing torch.nn.functional as F at the top of the file
                         if frame_noise.shape[2:] != expected_frame_shape[2:]:
-                            # print(f"   Resizing frame spatial dimensions from {frame_noise.shape[2:]} to {expected_frame_shape[2:]}")
-                            import torch.nn.functional as F # Ensure F is available
                             frame_noise = F.interpolate(frame_noise, size=(height, width), mode='bilinear', align_corners=False)
                             
                         # Final check
@@ -1359,70 +1357,6 @@ class ShaderNoiseKSampler:
         # Extract values for generation
         shader_type = shader_params.get("shader_type", "tensor_field")
         
-        # --- Parameter Response Mapper Integration --- START ---
-        if target_attribute_changes and target_attribute_changes.strip():
-            if debugger.enabled:
-                print("🧠 Applying Parameter Response Mapper adjustments...")
-            try:
-                import json # Need json for parsing
-                target_attrs = json.loads(target_attribute_changes)
-                
-                if isinstance(target_attrs, dict) and target_attrs:
-                    # Determine model type for mapper (simple inference)
-                    model_name_lower = model_name.lower() if model_name else ""
-                    if "sdxl" in model_name_lower:
-                        mapper_model_type = "SDXL"
-                    else:
-                        mapper_model_type = "SD1.5" # Default
-                    
-                    mapper = ParameterResponseMapper(model_type=mapper_model_type)
-                    
-                    # Extract current shader parameters relevant to the mapper
-                    current_mapper_params = {
-                        p: shader_params.get(p, shader_params.get(f"shader{p.capitalize()}", 0.0)) 
-                        for p in ["scale", "octaves", "warp_strength", "phase_shift"]
-                    }
-                    # Ensure correct types (e.g., octaves is float for mapper)
-                    current_mapper_params["octaves"] = float(current_mapper_params.get("octaves", 3.0))
-
-                    if debugger.enabled and debugger.debug_level >= 2:
-                        print(f"   Mapper using model_type: {mapper_model_type}")
-                        print(f"   Target Attributes: {target_attrs}")
-                        print(f"   Current Params for Mapper: {current_mapper_params}")
-
-                    # Get recommendations
-                    recommendations = mapper.get_recommended_adjustments(
-                        target_attrs,
-                        current_mapper_params,
-                        max_params=2 # Adjust max parameters as needed
-                    )
-                    
-                    if recommendations:
-                        if debugger.enabled:
-                            print(f"✅ Mapper recommended adjustments: {recommendations}")
-                        # Apply recommendations to the main shader_params
-                        for param, value in recommendations.items():
-                            # Update both plain and prefixed keys if they exist
-                            shader_params[param] = value
-                            prefixed_key = f"shader{param.capitalize()}"
-                            if prefixed_key in shader_params:
-                                shader_params[prefixed_key] = value
-                        # Re-log parameters if modified
-                        if debugger.enabled:
-                             debugger.log_parameters({"shader_params_after_mapper": shader_params})
-
-                        # Re-sanitize parameters after mapper modifications to prevent bypass
-                        shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
-                    elif debugger.enabled:
-                        print("ℹ️ Mapper provided no recommendations.")
-                else:
-                    if debugger.enabled:
-                         print("⚠️ Target attribute changes were provided but not a valid dictionary or empty.")
-
-            except Exception as e:
-                print(f"❌ Error processing target_attribute_changes: {e}. Skipping mapper adjustments.")
-        # --- Parameter Response Mapper Integration --- END ---
-
         # Log all parameters if debugging enabled
         if debugger.enabled:
             # Collect all parameters for logging

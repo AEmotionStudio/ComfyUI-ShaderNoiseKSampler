@@ -186,6 +186,13 @@ pnpm-lock.yaml
 # TypeScript build output
 dist/
 
+# Pytest
+.pytest_cache/
+
+# Runtime shader params written by the node, and local ComfyUI console dumps
+data/
+errors.md
+
 # Test coverage reports
 coverage/
 

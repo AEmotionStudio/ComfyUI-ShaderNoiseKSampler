@@ -54,7 +54,7 @@ The core innovation is treating latent space as a territory to be explored rathe
 ![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/shader_noise_ksampler_compare.webp)
 *(Same settings are used in both samplers)*
 
-**Shader Noise Neighboorhood Seed Travel**
+**Shader Noise Neighborhood Seed Travel**
 ![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/shader_noise_ksampler_seed_1.webp)
 *(Same settings are used in both samplers)*
 
@@ -276,7 +276,7 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 
 Generally, `ShaderNoiseKSampler` aims for broad compatibility. The following are often good starting points (refer to the Shader Matrix for more details):
 
--   **Recommended Samplers**: `euler_ancestral`, `dpm_2_ancestral`, `dpmppm_2_ancestral`, `lcm`
+-   **Recommended Samplers**: `euler_ancestral`, `dpm_2_ancestral`, `dpmpp_2s_ancestral`, `lcm`
 -   **Recommended Schedulers**: `beta` (often preferred), `normal`, `simple`, `kl_optimal`
 
 ### 🧱 Model Compatibility
@@ -408,4 +408,4 @@ For business inquiries or professional support, please contact me through my [we
 ## 📜 License
 
 This project is licensed under the **GNU General Public License v3.0**.
-See the `LICENSE` file for details (You may need to create this file if it doesn't exist, containing the GPL-3.0 license text). 
+See the `LICENSE` file for details.
