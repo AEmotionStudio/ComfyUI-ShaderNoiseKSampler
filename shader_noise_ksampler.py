@@ -20,6 +20,47 @@ from .core.debug import (
 )
 from .core.params import ShaderParams
 
+# NestedTensor latents (audio+video models such as MiniMax H3 or LTX AV) only exist
+# on newer ComfyUI builds, so keep importing optional.
+try:
+    from comfy.nested_tensor import NestedTensor
+except ImportError:
+    NestedTensor = None
+
+
+def is_nested_latent(samples):
+    """True for multi-stream latents (e.g. video + audio) rather than a plain tensor."""
+    return bool(getattr(samples, "is_nested", False))
+
+
+def primary_stream(samples):
+    """The stream the shader pipeline works on (the video/image stream of an AV latent)."""
+    return samples.unbind()[0] if is_nested_latent(samples) else samples
+
+
+def clone_latent(samples):
+    """Clone a latent, preserving nested structure."""
+    if is_nested_latent(samples):
+        return NestedTensor([t.clone() for t in samples.unbind()])
+    return samples.clone()
+
+
+def nested_noise_like(reference, primary_noise):
+    """
+    Match a dense noise tensor to a latent's stream layout.
+
+    Shader noise drives the primary (video) stream; the companion streams get plain
+    gaussian noise, since shader patterns are meaningless for e.g. audio latents.
+    comfy.sample.sample packs the streams together, so they must share device/dtype.
+    """
+    if not is_nested_latent(reference):
+        return primary_noise
+    noises = [primary_noise]
+    for t in reference.unbind()[1:]:
+        noises.append(torch.randn(t.shape, device=primary_noise.device, dtype=primary_noise.dtype))
+    return NestedTensor(noises)
+
+
 class CustomSigmaProvider:
     """
     A helper class to provide sigma values from a custom tensor,
@@ -225,11 +266,12 @@ class DenoisingStepCallback:
             # Check to avoid duplicate steps
             if should_save and current_step != self.last_saved_step:
                 try:
-                    # Safely get a copy of the tensor
-                    if hasattr(x, 'clone'):
-                        x_copy = x.clone()
+                    # Safely get a copy of the tensor (nested latents arrive as multi-stream)
+                    x_dense = primary_stream(x)
+                    if hasattr(x_dense, 'clone'):
+                        x_copy = x_dense.clone()
                     else:
-                        x_copy = x
+                        x_copy = x_dense
                     
                     # Capture intermediate denoising state
                     self.visualizer.save_denoising_step(
@@ -276,22 +318,24 @@ def shader_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, 
     torch.manual_seed(seed)
     
     # Extract latent samples
-    latent_samples = latent_image["samples"] 
-    is_video = len(latent_samples.shape) == 5
+    latent_samples = latent_image["samples"]
+    # Nested (multi-stream) latents: shape/noise handling below applies to the primary stream
+    latent_ref = primary_stream(latent_samples)
+    is_video = len(latent_ref.shape) == 5
     channel_dim = 2 if is_video else 1
     spatial_dims_start = 3 if is_video else 2
-    num_spatial_dims = len(latent_samples.shape) - spatial_dims_start
-    
+    num_spatial_dims = len(latent_ref.shape) - spatial_dims_start
+
     # Log initial tensors if debugging enabled
     if debugger.enabled:
         with debugger.time_operation("shader_ksampler_setup"):
-            debugger.analyze_tensor(latent_samples, "initial_latent")
+            debugger.analyze_tensor(latent_ref, "initial_latent")
             debugger.analyze_tensor(noise_tensor, "initial_noise")
-    
+
     # Save initial latent and noise if visualizer is enabled
     if visualizer.enabled:
         visualizer.save_latent_visualization(
-            latent_samples.clone(), 
+            latent_ref.clone(),
             "Initial Latent", 
             stage_info=stage_info,
             is_sample=True
@@ -306,18 +350,18 @@ def shader_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, 
     noise = noise_tensor.to(device)
     
     # Check if shapes match
-    if noise.shape != latent_samples.shape:
+    if noise.shape != latent_ref.shape:
         if debugger.enabled and debugger.debug_level >= 1:
-            print(f"⚠️ Shape mismatch detected: Noise {noise.shape} vs Latent {latent_samples.shape}")
-        
-        # Handle channel mismatch 
-        if noise.shape[channel_dim] != latent_samples.shape[channel_dim]:
+            print(f"⚠️ Shape mismatch detected: Noise {noise.shape} vs Latent {latent_ref.shape}")
+
+        # Handle channel mismatch
+        if noise.shape[channel_dim] != latent_ref.shape[channel_dim]:
             # Create a new noise tensor with the correct number of channels
-            new_noise_shape = list(latent_samples.shape)
+            new_noise_shape = list(latent_ref.shape)
             new_noise = torch.randn(new_noise_shape, device=device, dtype=noise.dtype)
-            
+
             # Copy over the values from the original noise tensor for channels that exist
-            min_channels = min(noise.shape[channel_dim], latent_samples.shape[channel_dim])
+            min_channels = min(noise.shape[channel_dim], latent_ref.shape[channel_dim])
             
             # Use slicing based on dimension type
             if is_video:
@@ -345,12 +389,12 @@ def shader_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, 
             spatial_mismatch = False
             for i in range(num_spatial_dims):
                 dim_index = spatial_dims_start + i
-                if noise.shape[dim_index] != latent_samples.shape[dim_index]:
+                if noise.shape[dim_index] != latent_ref.shape[dim_index]:
                     spatial_mismatch = True
                     break
-            
+
             if spatial_mismatch:
-                target_spatial_size = latent_samples.shape[spatial_dims_start:]
+                target_spatial_size = latent_ref.shape[spatial_dims_start:]
                 if debugger.enabled and debugger.debug_level >= 1:
                       print(f"Attempting to resize spatial dimensions {noise.shape[spatial_dims_start:]} -> {target_spatial_size}")
                       
@@ -402,11 +446,14 @@ def shader_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, 
     # Create our denoising step callback with frequency parameter
     callback = DenoisingStepCallback(visualizer, stage_info, denoise_visualization_frequency)
     
+    # Nested latents need noise with the same stream layout (comfy packs them together)
+    sampling_noise = nested_noise_like(latent_samples, noise)
+
     # Use comfy.sample.sample directly to apply our noise
     with debugger.time_operation("sampling_process") if debugger.enabled else contextlib.nullcontext():
         output_samples = comfy.sample.sample(
             model=model,
-            noise=noise,
+            noise=sampling_noise,
             steps=steps,
             cfg=cfg,
             sampler_name=sampler_name,
@@ -425,12 +472,12 @@ def shader_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, 
     
     # Log after sampling
     if debugger.enabled:
-        debugger.analyze_tensor(output_samples, "output_samples")
-    
+        debugger.analyze_tensor(primary_stream(output_samples), "output_samples")
+
     # Save output samples if visualizer is enabled
     if visualizer.enabled:
         visualizer.save_latent_visualization(
-            output_samples.clone(), 
+            primary_stream(output_samples).clone(),
             "Sampled Output", 
             stage_info=stage_info,
             is_sample=True
@@ -686,12 +733,16 @@ class ShaderNoiseKSampler:
                 if hasattr(model.diffusion_model, 'input_blocks') and hasattr(model.diffusion_model.input_blocks[0], 'in_channels'):
                     print(f"🔎 Model's input_blocks[0].in_channels: {model.diffusion_model.input_blocks[0].in_channels}")
         
-        # Check latent shape by looking at both the model and any wrapped models
-        if hasattr(model, 'latent_format') and hasattr(model.latent_format, 'latent_channels'):
-            channels = model.latent_format.latent_channels
-            if debugger.enabled:
-                print(f"✅ Found latent_format.latent_channels: {channels}")
-            return channels
+        # Authoritative source: ComfyUI's BaseModel always carries latent_format.
+        # latent_format lives on the inner BaseModel (model.model), not on the ModelPatcher,
+        # so check both. This generically covers Krea2, Flux, SD3, WAN, etc.
+        for candidate in (model, getattr(model, 'model', None)):
+            lf = getattr(candidate, 'latent_format', None)
+            channels = getattr(lf, 'latent_channels', None)
+            if channels:
+                if debugger.enabled:
+                    print(f"✅ Found latent_format.latent_channels: {channels}")
+                return channels
         
         # Examine diffusion model's channel structure
         if hasattr(model, 'diffusion_model'):
@@ -777,7 +828,7 @@ class ShaderNoiseKSampler:
             print(f"🔄 Using default channel count: 4")
         return 4
 
-    def _generate_shader_noise(self, latent_samples, target_noise_shape, shader_params, shader_type, seed, device="cuda", model=None, model_name=None, frame_count=1, frame_dim_idx=-1):
+    def _generate_shader_noise(self, latent_samples, target_noise_shape, shader_params, shader_type, seed, device="cuda", model=None, model_name=None, frame_count=1, frame_dim_idx=-1, channels_from_latent=False):
         """
         Generate noise using the specified shader
         
@@ -792,6 +843,8 @@ class ShaderNoiseKSampler:
             model_name: Optional model name for customized generation
             frame_count: Number of frames to generate (deduced from shape)
             frame_dim_idx: Index of the frame dimension (-1 if not video)
+            channels_from_latent: Channel count came from the latent itself (nested/multi-stream
+                latents), so a mismatch with the model's count is expected, not a problem
             
         Returns:
             torch.Tensor: Generated noise tensor with shape matching target_noise_shape
@@ -850,7 +903,7 @@ class ShaderNoiseKSampler:
             
             # Get target channels from model (should match 'channels' variable now)
             model_target_channels = self.get_model_channel_count(model)
-            if model_target_channels != channels:
+            if model_target_channels != channels and not channels_from_latent:
                 print(f"⚠️ Discrepancy: Model expects {model_target_channels} channels, but target noise shape indicates {channels}.")
                 # We will proceed with the 'channels' derived from target_noise_shape
         
@@ -1450,24 +1503,35 @@ class ShaderNoiseKSampler:
 
             # Save final output if visualizer is enabled
             if visualizer.enabled:
-                visualizer.capture_final_result(samples["samples"], {"method": "standard_ksampler", "stages": 0, "total_steps": total_sampling_steps})
+                visualizer.capture_final_result(primary_stream(samples["samples"]), {"method": "standard_ksampler", "stages": 0, "total_steps": total_sampling_steps})
                 visualizer.disable()
             
             return {"ui": {"images": [], "show_custom_preview": [show_custom_preview]}, "result": (samples,)}
         
         # Determine if we're working with a video or an image
+        # (nested/multi-stream latents report the primary stream's shape and device)
         latent_shape = latent_image["samples"].shape
         device = latent_image["samples"].device
         is_video = len(latent_shape) == 5
         batch_size = latent_shape[0]
-        
+
         if debugger.enabled:
             print(f"ℹ️ Total steps for sampling process: {total_sampling_steps} (derived from {'custom sigmas' if using_custom_sigmas else 'input'})")
 
         # Determine the target channel count early on using the model
         # Use model_to_use here to correctly get channels if model was wrapped (though usually wrapper forwards this)
         target_channels = self.get_model_channel_count(model_to_use)
-        
+
+        channels_from_latent = is_nested_latent(latent_image["samples"])
+        if channels_from_latent:
+            # Multi-stream latents (e.g. MiniMaxH3AV) report latent_channels as the max
+            # across streams, so the primary stream's own channel count is authoritative.
+            stream_channels = latent_shape[1]
+            if stream_channels != target_channels:
+                print(f"ShaderNoiseKSampler: Using primary stream's {stream_channels} channels "
+                      f"instead of the model's combined {target_channels} for noise generation")
+                target_channels = stream_channels
+
         # Initialize dimension indices and counts
         frames = 1
         channels = target_channels # Start assuming model's count
@@ -1589,9 +1653,15 @@ class ShaderNoiseKSampler:
         # Set initial random seed for consistency
         torch.manual_seed(seed)
         
-        # Extract the latent samples
-        latent_samples = latent_image["samples"].clone()
-        
+        # Extract the latent samples (may be a multi-stream NestedTensor, e.g. video+audio)
+        latent_samples = clone_latent(latent_image["samples"])
+        # The stream the shader pipeline operates on; identical to latent_samples when dense
+        latent_primary = primary_stream(latent_samples)
+        if is_nested_latent(latent_samples):
+            stream_shapes = [tuple(t.shape) for t in latent_samples.unbind()]
+            print(f"ShaderNoiseKSampler: Nested latent detected {stream_shapes} - "
+                  f"shader noise applies to the first stream, others get gaussian noise")
+
         # Generate initial noise if using full denoise
         if denoise > 0.0:
             if debugger.enabled:
@@ -1622,7 +1692,7 @@ class ShaderNoiseKSampler:
         # Save initial latent if visualizer is enabled
         if visualizer.enabled:
             visualizer.save_latent_visualization(
-                latent_samples.clone(),
+                latent_primary.clone(),
                 "Input Latent",
                 stage_info={"stage_type": "startup"},
                 is_sample=True
@@ -1709,7 +1779,7 @@ class ShaderNoiseKSampler:
                     
                 with debugger.time_operation(f"gen_seq_shader_{stage_idx}") if debugger.enabled else contextlib.nullcontext():
                     stage_shader_noise = self._generate_shader_noise(
-                        latent_samples=latent_samples, # Pass latent samples to derive shape if needed
+                        latent_samples=latent_primary, # Pass latent samples to derive shape if needed
                         target_noise_shape=noise_shape, # Pass the target noise shape
                         shader_params=stage_shader_params, 
                         shader_type=shader_type, 
@@ -1718,7 +1788,8 @@ class ShaderNoiseKSampler:
                         model=model_to_use,
                         model_name=model_name,
                         frame_count=frames, # Pass correct frame count
-                        frame_dim_idx=frame_dim_idx # Pass frame dimension index
+                        frame_dim_idx=frame_dim_idx, # Pass frame dimension index
+                        channels_from_latent=channels_from_latent
                     )
                 
                 if debugger.enabled and debugger.debug_level >= 2:
@@ -1835,13 +1906,13 @@ class ShaderNoiseKSampler:
                         base_noise=base_noise_sequential.clone(),
                         shader_noise=stage_shader_noise.clone(),
                         blended_noise=final_noise.clone(),
-                        result=current_latent["samples"].clone()
+                        result=primary_stream(current_latent["samples"]).clone()
                     )
                 
                 if debugger.enabled:
                     debugger.log_stage_end("sequential", stage_idx)
                     if debugger.debug_level >= 2:
-                        debugger.analyze_tensor(current_latent["samples"], f"seq_stage{stage_idx}_result")
+                        debugger.analyze_tensor(primary_stream(current_latent["samples"]), f"seq_stage{stage_idx}_result")
         
         # PHASE 2: Injection Shader Stages S{αi}∘K{βi}
         # Only proceed if we have injection stages to run
@@ -1888,12 +1959,12 @@ class ShaderNoiseKSampler:
                     raise TypeError(f"Initial shader_ksampler returned unexpected type/format: {type(initial_result)}")
 
                 if debugger.enabled and debugger.debug_level >= 2:
-                    debugger.analyze_tensor(current_latent["samples"], "after_initial_denoising")
+                    debugger.analyze_tensor(primary_stream(current_latent["samples"]), "after_initial_denoising")
                 
                 # Save initial denoising result if visualizer is enabled
                 if visualizer.enabled:
                     visualizer.save_latent_visualization(
-                        current_latent["samples"].clone(),
+                        primary_stream(current_latent["samples"]).clone(),
                         "Initial Denoising Result",
                         stage_info={"stage_type": "initial_denoising"},
                         is_sample=True
@@ -1927,7 +1998,7 @@ class ShaderNoiseKSampler:
             
             # Generate base shader noise for injection stages
             base_shader_noise_injection = self._generate_shader_noise(
-                latent_samples=latent_samples, # Pass latent samples
+                latent_samples=latent_primary, # Pass latent samples
                 target_noise_shape=noise_shape, # Pass the target noise shape
                 shader_params=shader_params, 
                 shader_type=shader_type, 
@@ -1936,7 +2007,8 @@ class ShaderNoiseKSampler:
                 model=model_to_use,
                 model_name=model_name,
                 frame_count=frames, # Pass correct frame count
-                frame_dim_idx=frame_dim_idx # Pass frame dimension index
+                frame_dim_idx=frame_dim_idx, # Pass frame dimension index
+                channels_from_latent=channels_from_latent
             )
             
             # Save base shader noise for injection if visualizer is enabled
@@ -2083,13 +2155,13 @@ class ShaderNoiseKSampler:
                         base_noise=base_noise_injection.clone(),
                         shader_noise=shader_noise.clone(),
                         blended_noise=final_noise.clone(),
-                        result=current_latent["samples"].clone()
+                        result=primary_stream(current_latent["samples"]).clone()
                     )
                 
                 if debugger.enabled:
                     debugger.log_stage_end("injection", stage_idx)
                     if debugger.debug_level >= 2:
-                        debugger.analyze_tensor(current_latent["samples"], f"inj_stage{stage_idx}_result")
+                        debugger.analyze_tensor(primary_stream(current_latent["samples"]), f"inj_stage{stage_idx}_result")
         
         # Reset random seed state when done
         torch.manual_seed(torch.seed())
@@ -2121,7 +2193,7 @@ class ShaderNoiseKSampler:
                 "noise_transform": noise_transform
             }
             # Use a copy of the tensor to ensure we don't modify the output
-            visualizer.capture_final_result(current_latent["samples"].clone(), final_metadata)
+            visualizer.capture_final_result(primary_stream(current_latent["samples"]).clone(), final_metadata)
             # Get visualization paths for UI display
             viz_paths = visualizer.get_ui_image_paths()
             visualizer.disable()
