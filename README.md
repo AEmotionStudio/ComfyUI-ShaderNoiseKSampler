@@ -1,6 +1,6 @@
 # ComfyUI-ShaderNoiseKSampler
 
-![Version](https://img.shields.io/badge/version-1.3.5-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
@@ -18,7 +18,9 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that blends stan
 ![ShaderNoiseKSampler Showcase PNG](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/shader_noise_ksampler.png)
 
 > [!IMPORTANT]
->The Shader Noise KSampler contains a shader display and requires saving, while the Shader Noise KSampler (Direct) *does not* contain a shader display and *does not* require saving. The shader display will help you better understand the parameter controls visually, while the (Direct) version is better for ideation and enables finer control over input values.
+> **Use `Shader Noise KSampler (Direct)`.** Since 2.0.0 it carries both halves: every shader parameter is a node input, and the live shader display is attached to it. Nothing needs saving, each queued run keeps its own parameters, and the display still shows what the controls are doing.
+>
+> The original `Shader Noise KSampler` is deprecated and hidden from node search. It still loads in existing workflows, where it keeps reading its parameters from `data/shader_params.json` and samples in `legacy` mode.
 
 **Shader Noise KSampler**
 ![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/shader_noise_ksampler_save.webp)
@@ -93,8 +95,7 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 -   **🔬 Multi-Stage Shader Application**:
     -   **Sequential Stages**: Apply shader noise over segments of the diffusion process.
     -   **Injection Stages**: Apply shader noise at specific, discrete steps.
--   **🎨 Twelve Shader Noise Archetypes**: Explore a vast range of patterns:
-    -   Tensor Field, Cellular, Domain Warp, Fractal (FBM), Perlin, Waves, Gaussian, Heterogeneous FBM, Interference, Spectral, 3D Projection, Curl Noise.
+-   **🎨 Three Shader Noise Archetypes**: `Domain Warp` for flowing distortions, `Tensor Field` for structured directional patterns, and `Curl Noise` for fluid motion. Each is a distinct lens on the latent neighbourhood, and each supports shape masks, colour schemes and transforms.
 -   **🎭 Sophisticated Blending & Transformations**:
     -   **Blend Modes**: Combine shader noise with base noise using modes like Multiply, Add, Overlay, Screen, Soft Light, Hard Light, Difference.
     -   **Noise Transformations**: Apply mathematical operations (Absolute, Sin, Square Root, etc.) to shader noise before blending.
@@ -262,6 +263,7 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 | **`blend_mode`**             | How shader noise combines with base noise (e.g., `multiply`, `add`).                                       | `multiply`        |
 | **`noise_transform`**        | Math operation on shader noise (e.g., `none`, `absolute`, `sin`).                                          | `none`            |
 | **`use_temporal_coherence`** | For consistent noise in animations or exploration.                                                         | `false`           |
+| **`sampling_mode`**          | `standard` samples one schedule split into stage segments, and honours `denoise` and `custom_sigmas`. `legacy` is the pre-2.0.0 behaviour, selected automatically for older workflows so their seeds reproduce. | `standard`        |
 | **`shader_noise_type (per stage)`** | The base pattern (e.g., `domain_warp`, `tensor_field`, `curl_noise`).                                          | `domain_warp`          |
 | **`noise_scale (per stage)`**    | The "Zoom Control" - determines how "zoomed in" or "zoomed out" you are in latent space.                  | `1.0`             |
 | **`noise_octaves (per stage)`**  | The "Detail Slider" - controls the level of detail and complexity in your noise pattern.                  | `1`               |
@@ -346,9 +348,11 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 
 ### Known Issues
 
--   **Optimal Use Cases**: The `ShaderNoiseKSampler` currently demonstrates its strongest capabilities in text-to-video and text-to-image generation. Performance with image-to-video or video-to-video workflows may not be as pronounced.
+-   **Fixed in 2.0.0 — Image-to-image and video-to-video**: `denoise` was ignored whenever a sequential stage ran (the default), so the input was fully regenerated instead of partially denoised. In `standard` sampling mode `denoise` now reaches the schedule. This was the cause of the weaker i2v/v2v results reported for earlier versions.
 
--   **Parameter Queuing with Non-Direct KSampler**: The standard (non-direct) `ShaderNoiseKSampler` node does not support queuing of differing parameter sets for consecutive runs i.e. you can't save over older parameters because their read at runtime. For rapid iteration and experimentation with varied parameters without needing to save each configuration, the `ShaderNoiseSampler (direct)` variant is recommended.
+-   **Fixed in 2.0.0 — Parameter queuing**: the deprecated `ShaderNoiseKSampler` read its parameters from a file at runtime, so queued runs could not carry different settings. `Shader Noise KSampler (Direct)` takes every shader parameter as a node input, so queued runs each keep their own values.
+
+-   **Legacy sampling mode**: nodes loaded from workflows saved before 2.0.0 switch to `sampling_mode: legacy` so their seeds still reproduce. Legacy keeps the old behaviour, including the issues above. Switch to `standard` for the corrected sampling; the same seed will produce a different image.
 
   > [!WARNING]
     **Potential for Visual Instability**: Certain parameter explorations, particularly with high intensity or complex interactions, may result in visually disruptive outputs such as flashing images or harsh artifacts. Users are advised to iterate with caution.
