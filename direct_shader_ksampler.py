@@ -1,8 +1,10 @@
 import comfy.sample
 from .shader_params_reader import get_shader_params, ShaderParamsReader
 from .shader_noise_ksampler import ShaderNoiseKSampler, get_visualizer, set_debug_level
+from .pipelines import standard as standard_pipeline
 
-class DirectShaderNoiseKSampler(ShaderNoiseKSampler):   
+
+class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -23,154 +25,126 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                 "blend_mode": (["normal", "add", "multiply", "screen", "overlay", "soft_light", "hard_light", "difference"], {"default": "multiply", "tooltip": "Method used to blend the shader noise with the base noise"}),
                 "noise_transform": (["none", "reverse", "inverse", "absolute", "square", "sqrt", "log", "sin", "cos"], {"default": "none", "tooltip": "Apply mathematical transformations to the noise for creative effects"}),
                 "use_temporal_coherence": ("BOOLEAN", {"default": False, "tooltip": "Ensures consistent noise patterns. For sequences like video frames, it helps maintain frame-to-frame consistency (e.g., using the same base seed and 4D noise). For single image generations, it ensures the base noise is derived consistently from the main seed."}),
-                
+
                 # New direct shader parameters
                 "shader_type": (["domain_warp", "tensor_field", "curl_noise"], {"default": "domain_warp", "tooltip": "Select the type of shader noise pattern to use in the visualization [different types have different characteristic outputs]"}),
                 "shape_type": (["none", "radial", "linear", "spiral", "checkerboard", "spots", "hexgrid", "stripes", "gradient", "vignette", "cross", "stars", "triangles", "concentric", "rays", "zigzag"], {"default": "none", "tooltip": "Apply a shape mask to the shader noise pattern to create more complex structures [not post processing - is applied to shader noise pattern before rendering]"}),
                 "color_scheme": (["none", "blue_red", "viridis", "plasma", "inferno", "magma", "turbo", "jet", "rainbow", "cool", "hot", "parula", "hsv", "autumn", "winter", "spring", "summer", "copper", "pink", "bone", "ocean", "terrain", "neon", "fire"], {"default": "none", "tooltip": "Choose a color palette to apply to the shader noise visualization [not post processing - is applied to the shader noise pattern before rendering]"}),
                 "noise_scale": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.001, "tooltip": "Adjust the scale of the shader noise pattern - lower values create larger, zoomed-in features; higher values create smaller, zoomed-out features [small value shifts can lead to larger variations]"}),
-                "octaves": ("FLOAT", {"default": 1.0, "min": 1.0, "max": 8.0, "step": 0.1, "tooltip": "Number of shader noise layers to combine - higher values add more detail and complexity [small value shifts can lead to larger variations]"}),
+                "octaves": ("FLOAT", {"default": 1.0, "min": 1.0, "max": 8.0, "step": 0.1, "tooltip": "Number of shader noise layers to combine - higher values add more detail and complexity. Fractional values blend between two layer counts (standard sampling only)"}),
                 "warp_strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 5.0, "step": 0.001, "tooltip": "Control how much the shader noise pattern warps and distorts - higher values create more swirling or complex transformations [small adjustments are good for subtle variations]"}),
                 "shape_mask_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.0001, "tooltip": "Adjust the intensity of the shape mask\'s effect on the shader noise pattern - higher values make the shape more prominent [small adjustments are good for subtle variations - not effective without shape mask]"}),
                 "phase_shift": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 2.0, "step": 0.0001, "tooltip": "Shift the phase of the shader noise pattern to create different variations or animate patterns over time [small adjustments are good for subtle variations]"}),
                 "color_intensity": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.0001, "tooltip": "Adjust the intensity of the color scheme application - lower values are more desaturated, higher values are more vibrant [small adjustments are good for subtle variations - not effective without color scheme]"}),
             },
+            # Appended after the required widgets on purpose: saved workflows map
+            # widget values by position, so new widgets must come last.
             "optional": {
                 "custom_sigmas": ("SIGMAS", {"tooltip": "Optional custom sigma schedule to override the model's default schedule"}),
-            },
-            "hidden": {
-                "debug_level": (["0-Off", "1-Basic", "2-Detailed", "3-Verbose"], {"default": "0-Off", "tooltip": "Enable debugging at specified level to understand what's happening during shader generation and sampling."}),
-                "fast_high_channel_noise": ("BOOLEAN", {"default": False, "tooltip": "Use a faster, simplified noise generation method for models with many channels (>16), like LTXV."}),
+                "sampling_mode": (["standard", "legacy"], {"default": "standard", "tooltip": "standard: stages are segments of one sampling run, denoise and custom sigmas are honoured, and blended noise keeps the distribution the model expects. legacy: the pre-2.0 behaviour, kept so older workflows reproduce their seeds."}),
                 "sequential_distribution": (["uniform", "linear_decrease", "linear_increase", "gaussian", "first_stronger", "last_stronger"], {"default": "linear_decrease", "tooltip": "How shader strength is distributed across sequential stages"}),
                 "injection_distribution": (["uniform", "linear_decrease", "linear_increase", "gaussian", "first_stronger", "last_stronger"], {"default": "linear_decrease", "tooltip": "How shader strength is distributed across injection stages"}),
-                "denoise_visualization_frequency": (["Every step", "25% intervals", "10% intervals", "4 steps", "2 steps"], {"default": "Every step", "tooltip": "How often to save images during the denoising process. Higher frequency means more images but slower generation."}),
-                "target_attribute_changes": ("STRING", {"forceInput": True, "tooltip": "Connect output from ParameterResponseMapperNode here"}),
-            }
+                "fast_high_channel_noise": ("BOOLEAN", {"default": False, "tooltip": "Use a faster, simplified noise generation method for models with many channels (>16), like LTXV"}),
+            },
         }
-    
+
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "sample"
     CATEGORY = "sampling"
-    
-    @classmethod
-    def REGISTER_MATRIX_BUTTON(s):
-        return True
 
-    @classmethod
-    def IS_CHANGED(s, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
-                  denoise=1.0, sequential_stages=2, injection_stages=3, shader_strength=0.3, blend_mode="multiply", 
-                  noise_transform="none", sequential_distribution="linear_decrease", injection_distribution="linear_decrease",
-                  use_temporal_coherence=False, debug_level="0-Off", fast_high_channel_noise=False, 
-                  denoise_visualization_frequency="25% intervals", custom_sigmas=None, target_attribute_changes="",
-                  shader_type="domain_warp", shape_type="none", color_scheme="none", noise_scale=1.0, octaves=1,
-                  warp_strength=0.5, shape_mask_strength=1.0, phase_shift=0.5, color_intensity=0.8):
-        # Ensure all direct parameters also trigger re-execution when changed
-        return (seed, steps, cfg, sampler_name, scheduler, denoise, sequential_stages,
-                injection_stages, shader_strength, blend_mode, noise_transform,
-                sequential_distribution, injection_distribution, use_temporal_coherence,
-                debug_level, denoise_visualization_frequency, custom_sigmas, 
-                target_attribute_changes, fast_high_channel_noise,
-                # Include direct shader parameters
-                shader_type, shape_type, color_scheme, noise_scale, octaves,
-                warp_strength, shape_mask_strength, phase_shift, color_intensity)
+    def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+               denoise=1.0, sequential_stages=1, injection_stages=0, shader_strength=0.3, blend_mode="multiply",
+               noise_transform="none", use_temporal_coherence=False,
+               shader_type="domain_warp", shape_type="none", color_scheme="none", noise_scale=1.0, octaves=1.0,
+               warp_strength=0.5, shape_mask_strength=1.0, phase_shift=0.5, color_intensity=0.8,
+               sampling_mode="standard", sequential_distribution="linear_decrease",
+               injection_distribution="linear_decrease", fast_high_channel_noise=False, custom_sigmas=None,
+               # Accepted for the legacy path and for older callers; not exposed as inputs.
+               debug_level="0-Off", denoise_visualization_frequency="25% intervals", target_attribute_changes=""):
+        """Run the shader noise sampler with direct parameter inputs."""
+        debugger = set_debug_level(int(debug_level.split("-")[0]))
+        get_visualizer()
 
-    def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, 
-              denoise=1.0, sequential_stages=2, injection_stages=3, shader_strength=0.3, blend_mode="multiply", 
-              noise_transform="none", sequential_distribution="linear_decrease", injection_distribution="linear_decrease",
-              use_temporal_coherence=False, debug_level="0-Off", fast_high_channel_noise=False, 
-              denoise_visualization_frequency="25% intervals", custom_sigmas=None, target_attribute_changes="",
-              shader_type="tensor_field", shape_type="none", color_scheme="none", noise_scale=1.0, octaves=3.0,
-              warp_strength=0.5, shape_mask_strength=1.0, phase_shift=0.0, color_intensity=0.8):
-        """
-        Run the multi-stage shader noise k-sampler with direct parameter inputs
-        """
-        # Parse debug level from the selected option
-        debug_level_value = int(debug_level.split("-")[0])
-        
-        # Set the debug level in the shader debugger
-        debugger = set_debug_level(debug_level_value)
-        
-        # Get the visualizer
-        visualizer = get_visualizer()
-
-        # Get device early from latent_image
-        device = latent_image["samples"].device
-        if debugger.enabled:
-            print(f"ℹ️ Using device: {device}")
-
-        # Get the shader parameters, but we'll modify them with our direct inputs
+        # Start from the saved params file, then override with this node's inputs.
         shader_params = get_shader_params()
-        
-        # Override shader parameters with direct inputs - ensure all naming variants are set
-        # Shader Type (set all variants)
+
+        # Every generator reads a different spelling of these, so set all variants.
         shader_params["shader_type"] = shader_type
         shader_params["shaderType"] = shader_type
-        
-        # Shape Type (set all variants)
+
         shader_params["shape_type"] = shape_type
         shader_params["shaderShapeType"] = shape_type
-        
-        # Color Scheme
+
         shader_params["colorScheme"] = color_scheme
         shader_params["color_scheme"] = color_scheme
-        
-        # Noise Scale (set all variants)
+
         shader_params["scale"] = noise_scale
         shader_params["shaderScale"] = noise_scale
-        
-        # Octaves (set all variants)
-        shader_params["octaves"] = float(octaves)  # Ensure float for compatibility
+
+        shader_params["octaves"] = float(octaves)
         shader_params["shaderOctaves"] = float(octaves)
-        
-        # Warp Strength (set all variants)
+
         shader_params["warp_strength"] = warp_strength
         shader_params["shaderWarpStrength"] = warp_strength
-        
-        # Shape Mask Strength (set all variants)
+
         shader_params["shapemaskstrength"] = shape_mask_strength
         shader_params["shaderShapeStrength"] = shape_mask_strength
-        shader_params["shapeMaskStrength"] = shape_mask_strength  # Added capital M version
-        shader_params["shape_mask_strength"] = shape_mask_strength  # Added underscore version
-        shader_params["shape_strength"] = shape_mask_strength  # Added alternative name checked in shader_to_tensor.py
-        
-        # Phase Shift (set all variants)
+        shader_params["shapeMaskStrength"] = shape_mask_strength
+        shader_params["shape_mask_strength"] = shape_mask_strength
+        shader_params["shape_strength"] = shape_mask_strength
+
         shader_params["phase_shift"] = phase_shift
         shader_params["shaderPhaseShift"] = phase_shift
-        
-        # Color Intensity (set all variants)
+
         shader_params["intensity"] = color_intensity
         shader_params["shaderColorIntensity"] = color_intensity
-        
-        # Other parameters
-        shader_params["time"] = shader_params.get("time", 0.0)  # Keep existing time or set to 0
-        shader_params["base_seed"] = seed  # Set base seed for temporal coherence
+
+        shader_params["time"] = shader_params.get("time", 0.0)
+        shader_params["base_seed"] = seed
         shader_params["useTemporalCoherence"] = use_temporal_coherence
-        shader_params["temporal_coherence"] = use_temporal_coherence  # Add alternative name
+        shader_params["temporal_coherence"] = use_temporal_coherence
         shader_params["fast_high_channel_noise"] = fast_high_channel_noise
-        
-        # Visualization type (default to 3/ellipses as in the default parameters)
         shader_params["visualization_type"] = shader_params.get("visualization_type", 3)
 
-        # Apply security validation and sanitization to the overridden parameters
-        # This prevents DoS attacks (e.g. excessive octaves) and ensures parameter safety
+        # Clamp octaves, seeds and enum values before they reach noise generation.
         shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
+        # Sanitising truncates octaves to an integer; the standard pipeline
+        # interpolates between integer renders, so keep the requested value.
+        shader_params["octaves"] = float(octaves)
 
         if debugger.enabled:
-            # Debug output for direct parameters
-            print(f"🔧 Direct Shader Parameters:")
-            print(f"   Shader Type: {shader_type}")
-            print(f"   Shape Type: {shape_type}")
-            print(f"   Color Scheme: {color_scheme}")
-            print(f"   Noise Scale: {noise_scale}")
-            print(f"   Octaves: {octaves}")
-            print(f"   Warp Strength: {warp_strength}")
-            print(f"   Shape Mask Strength: {shape_mask_strength}")
-            print(f"   Phase Shift: {phase_shift}")
-            print(f"   Color Intensity: {color_intensity}")
-        
-        # Call parent class sample method with the modified shader params
-        # Use the parent class implementation from ShaderNoiseKSampler
-        result = super().sample(
+            print(f"🔧 Direct shader parameters: type={shader_type} shape={shape_type} colour={color_scheme} "
+                  f"scale={noise_scale} octaves={octaves} warp={warp_strength} phase={phase_shift}")
+
+        if sampling_mode == "legacy":
+            return super().sample(
+                model=model,
+                seed=seed,
+                steps=steps,
+                cfg=cfg,
+                sampler_name=sampler_name,
+                scheduler=scheduler,
+                positive=positive,
+                negative=negative,
+                latent_image=latent_image,
+                denoise=denoise,
+                sequential_stages=sequential_stages,
+                injection_stages=injection_stages,
+                shader_strength=shader_strength,
+                blend_mode=blend_mode,
+                noise_transform=noise_transform,
+                sequential_distribution=sequential_distribution,
+                injection_distribution=injection_distribution,
+                use_temporal_coherence=use_temporal_coherence,
+                debug_level=debug_level,
+                fast_high_channel_noise=fast_high_channel_noise,
+                denoise_visualization_frequency=denoise_visualization_frequency,
+                custom_sigmas=custom_sigmas,
+                target_attribute_changes=target_attribute_changes,
+                shader_params_override=shader_params,
+            )
+
+        result = standard_pipeline.run(
             model=model,
             seed=seed,
             steps=steps,
@@ -179,22 +153,28 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
             scheduler=scheduler,
             positive=positive,
             negative=negative,
-            latent_image=latent_image,
+            latent=latent_image,
             denoise=denoise,
             sequential_stages=sequential_stages,
             injection_stages=injection_stages,
             shader_strength=shader_strength,
             blend_mode=blend_mode,
             noise_transform=noise_transform,
+            shader_params=shader_params,
+            shader_type=shader_type,
             sequential_distribution=sequential_distribution,
             injection_distribution=injection_distribution,
             use_temporal_coherence=use_temporal_coherence,
-            debug_level=debug_level,
-            fast_high_channel_noise=fast_high_channel_noise,
-            denoise_visualization_frequency=denoise_visualization_frequency,
             custom_sigmas=custom_sigmas,
-            target_attribute_changes=target_attribute_changes,
-            shader_params_override=shader_params,  # Pass our modified shader params to parent
         )
-        
-        return result 
+
+        shader_info = {
+            "shader_type": shader_type,
+            "shader_strength": shader_strength,
+            "sequential_stages": sequential_stages,
+            "injection_stages": injection_stages,
+            "blend_mode": blend_mode,
+            "noise_transform": noise_transform,
+            "sampling_mode": sampling_mode,
+        }
+        return {"ui": {"images": [], "shader_info": shader_info}, "result": (result,)}

@@ -1,0 +1,106 @@
+"""
+The node routes to the right pipeline, and standard mode samples one trajectory.
+
+Measured through the node with a recording sampler:
+
+    standard, 1 stage      1 call  x 20 steps, from sigma 14.61
+    standard, 2 stages     2 calls x 10 steps, from 14.61 then 1.48
+    standard, denoise 0.6  1 call  x 20 steps, from 2.23
+    standard, 3 injections 4 calls x  5 steps, 14.61 / 3.87 / 1.48 / 0.60
+    legacy,   2 stages     2 calls, each building its own full schedule
+
+The second sigma in the two-stage standard run is the point: legacy restarted
+every stage at 14.61, which on flow models discards the previous stage entirely.
+"""
+from unittest import mock
+
+import pytest
+import torch
+
+import comfy.sample
+from helpers import FakeModel
+from snk.direct_shader_ksampler import DirectShaderNoiseKSampler
+
+
+@pytest.fixture
+def sampler_calls():
+    calls = []
+
+    def fake_sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative,
+                    latent_image, denoise=1.0, disable_noise=False, start_step=None, last_step=None,
+                    force_full_denoise=False, noise_mask=None, sigmas=None, callback=None,
+                    disable_pbar=False, seed=None):
+        calls.append({
+            "steps": steps,
+            "sigmas": None if sigmas is None else sigmas.detach().clone(),
+            "denoise": denoise,
+        })
+        result = latent_image + 0.1 * noise
+        if callback is not None:
+            callback(max(steps - 1, 0), result * 0.5, result, steps)
+        return result
+
+    with mock.patch.object(comfy.sample, "sample", fake_sample):
+        yield calls
+
+
+def run_node(**overrides):
+    kwargs = dict(
+        model=FakeModel("eps"), seed=8888, steps=20, cfg=7.0, sampler_name="euler",
+        scheduler="normal", positive=[], negative=[],
+        latent_image={"samples": torch.zeros(1, 4, 16, 16)}, denoise=1.0,
+        sequential_stages=1, injection_stages=0, shader_strength=0.3, blend_mode="multiply",
+        noise_transform="none", use_temporal_coherence=False, shader_type="domain_warp",
+        shape_type="none", color_scheme="none", noise_scale=1.0, octaves=1.0,
+        warp_strength=0.5, shape_mask_strength=1.0, phase_shift=0.5, color_intensity=0.8,
+    )
+    kwargs.update(overrides)
+    return DirectShaderNoiseKSampler().sample(**kwargs)
+
+
+@pytest.mark.parametrize("mode", ["standard", "legacy"])
+def test_both_modes_return_a_latent(sampler_calls, mode):
+    result = run_node(sampling_mode=mode)
+    assert "result" in result and isinstance(result["result"], tuple)
+    assert result["result"][0]["samples"].shape == (1, 4, 16, 16)
+
+
+def test_standard_mode_samples_one_schedule(sampler_calls):
+    run_node(sampling_mode="standard", sequential_stages=2)
+
+    assert len(sampler_calls) == 2
+    first, second = sampler_calls
+    assert first["steps"] == second["steps"] == 10
+    assert first["sigmas"] is not None
+    # The second segment continues where the first stopped instead of restarting.
+    assert float(second["sigmas"][0]) < float(first["sigmas"][0])
+    assert torch.equal(first["sigmas"][-1], second["sigmas"][0])
+
+
+def test_legacy_mode_still_builds_its_own_schedule(sampler_calls):
+    """The frozen path passes no sigmas, so KSampler rebuilds a full one per stage."""
+    run_node(sampling_mode="legacy", sequential_stages=2)
+
+    assert len(sampler_calls) == 2
+    assert all(call["sigmas"] is None for call in sampler_calls)
+
+
+def test_denoise_only_reaches_the_schedule_in_standard_mode(sampler_calls):
+    run_node(sampling_mode="standard", denoise=1.0)
+    full_start = float(sampler_calls[0]["sigmas"][0])
+
+    sampler_calls.clear()
+    run_node(sampling_mode="standard", denoise=0.6)
+    assert float(sampler_calls[0]["sigmas"][0]) < full_start
+
+
+def test_injection_stages_never_leave_a_one_step_segment(sampler_calls):
+    run_node(sampling_mode="standard", injection_stages=3)
+
+    assert sum(call["steps"] for call in sampler_calls) == 20
+    assert all(call["steps"] >= 2 for call in sampler_calls)
+
+
+def test_standard_mode_is_the_default(sampler_calls):
+    run_node(sequential_stages=2)
+    assert all(call["sigmas"] is not None for call in sampler_calls)
