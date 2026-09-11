@@ -2,46 +2,6 @@ import comfy.sample
 from .shader_params_reader import get_shader_params, ShaderParamsReader
 from .shader_noise_ksampler import ShaderNoiseKSampler, get_visualizer, set_debug_level
 
-# Define a simple parameter response mapper if needed
-class ParameterResponseMapper:
-    """Simplified version of ParameterResponseMapper for direct shader parameters"""
-    def __init__(self, model_type="SD1.5"):
-        self.model_type = model_type
-    
-    def get_recommended_adjustments(self, target_attrs, current_params, max_params=2):
-        """Return recommended parameter adjustments based on target attributes"""
-        # This is a simple implementation that could be expanded
-        adjustments = {}
-        
-        if not target_attrs or not isinstance(target_attrs, dict):
-            return adjustments
-            
-        # Simple mapping from attributes to shader parameters
-        for attr, value in target_attrs.items():
-            # Only adjust if the attribute is strongly present (value > 0.5)
-            if value < 0.5:
-                continue
-                
-            # Map common attributes to shader parameters
-            if attr == "detailed" and "octaves" in current_params:
-                adjustments["octaves"] = min(current_params["octaves"] + 1, 8)
-            elif attr == "smooth" and "octaves" in current_params:
-                adjustments["octaves"] = max(current_params["octaves"] - 1, 1)
-            elif attr == "twisted" and "warp_strength" in current_params:
-                adjustments["warp_strength"] = min(current_params["warp_strength"] + 0.2, 5.0)
-            elif attr == "flowing" and "phase_shift" in current_params:
-                adjustments["phase_shift"] = (current_params["phase_shift"] + 0.5) % 6.28
-            elif attr == "large_scale" and "scale" in current_params:
-                adjustments["scale"] = min(current_params["scale"] + 0.5, 10.0)
-            elif attr == "small_scale" and "scale" in current_params:
-                adjustments["scale"] = max(current_params["scale"] - 0.5, 0.1)
-                
-            # Limit number of adjustments
-            if len(adjustments) >= max_params:
-                break
-                
-        return adjustments
-
 class DirectShaderNoiseKSampler(ShaderNoiseKSampler):   
     @classmethod
     def INPUT_TYPES(s):
@@ -194,74 +154,6 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
         # Apply security validation and sanitization to the overridden parameters
         # This prevents DoS attacks (e.g. excessive octaves) and ensures parameter safety
         shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
-
-        # --- Handle Parameter Response Mapper Integration ---
-        if target_attribute_changes and target_attribute_changes.strip():
-            if debugger.enabled:
-                print("🧠 Applying Parameter Response Mapper adjustments...")
-            try:
-                import json
-                target_attrs = json.loads(target_attribute_changes)
-                
-                if isinstance(target_attrs, dict) and target_attrs:
-                    # Determine model type for mapper (simple inference)
-                    model_name_lower = getattr(model, 'model_name', "").lower()
-                    if "sdxl" in model_name_lower:
-                        mapper_model_type = "SDXL"
-                    else:
-                        mapper_model_type = "SD1.5" # Default
-                    
-                    # Use our local ParameterResponseMapper
-                    mapper = ParameterResponseMapper(model_type=mapper_model_type)
-                    
-                    # Extract current shader parameters relevant to the mapper
-                    # Use validated values from shader_params instead of raw arguments
-                    current_mapper_params = {
-                        "scale": shader_params.get("scale", 1.0),
-                        "octaves": float(shader_params.get("octaves", 3.0)),
-                        "warp_strength": shader_params.get("warp_strength", 0.5),
-                        "phase_shift": shader_params.get("phase_shift", 0.0)
-                    }
-
-                    if debugger.enabled and debugger.debug_level >= 2:
-                        print(f"   Mapper using model_type: {mapper_model_type}")
-                        print(f"   Target Attributes: {target_attrs}")
-                        print(f"   Current Params for Mapper: {current_mapper_params}")
-
-                    # Get recommendations
-                    recommendations = mapper.get_recommended_adjustments(
-                        target_attrs,
-                        current_mapper_params,
-                        max_params=2
-                    )
-                    
-                    if recommendations:
-                        if debugger.enabled:
-                            print(f"✅ Mapper recommended adjustments: {recommendations}")
-                        # Apply recommendations to the shader_params - set ALL variants
-                        for param, value in recommendations.items():
-                            # Update all possible parameter naming variants
-                            if param == "scale":
-                                shader_params["scale"] = value
-                                shader_params["shaderScale"] = value
-                            elif param == "octaves":
-                                shader_params["octaves"] = float(value)
-                                shader_params["shaderOctaves"] = float(value)
-                            elif param == "warp_strength":
-                                shader_params["warp_strength"] = value
-                                shader_params["shaderWarpStrength"] = value
-                            elif param == "phase_shift":
-                                shader_params["phase_shift"] = value
-                                shader_params["shaderPhaseShift"] = value
-                            else:
-                                # For any other parameters
-                                shader_params[param] = value
-
-                        # Re-validate after mapper changes to ensure safety
-                        # This prevents bypasses where mapper logic (e.g. increments) might produce unsafe values
-                        shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
-            except Exception as e:
-                print(f"❌ Error processing target_attribute_changes: {e}. Skipping mapper adjustments.")
 
         if debugger.enabled:
             # Debug output for direct parameters
