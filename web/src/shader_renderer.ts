@@ -1214,7 +1214,57 @@ const FRAGMENT_SHADER_FOOTER = `
     name: "ShaderNoiseKSampler.ShaderRenderer",
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async beforeRegisterNodeDef(nodeType: any, nodeData: ComfyNodeData) {
-        if (nodeData.name !== "ShaderNoiseKSampler") return;
+        // The Direct node carries the same shader controls as real node inputs, so
+        // there the preview mirrors those widgets instead of adding its own copies.
+        const isDirect = nodeData.name === "ShaderNoiseKSamplerDirect";
+        if (nodeData.name !== "ShaderNoiseKSampler" && !isDirect) return;
+
+        /** Direct node input widget -> the property the WebGL uniforms read */
+        const INPUT_TO_PROPERTY: Record<string, string> = {
+            shader_type: "shaderType",
+            shape_type: "shaderShapeType",
+            color_scheme: "colorScheme",
+            noise_scale: "shaderScale",
+            octaves: "shaderOctaves",
+            warp_strength: "shaderWarpStrength",
+            shape_mask_strength: "shaderShapeStrength",
+            phase_shift: "shaderPhaseShift",
+            color_intensity: "shaderColorIntensity",
+        };
+
+        /** Copy the node's input values into the properties the preview renders from. */
+        const syncFromInputs = (node: ShaderRendererNode): void => {
+            if (!node.widgets) return;
+            for (const widget of node.widgets) {
+                const property = widget.name ? INPUT_TO_PROPERTY[widget.name] : undefined;
+                if (property && widget.value !== undefined) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (node.properties as any)[property] = widget.value;
+                }
+            }
+        };
+
+        /** Keep the preview in step with the inputs as the user edits them. */
+        const followInputs = (node: ShaderRendererNode): void => {
+            if (!node.widgets) return;
+            for (const widget of node.widgets) {
+                const property = widget.name ? INPUT_TO_PROPERTY[widget.name] : undefined;
+                if (!property) continue;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const original = (widget as any).callback;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (widget as any).callback = function (this: unknown, value: unknown, ...rest: unknown[]) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (node.properties as any)[property] = value;
+                    if (property === "shaderType" && node.loadShader &&
+                        (node.isShaderActive || node.properties.shaderVisible)) {
+                        node.loadShader(value as string);
+                    }
+                    node.setDirtyCanvas(true, true);
+                    return original ? original.call(this, value, ...rest) : undefined;
+                };
+            }
+        };
 
         const origOnNodeCreated = nodeType.prototype.onNodeCreated;
         const origComputeSize = nodeType.prototype.computeSize;
@@ -1288,44 +1338,62 @@ const FRAGMENT_SHADER_FOOTER = `
             }) as any);
             if (this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Toggle tooltip visibility";
 
+            if (isDirect) {
+                // These exist as real node inputs here; mirror them rather than
+                // adding a second, unconnected copy of every control.
+                syncFromInputs(this);
+                followInputs(this);
+            }
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("combo", "Shader Noise Type 🔄", this.properties.shaderType, ((v: string) => {
+            if (!isDirect) this.addWidget("combo", "Shader Noise Type 🔄", this.properties.shaderType, ((v: string) => {
                 this.properties.shaderType = v;
                 if (this.loadShader && (this.isShaderActive || this.properties.shaderVisible)) this.loadShader(v);
                 this.setDirtyCanvas(true, true);
             }) as any, { values: ["domain_warp", "tensor_field", "curl_noise"] });
-            if (this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Select shader noise pattern type";
+            if (!isDirect && this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Select shader noise pattern type";
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("combo", "Shape Mask Type 🔄", this.properties.shaderShapeType, ((v: string) => {
+            if (!isDirect) this.addWidget("combo", "Shape Mask Type 🔄", this.properties.shaderShapeType, ((v: string) => {
                 this.properties.shaderShapeType = v;
                 this.setDirtyCanvas(true, true);
             }) as any, { values: ["none", "radial", "linear", "spiral", "checkerboard", "spots", "hexgrid", "stripes", "gradient", "vignette", "cross", "stars", "triangles", "concentric", "rays", "zigzag"] });
-            if (this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Apply shape mask to shader pattern";
+            if (!isDirect && this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Apply shape mask to shader pattern";
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("combo", "Color Scheme 🔄", this.properties.colorScheme, ((v: string) => {
+            if (!isDirect) this.addWidget("combo", "Color Scheme 🔄", this.properties.colorScheme, ((v: string) => {
                 this.properties.colorScheme = v;
                 this.setDirtyCanvas(true, true);
             }) as any, { values: ["none", "blue_red", "viridis", "plasma", "inferno", "magma", "turbo", "jet", "rainbow", "cool", "hot", "parula", "hsv", "autumn", "winter", "spring", "summer", "copper", "pink", "bone", "ocean", "terrain", "neon", "fire"] });
-            if (this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Choose color palette for visualization";
+            if (!isDirect && this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Choose color palette for visualization";
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("slider", "Noise Scale 🔄", this.properties.shaderScale, ((v: number) => { this.properties.shaderScale = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.1, max: 10.0, step: 0.001, precision: 3 });
+            if (!isDirect) this.addWidget("slider", "Noise Scale 🔄", this.properties.shaderScale, ((v: number) => { this.properties.shaderScale = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.1, max: 10.0, step: 0.001, precision: 3 });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("slider", "Octaves 🔄", this.properties.shaderOctaves, ((v: number) => { this.properties.shaderOctaves = v; this.setDirtyCanvas(true, true); }) as any, { min: 1, max: 8, step: 0.1, precision: 1 });
+            if (!isDirect) this.addWidget("slider", "Octaves 🔄", this.properties.shaderOctaves, ((v: number) => { this.properties.shaderOctaves = v; this.setDirtyCanvas(true, true); }) as any, { min: 1, max: 8, step: 0.1, precision: 1 });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("slider", "Warp Strength 🔄", this.properties.shaderWarpStrength, ((v: number) => { this.properties.shaderWarpStrength = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 5.0, step: 0.001, precision: 3 });
+            if (!isDirect) this.addWidget("slider", "Warp Strength 🔄", this.properties.shaderWarpStrength, ((v: number) => { this.properties.shaderWarpStrength = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 5.0, step: 0.001, precision: 3 });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("slider", "Shape Mask Strength 🔄", this.properties.shaderShapeStrength, ((v: number) => { this.properties.shaderShapeStrength = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 2.0, step: 0.0005, precision: 4 });
+            if (!isDirect) this.addWidget("slider", "Shape Mask Strength 🔄", this.properties.shaderShapeStrength, ((v: number) => { this.properties.shaderShapeStrength = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 2.0, step: 0.0005, precision: 4 });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("slider", "Phase Shift 🔄", this.properties.shaderPhaseShift, ((v: number) => { this.properties.shaderPhaseShift = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 2.0, step: 0.0005, precision: 4 });
+            if (!isDirect) this.addWidget("slider", "Phase Shift 🔄", this.properties.shaderPhaseShift, ((v: number) => { this.properties.shaderPhaseShift = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 2.0, step: 0.0005, precision: 4 });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this.addWidget("slider", "Color Intensity 🔄", this.properties.shaderColorIntensity, ((v: number) => { this.properties.shaderColorIntensity = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 1.0, step: 0.0005, precision: 4 });
+            if (!isDirect) this.addWidget("slider", "Color Intensity 🔄", this.properties.shaderColorIntensity, ((v: number) => { this.properties.shaderColorIntensity = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.0, max: 1.0, step: 0.0005, precision: 4 });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             this.addWidget("slider", "Animation Speed 🖥️", this.properties.shaderSpeed, ((v: number) => { this.properties.shaderSpeed = v; this.setDirtyCanvas(true, true); }) as any, { min: 0.1, max: 3.0, step: 0.001, precision: 3 });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             this.addWidget("slider", "Pixel Resolution 🖥️", this.properties.shaderResolutionScale, ((v: number) => { this.properties.shaderResolutionScale = v; this.resizeShaderCanvas(this.size[0], this.shaderHeight); this.setDirtyCanvas(true, true); }) as any, { min: 128, max: 1024, step: 1, precision: 0 });
+
+            if (isDirect) {
+                // Preview-only controls must not claim saved widget slots: workflows
+                // map widget values by position, so serializing these would shift
+                // every stored input when an older workflow is loaded.
+                const displayOnly = ["Show Shader", "Show Tooltips", "Animation Speed 🖥️", "Pixel Resolution 🖥️"];
+                for (const widget of this.widgets ?? []) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    if (widget.name && displayOnly.includes(widget.name)) (widget as any).serialize = false;
+                }
+            }
 
             this.resizable = true;
             this.min_height = 100;
@@ -1587,17 +1655,23 @@ const FRAGMENT_SHADER_FOOTER = `
                 };
                 updateWidget("Show Shader", "shaderVisible");
                 updateWidget("Show Tooltips", "tooltipsVisible");
-                updateWidget("Shader Noise Type 🔄", "shaderType");
-                updateWidget("Shape Mask Type 🔄", "shaderShapeType");
-                updateWidget("Color Scheme 🔄", "colorScheme");
-                updateWidget("Noise Scale 🔄", "shaderScale");
-                updateWidget("Octaves 🔄", "shaderOctaves");
-                updateWidget("Warp Strength 🔄", "shaderWarpStrength");
-                updateWidget("Shape Mask Strength 🔄", "shaderShapeStrength");
-                updateWidget("Phase Shift 🔄", "shaderPhaseShift");
                 updateWidget("Animation Speed 🖥️", "shaderSpeed");
-                updateWidget("Color Intensity 🔄", "shaderColorIntensity");
                 updateWidget("Pixel Resolution 🖥️", "shaderResolutionScale");
+                if (isDirect) {
+                    // The saved input values are the source of truth here.
+                    syncFromInputs(this);
+                    followInputs(this);
+                } else {
+                    updateWidget("Shader Noise Type 🔄", "shaderType");
+                    updateWidget("Shape Mask Type 🔄", "shaderShapeType");
+                    updateWidget("Color Scheme 🔄", "colorScheme");
+                    updateWidget("Noise Scale 🔄", "shaderScale");
+                    updateWidget("Octaves 🔄", "shaderOctaves");
+                    updateWidget("Warp Strength 🔄", "shaderWarpStrength");
+                    updateWidget("Shape Mask Strength 🔄", "shaderShapeStrength");
+                    updateWidget("Phase Shift 🔄", "shaderPhaseShift");
+                    updateWidget("Color Intensity 🔄", "shaderColorIntensity");
+                }
             }
             if (this.properties?.shaderVisible) {
                 const baseSize = origComputeSize ? origComputeSize.call(this, [this.size[0], 0]) : [this.size[0], 0];
