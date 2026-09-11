@@ -1,3 +1,22 @@
+"""
+The legacy sampling pipeline. FROZEN -- crash fixes only.
+
+This is the pre-2.0 implementation, kept so that workflows saved before 2.0
+reproduce their seeds exactly. `sampling_mode: legacy` runs this code; the
+default, `standard`, runs pipelines/standard.py instead.
+
+Do not refactor or tidy this module. Its behaviour is pinned byte for byte by
+tests/test_legacy_golden.py (11 recorded configurations) and was verified
+pixel-identical across 12 rendered configurations on SD1.5 and Wan 2.1. That
+includes the parts that look like dead weight: the visualiser and debugger
+calls throughout are stubs from core/debug.py that can never be enabled,
+and rewriting the ~163 call sites would risk the guarantee for no gain.
+
+New work belongs in core/ and pipelines/standard.py. What this pipeline gets
+wrong -- stages restarting from maximum noise, `denoise` and `custom_sigmas`
+being ignored, blend modes shifting the noise distribution -- is documented in
+CODE_REVIEW.md and fixed there.
+"""
 import torch
 import torch.nn.functional as F
 import math
