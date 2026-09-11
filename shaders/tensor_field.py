@@ -295,8 +295,9 @@ class TensorFieldGenerator(BaseNoiseGenerator):
             # Eigenvalue magnitude
             result = (torch.abs(lambda1) + torch.abs(lambda2)) * 0.5
         elif viz_type == 1:
-            # Eigenvalue difference
-            result = (lambda1 - lambda2).unsqueeze(-1)
+            # Eigenvalue difference. compute_tensor_properties returns [B, H, W, 1]
+            # tensors, so unsqueezing here made it 5D and broke the permute below.
+            result = lambda1 - lambda2
         elif viz_type == 2:
             # Hyperstreamlines
             angle = torch.atan2(v1[..., 1:2], v1[..., 0:1])
