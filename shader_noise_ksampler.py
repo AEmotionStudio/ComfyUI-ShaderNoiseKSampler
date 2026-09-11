@@ -536,38 +536,26 @@ class ShaderNoiseKSampler:
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "sample"
     CATEGORY = "sampling"
+    # Superseded by ShaderNoiseKSamplerDirect, which exposes the same shader
+    # controls as real inputs and carries the live preview. Kept so workflows
+    # saved before 2.0 still load and reproduce their seeds; ComfyUI hides a
+    # DEPRECATED node from the search dialog. The subclass sets this back to
+    # False, otherwise it would inherit the flag and disappear too.
+    DEPRECATED = True
 
     @classmethod
-    def IS_CHANGED(s, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
-                   denoise, sequential_stages, injection_stages, shader_strength, blend_mode, noise_transform="none",
-                   sequential_distribution="linear_decrease", injection_distribution="linear_decrease", use_temporal_coherence=False, debug_level="0-Off",
-                   save_visualizations=False, denoise_visualization_frequency="Every step", custom_sigmas=None, # Add custom_sigmas here
-                   target_attribute_changes="", # Add target_attribute_changes here
-                   fast_high_channel_noise=False, # Add fast_high_channel_noise here
-                   show_custom_preview=False, show_default_preview=False, shader_params_override=None):
-        # This will force a re-execution of the node when params change
-        # Include custom_sigmas in the check. Use a simple hash or just the object itself.
-        # Using the object itself works for comparison; hashing tensor content is more robust if needed
-        # but usually comparing the tensor object ID or a simple representation is sufficient for IS_CHANGED.
-        # We return a tuple of things that, if changed, should trigger a re-run.
-        # Note: Comparing the tensor directly might not always work if a new identical tensor is passed.
-        # A more robust way might involve hashing, but let's start simple.
-        return (seed, steps, cfg, sampler_name, scheduler, denoise, sequential_stages,
-                injection_stages, shader_strength, blend_mode, noise_transform,
-                sequential_distribution, injection_distribution, use_temporal_coherence,
-                debug_level, save_visualizations, denoise_visualization_frequency,
-                custom_sigmas, target_attribute_changes, fast_high_channel_noise) # Add custom_sigmas, target_attribute_changes and fast_high_channel_noise to the tuple
+    def IS_CHANGED(cls, **kwargs):
+        # This node takes its shader parameters from data/shader_params.json,
+        # written by the save button and invisible to ComfyUI's cache key.
+        # Reporting the file's timestamp makes saving new parameters re-run the
+        # node. Accepts any inputs so it can never fail on a signature change.
+        import os
 
-    @classmethod
-    def CONTEXT_MENUS(s):
-        return {
-            "Show Custom Preview": lambda self, **kwargs: {"show_custom_preview": False},
-            "Hide Custom Preview": lambda self, **kwargs: {"show_custom_preview": False}
-        }
-
-    def has_preview(self, show_default_preview):
-        # Use the parameter to decide whether to allow the default preview
-        return show_default_preview
+        params_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "shader_params.json")
+        try:
+            return os.path.getmtime(params_file)
+        except OSError:
+            return float("nan")  # no file yet: always re-run
 
     def _calculate_stage_strengths(self, base_strength, num_stages, distribution):
         """Calculate strength for each stage based on distribution type"""

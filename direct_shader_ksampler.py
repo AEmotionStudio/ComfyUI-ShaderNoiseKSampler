@@ -51,6 +51,9 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "sample"
     CATEGORY = "sampling"
+    # The base class is deprecated; this node is not. Without this the flag
+    # would be inherited and ComfyUI would hide this node from node search too.
+    DEPRECATED = False
 
     def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                denoise=1.0, sequential_stages=1, injection_stages=0, shader_strength=0.3, blend_mode="multiply",
