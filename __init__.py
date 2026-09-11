@@ -22,59 +22,34 @@ from .shaders.registry import (
     list_shaders,
 )
 
-# Import shader generators
+# Importing the generator modules runs their @shader_generator decorators,
+# which register "domain_warp", "tensor_field", "curl_noise" and
+# "temporal_coherent". Only the aliases below are registered here.
 from .shaders.domain_warp import (
     DomainWarpGenerator,
-    add_domain_warp_to_tensor,
     generate_domain_warp_tensor,
 )
 from .shaders.tensor_field import (
     TensorFieldGenerator,
-    add_tensor_field_to_tensor,
     generate_tensor_field_tensor,
 )
 from .shaders.curl_noise import (
     CurlNoiseGenerator,
-    add_curl_noise_to_tensor,
     generate_curl_noise_tensor,
 )
 from .shaders.temporal_coherent_noise import (
     TemporalCoherentNoiseGenerator,
-    integrate_temporal_coherent_noise,
     generate_temporal_coherent_noise_tensor,
 )
 
-# Register all shader generators with the centralized registry
-register_shader("domain_warp", DomainWarpGenerator, {
-    "description": "Domain warping noise using FBM",
-    "supports_temporal": True,
-})
-register_shader("tensor_field", TensorFieldGenerator, {
-    "description": "Tensor field based noise patterns",
-    "supports_temporal": True,
-})
 register_shader("curl", CurlNoiseGenerator, {
-    "description": "Curl/fluid noise patterns",
-    "supports_temporal": True,
-})
-register_shader("curl_noise", CurlNoiseGenerator, {
     "description": "Curl/fluid noise patterns (alias)",
-    "supports_temporal": True,
-})
-register_shader("temporal_coherent", TemporalCoherentNoiseGenerator, {
-    "description": "Temporally coherent noise for animations",
     "supports_temporal": True,
 })
 register_shader("temporal_coherent_noise", TemporalCoherentNoiseGenerator, {
     "description": "Temporally coherent noise (alias)",
     "supports_temporal": True,
 })
-
-# Apply shader integrations to ShaderToTensor for backward compatibility
-add_domain_warp_to_tensor(ShaderToTensor)
-add_tensor_field_to_tensor(ShaderToTensor)
-add_curl_noise_to_tensor(ShaderToTensor)
-integrate_temporal_coherent_noise()
 
 # Register API routes for server-side parameter saving
 try:
@@ -146,7 +121,7 @@ def get_shader_generator(shader_type: str):
     """
     # Import here to avoid circular imports
     from .shader_params_reader import generate_noise_tensor
-    
+
     # First try the legacy dict for backward compatibility
     # Wrap legacy functions to accept 'params' keyword argument
     if shader_type in SHADER_GENERATORS:
@@ -184,10 +159,10 @@ def get_shader_generator(shader_type: str):
 def register_shader_generator(shader_type: str, generator_function):
     """
     Register a shader generator function.
-    
+
     This function provides backward compatibility with the old API.
     Registers to both the legacy SHADER_GENERATORS dict and the new registry.
-    
+
     Args:
         shader_type: Name of the shader type
         generator_function: Generator function or class to register
@@ -217,23 +192,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 # Add web directory for UI components
 WEB_DIRECTORY = "./web"
 
-# List of JS files to be loaded - ORDER IS CRITICAL
-__js_files__ = [
-    "gradient_title.js",
-    "shader_renderer.js",
-    "matrix_button.js",
-    "shader_params_save_button.js",
-    "noise_visualizer.js",
-    "advanced_comparer.js",
-    "video_comparer.js"
-]
-
 # List of exported elements
 __all__ = [
     "NODE_CLASS_MAPPINGS",
     "NODE_DISPLAY_NAME_MAPPINGS",
     "WEB_DIRECTORY",
-    "__js_files__",
     "SHADER_GENERATORS",
     "get_shader_generator",
     "register_shader_generator",
