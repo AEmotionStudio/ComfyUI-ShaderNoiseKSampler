@@ -1,6 +1,7 @@
 import comfy.sample
 from .shader_params_reader import get_shader_params, ShaderParamsReader
 from .shader_noise_ksampler import ShaderNoiseKSampler, get_visualizer, set_debug_level
+from .core import presets as preset_table
 from .pipelines import standard as standard_pipeline
 
 
@@ -45,9 +46,10 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                 "sequential_distribution": (["uniform", "linear_decrease", "linear_increase", "gaussian", "first_stronger", "last_stronger"], {"default": "linear_decrease", "tooltip": "How shader strength is distributed across sequential stages"}),
                 "injection_distribution": (["uniform", "linear_decrease", "linear_increase", "gaussian", "first_stronger", "last_stronger"], {"default": "linear_decrease", "tooltip": "How shader strength is distributed across injection stages"}),
                 "fast_high_channel_noise": ("BOOLEAN", {"default": False, "tooltip": "Use a faster, simplified noise generation method for models with many channels (>16), like LTXV"}),
+                "preset": (["custom", "nudge", "explore", "roam", "video", "jump", "stamp"], {"default": "custom", "tooltip": "Pick one and go. A preset sets shader_type, shader_strength, blend_mode, travel_mode, stage_progression and shape_type together, and turns normalize_strength on so its strength number means the same thing in any blend mode -- those settings only mean anything in combination, and choosing them one at a time is how you end up at 0.6 with a shape mask and a picture made of hexagons. nudge: the smallest visible change. explore: the recommended start. roam: as far as the picture reliably holds. video: the 4D time-aware shader, for video latents. jump: destination set by the shader, texture rather than a scene. stamp: jump with a shape mask, so the mask is drawn in your prompt's material. custom leaves every widget alone. The Walk node keeps whichever parameter it is ramping."}),
                 "stage_progression": (["uniform", "coarse_to_fine", "fine_to_coarse"], {"default": "uniform", "tooltip": "Vary the shader across the run instead of drawing the same one at every stage. The trajectory is not uniform -- early steps settle composition, late steps settle detail -- but every stage has always used the same zoom. coarse_to_fine starts zoomed in on large features with fewer octaves and ends zoomed out on small ones with more, so the noise matches what each part of the run is deciding; fine_to_coarse reverses it. The adjustment spans 0.5x to 2x your noise_scale and plus or minus one octave, centred on your widget values, so uniform is unchanged. Needs more than one stage to do anything. Standard sampling only."}),
                 "shade_non_spatial": ("BOOLEAN", {"default": False, "tooltip": "Also paint the streams that have no picture in them. Off, the shader touches only the spatial stream and everything else keeps the Gaussian noise ComfyUI gave it -- on MiniMax H3 and LTXAV that means the audio is left alone, and sequence latents (Stable Audio, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D, TripoSplat) are refused outright. On, an audio stream is painted across stereo x time, and a sequence latent is painted as a single row. Video and audio are denoised together on H3, so this reaches the picture too. Unexplored and easy to overdo: audio has no busy scene to hide structure in, so start near 0.05. Streams too small to be content are skipped, so TripoSplat's camera parameters are left alone. Standard sampling only."}),
-                "decorrelate_channels": ("BOOLEAN", {"default": False, "tooltip": "Give every latent channel its own shader draw instead of copies of one. The generators build extra channels as pointwise functions of the first one or two, so domain_warp returns noise spanning a single channel at SD's four and about two at any larger count, and temporal_coherent returns literally identical channels. Samplers expect independent noise, and that collapse is the main reason the shader's own pattern surfaces so readily: on SD 1.5 it moves the usable ceiling from below 0.25 to around 0.5, and on MiniMax H3 from about 0.25 to about 0.75. Costs a few extra noise renders. Generators that already span their channels, such as tensor_field, are detected and left untouched. Off by default so existing workflows reproduce; standard sampling only."}),
+                "travel_mode": (["walk", "drift", "jump"], {"default": "walk", "tooltip": "How the shader moves you. walk: the seed anchors the picture and the shader steers around it -- the wide, coherent range this node is for, and the right answer unless you want otherwise. drift: halfway, a stronger push over a narrower range. jump: the shader's parameters set the destination and the seed stops mattering; the result is a texture or pattern field in your prompt's material rather than a scene, because the model is being handed noise it was never trained to denoise. The difference is how many independent channels the noise spans: the generators natively return about one or two whatever the latent has, which is why walk has to build them and why jump is the behaviour you get for free. Standard sampling only."}),
                 "normalize_strength": ("BOOLEAN", {"default": False, "tooltip": "Make shader_strength mean the same thing in every blend mode. Untouched, the modes differ by up to twenty-three times at the same setting: at 0.5 normal hands the sampler 0.71 of the shader and difference only 0.03. With this on, strength is read on multiply's scale, so the default mode is unchanged and the others are rescaled to match -- soft_light needs about 1.6x its old number, add and hard_light about half. difference cannot reach the top of the scale at all and saturates. Off by default so existing workflows reproduce; standard sampling only."}),
             },
         }
@@ -66,11 +68,27 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                warp_strength=0.5, shape_mask_strength=1.0, phase_shift=0.5, color_intensity=0.8,
                sampling_mode="standard", sequential_distribution="linear_decrease",
                injection_distribution="linear_decrease", fast_high_channel_noise=False,
-               normalize_strength=False, decorrelate_channels=False, shade_non_spatial=False,
-               stage_progression="uniform", custom_sigmas=None,
+               normalize_strength=False, travel_mode="walk", shade_non_spatial=False,
+               stage_progression="uniform", preset="custom", custom_sigmas=None,
                # Accepted for the legacy path and for older callers; not exposed as inputs.
                debug_level="0-Off", denoise_visualization_frequency="25% intervals", target_attribute_changes=""):
         """Run the shader noise sampler with direct parameter inputs."""
+        # A preset speaks for several widgets at once, so it has to land before
+        # anything reads them. `_preset_exclude` lets a subclass keep an input it
+        # is driving itself -- the Walk node uses it for the parameter it ramps.
+        chosen = preset_table.apply_preset(preset, dict(
+            shader_type=shader_type, shader_strength=shader_strength, blend_mode=blend_mode,
+            travel_mode=travel_mode, stage_progression=stage_progression, shape_type=shape_type,
+            normalize_strength=normalize_strength,
+        ), exclude=getattr(self, "_preset_exclude", ()))
+        shader_type = chosen["shader_type"]
+        shader_strength = chosen["shader_strength"]
+        blend_mode = chosen["blend_mode"]
+        travel_mode = chosen["travel_mode"]
+        stage_progression = chosen["stage_progression"]
+        shape_type = chosen["shape_type"]
+        normalize_strength = chosen["normalize_strength"]
+
         debugger = set_debug_level(int(debug_level.split("-")[0]))
         get_visualizer()
 
@@ -175,7 +193,7 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
             injection_distribution=injection_distribution,
             use_temporal_coherence=use_temporal_coherence,
             normalize_strength=normalize_strength,
-            decorrelate_channels=decorrelate_channels,
+            travel_mode=travel_mode,
             shade_non_spatial=shade_non_spatial,
             stage_progression=stage_progression,
             custom_sigmas=custom_sigmas,
@@ -190,7 +208,8 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
             "noise_transform": noise_transform,
             "sampling_mode": sampling_mode,
             "normalize_strength": normalize_strength,
-            "decorrelate_channels": decorrelate_channels,
+            "travel_mode": travel_mode,
+            "preset": preset,
             "shade_non_spatial": shade_non_spatial,
             "stage_progression": stage_progression,
         }

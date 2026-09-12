@@ -33,7 +33,7 @@ import torch
 import comfy.sample
 import latent_preview
 
-from ..core import noise_math, schedule, shader_noise
+from ..core import noise_math, presets, schedule, shader_noise
 
 logger = logging.getLogger("ShaderNoiseKSampler")
 
@@ -185,7 +185,7 @@ def _apply_events(
     dtype: torch.dtype,
     temporal_coherence: bool,
     normalize_strength: bool = False,
-    decorrelate_channels: bool = False,
+    travel_mode: str = presets.DEFAULT_TRAVEL_MODE,
     allow_sequence: bool = False,
     stream_seed_offset: int = 0,
 ) -> torch.Tensor:
@@ -202,7 +202,8 @@ def _apply_events(
         generated = shader_noise.generate(
             tuple(noise.shape), stage_params, shader_type, stage_seed + stream_seed_offset, device,
             dtype=dtype, temporal_coherence=temporal_coherence,
-            decorrelate=decorrelate_channels, allow_sequence=allow_sequence,
+            decorrelate=True, basis=presets.basis_for(travel_mode),
+            allow_sequence=allow_sequence,
         )
         generated = noise_math.transform_noise(generated, noise_transform)
         noise = noise_math.mix_noise(noise, generated, blend_mode, strength, normalize_strength)
@@ -267,7 +268,7 @@ def run(
     injection_distribution: str = "linear_decrease",
     use_temporal_coherence: bool = False,
     normalize_strength: bool = False,
-    decorrelate_channels: bool = False,
+    travel_mode: str = presets.DEFAULT_TRAVEL_MODE,
     shade_non_spatial: bool = False,
     stage_progression: str = "uniform",
     custom_sigmas: Optional[torch.Tensor] = None,
@@ -306,7 +307,7 @@ def run(
         noise_streams[index] = _apply_events(
             noise_streams[index].to(device), events.get(boundaries[0], []), shader_params,
             shader_type, blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-            normalize_strength, decorrelate_channels, shade_non_spatial,
+            normalize_strength, travel_mode, shade_non_spatial,
             stream_seed_offset=index * _STREAM_SEED_STRIDE,
         )
     noise = _rebuild(samples, noise_streams)
@@ -344,7 +345,7 @@ def run(
             residual_streams[index] = _apply_events(
                 residual_streams[index], events.get(end, []), shader_params, shader_type,
                 blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-                normalize_strength, decorrelate_channels, shade_non_spatial,
+                normalize_strength, travel_mode, shade_non_spatial,
                 stream_seed_offset=index * _STREAM_SEED_STRIDE,
             )
         noise = _rebuild(residual, residual_streams)

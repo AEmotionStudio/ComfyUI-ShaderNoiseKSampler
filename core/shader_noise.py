@@ -166,7 +166,7 @@ def effective_channel_rank(noise: torch.Tensor) -> float:
 
 
 def _decorrelate(latent_shape, params, shader_type, seed, device, dtype,
-                 temporal_coherence, generator) -> torch.Tensor:
+                 temporal_coherence, generator, basis_size=None) -> torch.Tensor:
     """
     Fill the channel axis with independent draws instead of copies of one.
 
@@ -182,7 +182,7 @@ def _decorrelate(latent_shape, params, shader_type, seed, device, dtype,
     shader.
     """
     channels = latent_shape[1]
-    basis = min(channels, DECORRELATION_BASIS)
+    basis = min(channels, DECORRELATION_BASIS if basis_size is None else max(1, basis_size))
     single = (latent_shape[0], 1) + tuple(latent_shape[2:])
 
     draws = torch.stack([
@@ -212,6 +212,7 @@ def generate(
     generator=None,
     decorrelate: bool = False,
     allow_sequence: bool = False,
+    basis: int = None,
 ) -> torch.Tensor:
     """
     Generate shader noise matching a latent's shape.
@@ -230,7 +231,7 @@ def generate(
         batch, channels, length = latent_shape
         strip = generate((batch, channels, 1, length), params, shader_type, seed, device,
                          dtype=dtype, temporal_coherence=temporal_coherence,
-                         generator=generator, decorrelate=decorrelate)
+                         generator=generator, decorrelate=decorrelate, basis=basis)
         return strip.reshape(latent_shape)
 
     layout = latent_layout(latent_shape)
@@ -246,7 +247,7 @@ def generate(
             noise = _render_octaves(generator, base_params, layout, seed, device)
             return _maybe_decorrelate(
                 _fit(noise, latent_shape, device, dtype), decorrelate, latent_shape,
-                params, shader_type, seed, device, dtype, temporal_coherence)
+                params, shader_type, seed, device, dtype, temporal_coherence, basis)
 
         frames = []
         span = max(layout["frames"] - 1, 1)
@@ -259,7 +260,7 @@ def generate(
     stacked = torch.stack(frames, dim=2)  # [B, C, T, H, W]
     return _maybe_decorrelate(
         _fit(stacked, latent_shape, device, dtype), decorrelate, latent_shape,
-        params, shader_type, seed, device, dtype, temporal_coherence)
+        params, shader_type, seed, device, dtype, temporal_coherence, basis)
 
 
 def _fit(noise: torch.Tensor, target_shape, device, dtype) -> torch.Tensor:
@@ -276,23 +277,36 @@ def _fit(noise: torch.Tensor, target_shape, device, dtype) -> torch.Tensor:
 
 
 def _maybe_decorrelate(noise, decorrelate, latent_shape, params, shader_type, seed,
-                       device, dtype, temporal_coherence):
-    """Remix the channel axis only when the draw actually collapsed."""
+                       device, dtype, temporal_coherence, basis=None):
+    """
+    Remix the channel axis.
+
+    Widening is guarded, because it is an improvement that might not be one.
+    Narrowing is not, because a caller asking for a basis of 1 wants the collapse
+    and the guards exist precisely to prevent it.
+    """
     if not decorrelate or noise.shape[1] < 2:
         return noise
+
+    size = DECORRELATION_BASIS if basis is None else max(1, basis)
+    if size <= 1:
+        # A deliberate collapse: every channel carries the same field, so the
+        # shader's parameters decide the destination and the seed stops mattering.
+        return _decorrelate(tuple(latent_shape), params, shader_type, seed, device,
+                            dtype, temporal_coherence, None, basis_size=1)
 
     # Cheap reject first: remixing can only reach about min(channels, basis)
     # independent directions, so a draw already at least that wide is left alone.
     # This is why the guard is on rank and not on correlation -- curl_noise looks
     # correlated but already spans 25 of 128 channels.
     stock_rank = effective_channel_rank(noise)
-    if stock_rank >= min(noise.shape[1], DECORRELATION_BASIS) * 0.9:
+    if stock_rank >= min(noise.shape[1], size) * 0.9:
         return noise
 
     # The basis draws are not guaranteed independent either: at four channels
     # curl_noise remixes to a *lower* rank than it started with. Rather than tune
-    # a threshold per generator, keep whichever is actually wider, so turning this
-    # on can never make the noise narrower than leaving it off.
+    # a threshold per generator, keep whichever is actually wider, so asking to
+    # widen can never make the noise narrower than leaving it alone.
     remixed = _decorrelate(tuple(latent_shape), params, shader_type, seed, device,
-                           dtype, temporal_coherence, None)
+                           dtype, temporal_coherence, None, basis_size=size)
     return remixed if effective_channel_rank(remixed) > stock_rank else noise

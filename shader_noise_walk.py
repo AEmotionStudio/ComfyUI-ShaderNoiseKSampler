@@ -120,6 +120,10 @@ class ShaderNoiseWalk(DirectShaderNoiseKSampler):
         if WALKABLE[walk_parameter]:
             values = [int(round(v)) for v in values]
 
+        # A preset that pins shader_strength would flatten a strength ramp into
+        # five identical frames, so the walked parameter is held back from it.
+        self._preset_exclude = (walk_parameter,)
+
         progress = comfy.utils.ProgressBar(len(values))
         latents = []
         for value in values:
