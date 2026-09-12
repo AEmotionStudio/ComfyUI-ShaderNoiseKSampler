@@ -32,6 +32,8 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that blends stan
 
 ## 🚀 Recent Updates
 
+- **Shader Blending Upgrade - 9/12/26**: The shader now blends into every channel of the latent instead of stamping one pattern across it, and the first step away from `shader_strength` 0 is only as large as the shader makes it. New `preset` and `travel_mode` inputs, `normalize_strength` on by default, and tooltips that describe what each strength does. Saved workflows render differently at any strength above 0; see the [Changelog](CHANGELOG.md).
+
 - **Comparer Auto-Fill - 6/12/25**: Both the `Advanced Image Comparer` and `Video Comparer` nodes now feature an `auto_fill` toggle. This addition streamlines your workflow by allowing you to compare with a single input. When `auto_fill` is enabled (the default setting), any empty image or video slot will be automatically populated with the output from the previous generation. This makes iterative A/B testing—comparing your latest creation to the one right before it—faster and more intuitive. It does not pull from your output folder but from the cached images or videos of your current session.
 ![Video Comparer Updated WEBP](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/video_comparer_updated.webp)
 
@@ -47,6 +49,8 @@ The shader noise is your map and the shader parameters (like Noise Scale, Octave
 - **🔬 Octaves: The Detail Slider** - Controls the level of detail and complexity in your noise pattern
 - **🌀 Warp Strength: The Non-Linear Navigator** - Creates non-linear paths through latent space
 - **🔄 Phase Shift: The Perspective Shifter** - Reveals different "facets" of the same core elements
+
+In practice, holding the seed fixed parks the car: the seed sets both the base noise and the shader's own pattern, so every change you make afterwards is a change of street, not of town. `shader_strength` is how far from the seed's own image you drive, and the other shader settings choose the streets. Low strengths explore close to that image; higher strengths blend the shader's pattern and colour progressively into the picture until, at the top, it can take the picture over. How quickly that happens depends on the model and the seed. On an SD 1.5 portrait the picture was re-composed by 0.25 and mostly shader by 0.75, while on MiniMax H3 the seed's scene held through 0.5 and blended with the shader at 0.75 to 1.0. `travel_mode: jump` is the deliberate exception: the shader's parameters set the destination and the seed stops mattering.
 
 The core innovation is treating latent space as a territory to be explored rather than a lottery to be played - turning the act of AI image generation into a journey of deliberate artistic discovery guided by the elegant language of mathematical patterns.
 
@@ -107,6 +111,9 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 -   **🎛️ Granular Control**:
     -   Global `shader_strength` and per-stage strength tuning.
     -   Adjust `noise_scale`, `octaves`, `warp_strength`, `phase_shift`, and more for each stage.
+-   **🎚️ Presets**: `nudge`, `explore`, `roam`, `video`, `jump` and `stamp` set the shader settings that only mean something together, and write them into the node's widgets so you can see what the run will use.
+-   **🧭 Travel Modes**: `walk` explores around the seed, `drift` narrows how the shader moves you, and `jump` lets the shader's parameters choose the destination.
+-   **⚖️ Consistent Strength**: With `normalize_strength` (on by default), one `shader_strength` value hands the sampler the same share of shader in every blend mode.
 -   **💾 Parameter Management**: Save your shader parameter configurations. Not necessary with (direct) node version.
 -   **📊 "Show Shader Matrix" Button**: Access comprehensive, interactive documentation and visualizations directly within ComfyUI (Alt+M shortcut).
 -   **🤝 Compatibility**: Shape-driven rather than a model list — any image or video latent at any channel count, including multi-stream video+audio latents like MiniMax H3 (see Model Compatibility section).
@@ -218,6 +225,8 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
     -   Set `seed`, `steps`, `cfg`, `sampler_name`, `scheduler`, and `denoise` as you would for a standard KSampler.
     -   It is recommended to use a fixed `seed` number when you want to explore the neighborhood around that specific seed. This allows the shader noise parameters to navigate the latent space coherently from a consistent starting point.
 4.  **Configure Shader Noise**: This is where the exploration begins!
+    -   **Preset**: Pick `explore` to start, or leave it on `custom` to set everything yourself. A preset writes its values into the widgets it controls.
+    -   **Travel Mode**: Leave `travel_mode` on `walk` to explore around your seed; `jump` hands the destination to the shader.
     -   **Stages**: Define `sequential_stages` and `injection_stages`.
     -   **Global Controls**: Set `shader_strength` (0.0 to disable shaders), `blend_mode`, and `noise_transform`.
     -   **Per-Stage Controls**: For each stage, configure:
@@ -231,7 +240,7 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
 6.  **Generate**: Queue your prompt and witness the shader-guided generation!
 
 > [!TIP]
-> Start with a low `shader_strength` (e.g., 0.1-0.3) and a single `sequential_stage` to understand the impact of different noise types and parameters. Remember to use a fixed `seed` for neighborhood exploration. Gradually increase complexity as you become more familiar with how each parameter navigates the latent space.
+> Fix your `seed` first, then start from the `explore` preset or a `shader_strength` around 0.1-0.3 with a single `sequential_stage`, and walk outward from there. Each small step can still land on a noticeably different neighbour, by an amount that depends on the model and the seed, so compare neighbouring strengths rather than expecting a smooth fade. Try `noise_scale` early: larger features let the shader show more, smaller ones let the model absorb it into the picture.
 
 ## 🧠 Latent Space Navigation
 
@@ -261,9 +270,12 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 | **`injection_stages`**       | Number of shader stages injected at specific steps.                                                        | `0`               |
 | **`shader_strength`**        | Global strength of shader noise influence (0.0 to disable).                                                | `0.3`             |
 | **`blend_mode`**             | How shader noise combines with base noise (e.g., `multiply`, `add`).                                       | `multiply`        |
+| **`normalize_strength`**     | Reads `shader_strength` on `multiply`'s scale, so the same value hands over the same share of shader in every blend mode. | `true`            |
+| **`preset`**                 | Sets the shader settings that only mean something together, and writes them into the widgets. `custom` leaves everything alone. | `custom`          |
+| **`travel_mode`**            | How the shader moves you: `walk` explores around the seed, `drift` narrows the move, `jump` lets the shader set the destination. | `walk`            |
 | **`noise_transform`**        | Math operation on shader noise (e.g., `none`, `absolute`, `sin`).                                          | `none`            |
 | **`use_temporal_coherence`** | For consistent noise in animations or exploration.                                                         | `false`           |
-| **`sampling_mode`**          | `standard` samples one schedule split into stage segments, and honours `denoise` and `custom_sigmas`. `legacy` is the pre-2.0.0 behaviour, selected automatically for older workflows so their seeds reproduce. | `standard`        |
+| **`sampling_mode`**          | `standard` samples one schedule split into stage segments, and honours `denoise` and `custom_sigmas`. `legacy` keeps the pre-2.0.0 pipeline and is selected automatically for older workflows, but no longer reproduces every earlier seed exactly (see Known Issues). | `standard`        |
 | **`shader_noise_type (per stage)`** | The base pattern (e.g., `domain_warp`, `tensor_field`, `curl_noise`).                                          | `domain_warp`          |
 | **`noise_scale (per stage)`**    | The "Zoom Control" - determines how "zoomed in" or "zoomed out" you are in latent space.                  | `1.0`             |
 | **`noise_octaves (per stage)`**  | The "Detail Slider" - controls the level of detail and complexity in your noise pattern.                  | `1`               |
@@ -307,8 +319,9 @@ nothing to paint, and the node then samples those models as a plain KSampler.
 
 > [!NOTE]
 > The above describes `standard` mode. `legacy` mode keeps its original
-> channel-count detection, along with its quirks, so that pre-2.0 workflows
-> reproduce their seeds unchanged — it is frozen, not maintained.
+> channel-count detection and pipeline, along with their quirks; it is frozen, not
+> maintained. It shares the shader generators, though, so it no longer reproduces
+> every pre-2.0 seed exactly (see Known Issues).
 
 ## 🔬 Shader Noise Deep Dive (Brief Overview)
 
@@ -338,7 +351,7 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 -   **Shader Effects Not Visible**:
     -   Ensure `shader_strength` is greater than `0.0`.
 
--   **Unexpected Results**: Small parameter changes can sometimes lead to large visual shifts. Use the shader visualizer to understand the noise before generating. Experimentation is encouraged.
+-   **Unexpected Results**: Small parameter changes can sometimes lead to large visual shifts. Even a 0.05 change in `shader_strength` can land on a noticeably different neighbour of your seed's image, or on a near-identical one; which you get depends on the model and the seed. Use the shader visualizer to understand the noise before generating. Experimentation is encouraged.
 
 -   **Consult the Shader Matrix**: The in-app documentation is your best friend for detailed troubleshooting and understanding.
 
@@ -348,7 +361,7 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 
 -   **Fixed in 2.0.0 — Parameter queuing**: the deprecated `ShaderNoiseKSampler` read its parameters from a file at runtime, so queued runs could not carry different settings. `Shader Noise KSampler (Direct)` takes every shader parameter as a node input, so queued runs each keep their own values.
 
--   **Legacy sampling mode**: nodes loaded from workflows saved before 2.0.0 switch to `sampling_mode: legacy` so their seeds still reproduce. Legacy keeps the old behaviour, including the issues above. Switch to `standard` for the corrected sampling; the same seed will produce a different image.
+-   **Legacy sampling mode**: nodes loaded from workflows saved before 2.0.0 switch to `sampling_mode: legacy`, which keeps the old pipeline, including the issues above. Its seeds no longer reproduce exactly for workflows using `domain_warp`, `temporal_coherent`, or `curl_noise` on latents wider than four channels, because the shader generators both modes share now fill every latent channel. Switch to `standard` for the corrected sampling.
 
   > [!WARNING]
     **Potential for Visual Instability**: Certain parameter explorations, particularly with high intensity or complex interactions, may result in visually disruptive outputs such as flashing images or harsh artifacts. Users are advised to iterate with caution.

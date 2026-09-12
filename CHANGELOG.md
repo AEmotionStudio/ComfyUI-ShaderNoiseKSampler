@@ -2,6 +2,72 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+Changes what a seed produces at any `shader_strength` above 0, in both sampling
+modes. Strength 0 is unchanged.
+
+The shader generators handed the sampler noise that spanned about one channel
+however many the latent had, so the shader stamped one pattern across the whole
+latent instead of blending into it. That is fixed at the source, the fixes that
+were optional are now defaults, and blending keeps the base noise's own statistics
+so the first step away from strength 0 is only as large as the shader makes it.
+
+### Changed
+- **Every latent channel gets a shader field of its own.** `domain_warp` copied one
+  field across its four channels and built the rest from the first two;
+  `temporal_coherent` broadcast one field to every channel; `curl_noise` padded its
+  colour path with copies. Effective channel rank for `domain_warp` at 4 / 24 / 128
+  channels goes from 1.00 / 2.13 / 2.43 to 3.91 / 22.72 / 69.56. `tensor_field`
+  already did this and is unchanged. On MiniMax H3 under a real prompt,
+  `domain_warp` now holds the seed's scene to about 0.75, against about 0.5 with the
+  old after-the-fact decorrelation. This also changes `legacy` output; see Known
+  issues.
+- **Blending keeps the base noise's own mean and deviation**, per channel, instead of
+  forcing exactly 0 and 1. Forcing them moved the starting noise by 1 to 3 per cent
+  the moment strength left 0, before the shader contributed anything, and on SD 1.5
+  that alone moved the image as far as a whole 0.05 step of shader. From 0 to 0.001
+  the image now moves 0.03 of the typical distance between two seeds' images, where
+  it moved 0.32. On H3 the same step fell from 0.48 to 0.38; the rest is H3
+  responding to a very small change in its noise, not the node.
+- **`normalize_strength` is on by default**, so one `shader_strength` value hands the
+  sampler the same share of shader in every blend mode. `multiply`, the default
+  mode, is the calibration reference and is unaffected.
+- **`travel_mode` replaces `decorrelate_channels`.** `walk` (default) keeps the
+  generator's own width, `drift` mixes it down to four directions, and `jump` folds
+  it into one, so the shader's parameters set the destination and the seed stops
+  mattering. The guard deciding when to remix is now direction-aware.
+- **Tooltips describe what happens at each strength** rather than how much to avoid:
+  the shader blending progressively into the picture, at a pace set by the model,
+  the seed and `noise_scale`.
+- **The golden test suite pins the `standard` pipeline** instead of `legacy`.
+
+### Added
+- **`preset` input.** `nudge`, `explore`, `roam`, `video`, `jump` and `stamp` set
+  `shader_type`, `shader_strength`, `blend_mode`, `travel_mode`, `stage_progression`
+  and `shape_type` together; `custom` leaves every widget alone.
+- **Choosing a preset writes the widgets it controls**, and editing one of those
+  widgets to another value switches the preset back to `custom`, so the panel shows
+  what the run will use. The table is served by `GET /shader_noise_ksampler/presets`.
+- **`verification/blend/`**: scripts that run a matrix of seeds, strengths and shader
+  settings through a ComfyUI server and measure how the shader blends into the
+  result: how far each setting moves you from the seed's own image, whether you stay
+  nearer it than any other seed's, and how much of the shader pattern is in the
+  final latent.
+
+### Fixed
+- **`drift` did nothing for `tensor_field` and `curl_noise`.** Those generators
+  already spanned their channels, so the widening guard returned their noise
+  untouched and `drift` behaved exactly like `walk`.
+
+### Known issues
+- **`legacy` no longer reproduces every earlier seed.** It keeps the pre-2.0 pipeline
+  structure but shares the shader generators, so workflows using `domain_warp`,
+  `temporal_coherent`, or `curl_noise` on latents wider than four channels now
+  produce different images. Workflows saved before 2.0 are still switched to
+  `legacy` when loaded, and the `sampling_mode` tooltip still describes it as
+  reproducing their seeds.
+
 ## [2.1.0] - 2026-09-11
 
 Compatibility release for ComfyUI 0.34.0's model roster, MiniMax H3 in
@@ -87,7 +153,8 @@ what was wrong was how a multi-stream latent crossed a stage boundary.
   starts zoomed in on large features with fewer octaves and ends zoomed out on
   small ones with more, `fine_to_coarse` reverses it. Centred on your widget
   values, spanning 0.5x to 2x noise_scale and plus or minus one octave.
-- **`decorrelate_channels` (optional, default off).** The generators built every
+- **`decorrelate_channels` (optional, default off).** *Replaced by `travel_mode`
+  before it shipped; see Unreleased.* The generators built every
   channel past the first one or two as a pointwise function of those two, so
   `domain_warp` returned noise spanning a single channel at SD's four and about
   two at any larger count, and `temporal_coherent` returned identical channels.
