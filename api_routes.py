@@ -68,6 +68,19 @@ async def save_shader_params(request):
         return web.json_response({"status": "error", "message": "Could not save parameters"}, status=500)
 
 
+async def get_presets(request):
+    """
+    Serve the preset table, so the frontend can write a preset's values into the
+    widgets without keeping a copy of its own. Preset values get recalibrated
+    against real runs, and a second copy would drift the first time one did.
+    """
+    from .core import presets
+    return web.json_response({
+        "presets": presets.PRESETS,
+        "descriptions": presets.PRESET_DESCRIPTIONS,
+        "keys": list(presets.PRESET_KEYS),
+    })
+
 def setup_routes(server):
     """
     Register API routes with ComfyUI's PromptServer.
@@ -78,3 +91,5 @@ def setup_routes(server):
     if hasattr(server, 'app') and hasattr(server.app, 'router'):
         server.app.router.add_post("/shader_noise_ksampler/save_params", save_shader_params)
         logger.info("Registered API route: POST /shader_noise_ksampler/save_params")
+        server.app.router.add_get("/shader_noise_ksampler/presets", get_presets)
+        logger.info("Registered API route: GET /shader_noise_ksampler/presets")

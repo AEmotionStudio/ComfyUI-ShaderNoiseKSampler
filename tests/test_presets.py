@@ -124,3 +124,16 @@ def test_the_node_offers_exactly_the_presets_that_exist():
     modes = spec["optional"]["travel_mode"][0]
     assert set(modes) == set(TRAVEL_MODES)
     assert spec["optional"]["travel_mode"][1]["default"] == presets.DEFAULT_TRAVEL_MODE
+
+
+def test_the_frontend_is_served_the_table_the_node_applies():
+    """The panel writes widgets from this route; a second copy of the table would drift."""
+    import asyncio
+    import json
+
+    from snk.api_routes import get_presets
+
+    served = json.loads(asyncio.run(get_presets(None)).text)
+    assert served["presets"] == PRESETS
+    assert served["descriptions"] == presets.PRESET_DESCRIPTIONS
+    assert served["keys"] == list(presets.PRESET_KEYS)
