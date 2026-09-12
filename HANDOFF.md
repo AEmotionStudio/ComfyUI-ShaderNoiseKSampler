@@ -384,6 +384,10 @@ itself was not re-measured.
 
 ### Measured on real weights
 
+These are ceilings: how much shader the picture can hide. That turned out not to
+be what the project is for. "Measuring the blend, not the ceiling" below measures
+what is.
+
 **SD 1.5** at 512x512, 20 steps, cfg 7, `euler`/`normal`, seed 8888. `domain_warp`
 on `walk`, before and after, same two prompts:
 
@@ -479,6 +483,187 @@ whether presets over the existing knobs would serve better than another knob —
 
 ---
 
+## Measuring the blend, not the ceiling
+
+The ceilings above answer "how much shader can the picture hide", which is not what
+the project is for. The intent, as the author put it: a legitimate blend of the
+seed's noise and shader noise, to create new visuals or to see how the shader alters
+them. A seed is a town. Holding it fixed parks the car there, and the shader
+settings explore its streets, near and far. How that looks is expected to differ
+between models and between seeds, so nothing here compares models.
+
+In the code, both halves of the town come from the seed: the base noise from
+`comfy.sample.prepare_noise(seed)`, and the shader field from `seed + stage`.
+Changing the seed moves both. Holding it fixes both, and the shader settings then
+re-render only the field.
+
+### Method
+
+Everything is measured on the final latent, per model, over several seeds. Image
+distance (mean absolute RGB difference at 64x64) is reported alongside, as a check on
+whether latent distance means anything to the eye.
+
+- **Town**: the mean distance between two seeds' strength-0 results. Every other
+  distance is read in towns.
+- **Far**: distance from your own seed's strength-0 result.
+- **Home**: that distance over the mean distance to the other seeds' strength-0
+  results. Below 1, you are nearer your own town than anyone else's.
+- **Streets**: at one seed and strength, the distance between runs that differ only
+  in `phase_shift` or `noise_scale`.
+- **Overlap**: the correlation between a latent change and the shader field that
+  caused it, against the same correlation with other seeds' fields, which is chance.
+  The field is reconstructed by running the Direct node on CPU with a stub sampler
+  and capturing what `core.shader_noise.generate` returned; that matches the CUDA
+  render to 2.5e-6. Only the outermost `generate()` call counts: a travel mode that
+  remixes calls it again for its one-channel basis draws, and recording one of those
+  instead produced wrong `jump` numbers in a first pass, since corrected.
+
+Every run is one stage: `domain_warp`, `multiply`, `normalize_strength` on, octaves
+2, warp 0.7.
+
+### SD 1.5
+
+512x512, 20 steps, cfg 7, `euler`/`normal`, the fisherman portrait prompt, four seeds.
+
+| | far (latent / image) | home (latent / image) | overlap: own field vs others' (max) |
+|---|---|---|---|
+| `walk` 0.25 | 0.77 / 0.73 | 0.71 / 0.65 | 0.28 vs 0.06 |
+| `walk` 0.50 | 1.21 / 1.08 | 0.89 / 0.85 | 0.50 vs 0.07 |
+| `walk` 0.75 | 1.73 / 1.26 | 0.95 / 0.94 | 0.69 vs 0.05 |
+| `walk` 1.00 | 2.15 / 1.29 | 0.97 / 0.96 | 0.75 vs 0.05 |
+| `jump` 0.50 | 1.52 / 1.30 | 0.94 / 0.97 | 0.72 vs 0.09 |
+
+- **The shader is literally in the result**, in proportion to strength: the change in
+  the final latent tracks its own field and no other.
+- **Parking works.** In latent space every seed stayed nearest its own town at every
+  strength. In image space that holds through 0.75; at 1.0, for one seed in four.
+- **Close is not very close here.** 0.25 is already about 0.7 of a town away: a
+  different fisherman, the same kind of picture. For what lies below 0.25, see "The
+  near end of the road".
+- **To the eye**: at 0.25 every seed is a photographic portrait, re-composed. At 0.50
+  three of four are a genuine blend, the portrait painted through the shader's colour
+  structure. At 0.75 and 1.0 the prompt is gone and each seed is its own reproducible
+  shader field.
+- **`jump`** gives flat two- and three-colour graphic shapes, and its latent change
+  tracks its own field more strongly than `walk` does at the same strength (0.72
+  against 0.50).
+
+Streets at a parked seed, strength 0.50, in image towns: `phase_shift` 0.0 and 1.0
+move 0.68 and 0.69; `noise_scale` 0.5 moves 1.36 and 2.0 moves 1.16. At 0.25, 0.50
+and 0.75 alike, every street change tracks the change in the field that caused it
+(0.19 to 0.78, against at most 0.12 for other seeds' fields), so the settings are
+real, controllable levers.
+
+`noise_scale` is the biggest of them, and it trades the shader's imprint against
+staying home (overlap here pooled 4x):
+
+| `noise_scale` at 0.50 | overlap: own vs others' (max) | home (image) | nearest own town |
+|---|---|---|---|
+| 0.5 (large features) | 0.77 vs 0.13 | 0.93 | 3/4 |
+| 1.0 | 0.58 vs 0.08 | 0.85 | 4/4 |
+| 2.0 (small features) | 0.38 vs 0.10 | 0.76 | 4/4 |
+
+At 0.5 every seed turns abstract. At 2.0 every seed is a clean photographic portrait
+again, still carrying its own field in the latent: the model absorbs fine structure
+into the picture instead of drawing it.
+
+### MiniMax H3
+
+608x352, 56 frames, 8 steps, `res_multistep`/`simple`, cfg 1.0, the forge prompt,
+three seeds; image measures use the middle frame.
+
+| | far (latent / image) | home (latent / image) | overlap: own field vs others' (max) |
+|---|---|---|---|
+| `walk` 0.25 | 0.69 / 0.66 | 0.72 / 0.65 | 0.05 vs 0.01 |
+| `walk` 0.50 | 0.86 / 0.87 | 0.83 / 0.78 | 0.08 vs 0.02 |
+| `walk` 0.75 | 0.99 / 1.27 | 0.89 / 0.90 | 0.15 vs 0.03 |
+| `walk` 1.00 | 1.24 / 1.77 | 0.96 / 0.98 | 0.26 vs 0.03 |
+| `jump` 0.50 | 1.30 / 1.72 | 0.96 / 0.97 | 0.29 vs 0.02 |
+
+- **The shader is in the result, but H3 transforms it far more than SD 1.5 does.**
+  The direct trace of the field runs 0.05 to 0.26, against 0.28 to 0.75 there. It is
+  above chance at every strength.
+- **Parking works, in a tighter neighbourhood.** In latent space every seed stayed
+  nearest its own town at every `walk` strength; in image space all three did at 0.25
+  and two of three above that. The three seeds' forge scenes look alike (image town
+  0.16, against 0.32 on SD 1.5), so image distance separates them weakly. By eye,
+  each seed's scene is recognisable at every `walk` strength.
+- **To the eye**: 0.25 and 0.50 are close neighbours of the seed's scene, the same
+  anvil and fire with hands and tools moved. At 0.75 the shader's colour starts to
+  show. At 1.00 it is a genuine blend: the seed's horseshoe and anvil with rainbow
+  bokeh, dot grids and colour fields through them.
+- **`jump`**: two of three seeds become new graphic visuals with the horseshoe inside
+  them, glossy cyan bubbles on a textured red field and a navy and beige blob
+  pattern; the third stays close to its scene. Its latent change carries its own
+  field far more than `walk` does at the same strength (0.29 against 0.08).
+
+Streets at 0.50, in image towns: `phase_shift` 0.0 and 1.0 move 0.68 and 0.85;
+`noise_scale` 0.5 moves 1.24 and 2.0 moves 0.98. All of them stay the same seed's
+forge scene, re-composed, with no visible shader pattern at this strength. Each
+tracks its own field change (0.05 to 0.14, against at most 0.03 for other seeds').
+
+`noise_scale` sets the imprint here as on SD 1.5 (0.16, 0.10 and 0.07 at 0.5, 1.0 and
+2.0, pooled, against at most 0.03 to 0.04), but does not trade it cleanly against
+staying home (image home 0.90, 0.78, 0.89).
+
+### The near end of the road
+
+Strengths 0.001, 0.05, 0.10, 0.15 and 0.20 on both models, with streets at 0.10. Each
+step is the distance between neighbouring strengths, averaged over seeds, in image
+towns; latent distances agree.
+
+| step | SD 1.5 | H3 |
+|---|---|---|
+| 0 to 0.001 | 0.32 | 0.48 |
+| 0.001 to 0.05 | 0.30 | 0.41 |
+| 0.05 to 0.10 | 0.27 | 0.47 |
+| 0.10 to 0.15 | 0.30 | 0.40 |
+| 0.15 to 0.20 | 0.28 | 0.28 |
+| 0.20 to 0.25 | 0.24 | 0.40 |
+
+- **Strength 0 is not the start of the road.** At exactly 0 the base noise reaches the
+  sampler untouched. Above 0, `mix_noise` first rescales every channel of it to mean 0
+  and deviation 1, and only then blends. At 0.001 that rescale is the whole change to
+  the starting noise (on SD 1.5 the shader's part is 0.08, against 1.7 to 4.2 for the
+  rescale), the result carries no trace of the field, and still the image moves as far
+  as an ordinary step or further. Some seeds show it as a new picture (SD 1.5 seed 1234
+  goes from one grayscale man to another); others barely move (seed 4242).
+- **After that the road moves in hops, not a glide.** Each 0.05 moves a quarter to half
+  a town on average, and per seed it alternates between near-identical runs and new
+  pictures. SD 1.5 seed 1234 holds the same portrait from 0.05 to 0.25 (steps 0.11 to
+  0.15), while seed 4242 changes man at every step from 0.10. That is the sampler's
+  sensitivity to its starting noise, not something the shader adds.
+- **Towns are not the same size on every model.** H3's steps look larger in towns, but
+  its seeds render similar forge scenes (image town 0.16, against 0.32), and in
+  absolute pixel difference its steps are no larger than SD 1.5's. By eye H3 keeps each
+  seed's scene through 0.50 with hands, tools and horseshoe moved; SD 1.5 changes the
+  man.
+- **The field becomes detectable** from 0.05 on SD 1.5 (0.09 against 0.04 by chance)
+  and from 0.10 on H3 (0.020 against 0.004). At 0.05 on H3 it is within chance.
+- **Streets at 0.10** move 0.28 to 0.59 image towns on SD 1.5 and 0.37 to 0.73 on H3,
+  `phase_shift` 1.0 the least on both.
+
+The rescale is worth revisiting. Matching the blend to the base noise's own mean and
+deviation, instead of forcing 0 and 1, would keep strength 0 bit-identical to a stock
+KSampler, keep the statistics the model receives from ComfyUI, and make the road
+continuous from 0. Not done and not tested: it changes every non-zero-strength output.
+
+### What the two models say together
+
+Parking the seed does what the metaphor says on both: results stay nearest their own
+town, and the shader settings are real levers whose effect traces back to the field.
+What differs is the pace, and how the shader shows. SD 1.5 leaves the neighbourhood
+fast, and by 0.75 the shader has replaced the prompt. H3 explores close streets
+through 0.50 and blends the shader's look into the scene at 0.75 to 1.00, with the
+scene still there. Each result is one prompt, one stage and three or four seeds, so
+the strengths are illustrations, not calibration.
+
+Not measured: more than one
+stage; shader types other than `domain_warp`; flicker across frames. The tools are in
+`verification/blend/`; see "Reproducing the measurements".
+
+---
+
 ## Built: the collapse kept as a travel mode (`5434791`)
 
 Do not simply delete the rank-1 behaviour when fixing `expand_channels`. It is a
@@ -565,8 +750,21 @@ last. A major version should move it to the top of the required block.
 
 ## Reproducing the measurements
 
-Scratch workflows and contact sheets live in the session scratchpad, not the
-repository.
+Most scratch workflows live in the session scratchpad, not the repository. The
+blend measurements are the exception. With the pack loaded in a running ComfyUI
+server and nothing else queued:
+
+    ~/ComfyUI/venv/bin/python verification/blend/drive.py sd15 --label far \
+        --strengths 0.25,0.5,0.75,1.0 --street-strengths 0.25,0.5,0.75 --jump 0.5
+    ~/ComfyUI/venv/bin/python verification/blend/analyze.py \
+        ~/ComfyUI/output/snk_measure/sd15_far.jsonl --sheets ~/ComfyUI/output/snk_measure/sheets
+
+`drive.py` records where each run's latent and image or video landed in a manifest,
+and resumes from it; `h3` works the same way, at about 35 seconds a run against 1.5
+for SD 1.5. Strength 0 is always included, since every distance is read against it.
+`analyze.py` accepts several manifests for one model and checks that any run recorded
+twice came out bit-identical. The server's output is deterministic, so a difference
+there means something changed.
 
 - Minimal H3 t2v graph: `UNETLoader` -> `MiniMaxH3SigmaShift(6.0, 3.0)`,
   `CLIPLoader(type="minimax")`, two `VAELoader`s (video + audio),
