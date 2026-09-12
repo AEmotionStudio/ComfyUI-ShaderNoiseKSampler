@@ -65,6 +65,28 @@ what was wrong was how a multi-stream latent crossed a stage boundary.
   averaging it out. The tooltips now say so, and rank the blend modes by how
   aggressive they are.
 
+- **`normalize_strength` (optional, default off).** One `shader_strength` value
+  meant eight different things: measured as the shader's share of the mixed
+  noise, the blend modes differ by a factor of twenty-three at 0.5. With this on,
+  strength is read on `multiply`'s scale and the rest are rescaled to match. On
+  H3 across six modes at 0.30, the spread in audio level fell from 4.6 dB to
+  2.1 dB.
+- **`decorrelate_channels` (optional, default off).** The generators built every
+  channel past the first one or two as a pointwise function of those two, so
+  `domain_warp` returned noise spanning a single channel at SD's four and about
+  two at any larger count, and `temporal_coherent` returned identical channels.
+  Samplers expect i.i.d. noise. Filling the channel axis from independent draws
+  moves SD 1.5's usable strength from below 0.25 to about 0.5, and clears the
+  blocking H3 showed at 0.5. Generators that already span their channels, such as
+  `tensor_field`, are detected and left untouched.
+
+### Fixed
+- **`temporal_coherent` ignored its seed.** It read `params["base_seed"]`
+  unconditionally where `domain_warp` gates that on `use_temporal_coherence`, and
+  the node always sets `base_seed` — so every stage drew the identical field and
+  only `time` varied. Nothing could select that generator from a workflow before
+  this release, so no saved workflow changes.
+
 ### Removed
 - **`core/model_compat.py`**, along with the `MODEL_CHANNEL_COUNTS`,
   `MODEL_NAME_PATTERNS` and `VIDEO_MODEL_CHANNELS` tables. Nothing called it. Its
