@@ -85,15 +85,26 @@ def _latent_space(model):
 _STREAM_SEED_STRIDE = 104729
 
 
+# A stream smaller than this carries settings rather than content, so painting it
+# would corrupt a parameter instead of varying a picture. TripoSplat's second
+# stream is a [B, 1, 5] camera; H3's audio, the smallest real one, is 414 cells.
+_METADATA_ELEMENTS = 64
+
+
 def _paintable(streams, shade_non_spatial: bool):
     """
     Which streams get shader noise.
 
     Only the first by default: it is the spatial one, and the rest -- MiniMax H3
     and LTXAV's audio -- have no grid to paint. With `shade_non_spatial` they all
-    do, which is the point of the option.
+    do, except any stream small enough to be metadata. That exception is what
+    keeps the option from writing noise into TripoSplat's camera parameters,
+    which would move the viewpoint rather than vary the subject.
     """
-    return range(len(streams)) if shade_non_spatial else [0]
+    if not shade_non_spatial:
+        return [0]
+    return [i for i, stream in enumerate(streams)
+            if i == 0 or stream.numel() // max(stream.shape[0], 1) >= _METADATA_ELEMENTS]
 
 
 def _shader_events(

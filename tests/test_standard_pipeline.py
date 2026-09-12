@@ -316,3 +316,21 @@ def test_shaping_leaves_the_callers_params_alone(recorder):
     run_pipeline(sequential_stages=3, shader_strength=0.4, shader_params=params,
                  stage_progression="coarse_to_fine")
     assert params["scale"] == 1.0 and params["octaves"] == 2.0
+
+
+def test_metadata_streams_are_never_painted(recorder):
+    """
+    TripoSplat is (geometry, camera) where the camera is [B, 1, 5]. Painting it
+    would move the viewpoint rather than vary the subject, so shade_non_spatial
+    has to skip it even though it skips nothing else.
+    """
+    from comfy.nested_tensor import NestedTensor
+    from snk.pipelines.standard import _paintable
+
+    geometry, camera = torch.ones(1, 16, 8, 8), torch.ones(1, 1, 5)
+    assert _paintable([geometry, camera], True) == [0]
+    assert _paintable([geometry, camera], False) == [0]
+
+    # a real audio stream is far above the threshold and must still be painted
+    audio = torch.ones(1, 32, 2, 207)
+    assert _paintable([geometry, audio], True) == [0, 1]
