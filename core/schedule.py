@@ -148,3 +148,40 @@ def build_sigmas(
         model_options=getattr(model, "model_options", {}),
     )
     return sampler.sigmas
+
+
+# How far the zoom and detail controls move across the trajectory, as a
+# multiplier on noise_scale and an offset on octaves at the far end. Modest on
+# purpose: this shapes the walk, it is not meant to be a second strength knob.
+PROGRESSIONS = ("uniform", "coarse_to_fine", "fine_to_coarse")
+_SCALE_SPAN = (0.5, 2.0)
+_OCTAVE_SPAN = (-1.0, 1.0)
+
+
+def stage_shaping(progression: str, progress: float) -> dict:
+    """
+    Per-stage overrides for a boundary `progress` of the way through the schedule.
+
+    The diffusion trajectory is not uniform -- early steps settle composition and
+    late steps settle detail -- but every stage has always drawn the same shader
+    at the same zoom. `coarse_to_fine` starts zoomed in on large features and ends
+    on small ones, which lines the noise up with what each part of the trajectory
+    is actually deciding. The README already calls noise_scale the zoom control
+    and octaves the detail slider; this just ties them to position.
+
+    Returns multiplicative/additive adjustments, not absolute values, so the
+    node's own widget settings stay the centre of the range.
+    """
+    if progression not in PROGRESSIONS or progression == "uniform":
+        return {}
+
+    position = min(max(progress, 0.0), 1.0)
+    if progression == "fine_to_coarse":
+        position = 1.0 - position
+
+    scale_low, scale_high = _SCALE_SPAN
+    octave_low, octave_high = _OCTAVE_SPAN
+    return {
+        "scale_multiplier": scale_low + (scale_high - scale_low) * position,
+        "octave_offset": octave_low + (octave_high - octave_low) * position,
+    }

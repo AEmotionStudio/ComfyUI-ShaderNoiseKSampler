@@ -40,6 +40,10 @@ logger = logging.getLogger("ShaderNoiseKSampler")
 # Seed offset for injection stages, so they cannot collide with sequential ones.
 _INJECTION_SEED_BASE = 1000
 
+# Bounds a shaped stage must stay inside; the node's own widgets allow these.
+_MIN_SCALE = 0.1
+_MAX_OCTAVES = 8.0
+
 
 def _is_nested(samples) -> bool:
     return bool(getattr(samples, "is_nested", False))
@@ -101,12 +105,15 @@ def _shader_events(
     injection_distribution: str,
     seed: int,
     temporal_coherence: bool,
-) -> Tuple[List[int], Dict[int, List[Tuple[float, int]]]]:
+    stage_progression: str = "uniform",
+) -> Tuple[List[int], Dict[int, List[Tuple[float, int, Dict[str, float]]]]]:
     """
     Work out where shader noise enters and how strong it is there.
 
     Returns the segment boundaries and, per boundary step, the list of
-    (strength, seed) shader contributions to apply in order.
+    (strength, seed, shaping) shader contributions to apply in order. `shaping`
+    carries the zoom and detail adjustments for that point in the trajectory and
+    is empty under the default uniform progression.
     """
     starts = schedule.sequential_starts(total_steps, sequential_stages)
     points = schedule.injection_points(total_steps, injection_stages)
@@ -115,7 +122,13 @@ def _shader_events(
     sequential = schedule.stage_strengths(shader_strength, max(sequential_stages, 1), sequential_distribution)
     injection = schedule.stage_strengths(shader_strength, injection_stages, injection_distribution)
 
-    events: Dict[int, List[Tuple[float, int]]] = {step: [] for step in boundaries}
+    events: Dict[int, List[Tuple[float, int, Dict[str, float]]]] = {step: [] for step in boundaries}
+
+    def shaping(step: int) -> Dict[str, float]:
+        # Position in the schedule, not stage index: sequential and injection
+        # stages interleave, and what matters is how far along the trajectory the
+        # noise lands.
+        return schedule.stage_shaping(stage_progression, step / max(total_steps, 1))
 
     def nearest(step: int) -> int:
         return min(boundaries, key=lambda b: (abs(b - step), b))
@@ -123,12 +136,31 @@ def _shader_events(
     if sequential_stages > 0:
         for index, start in enumerate(starts):
             stage_seed = seed if temporal_coherence else seed + index
-            events[nearest(start)].append((sequential[index], stage_seed))
+            events[nearest(start)].append((sequential[index], stage_seed, shaping(start)))
     for index, point in enumerate(points):
         stage_seed = seed if temporal_coherence else seed + _INJECTION_SEED_BASE + index
-        events[nearest(point)].append((injection[index], stage_seed))
+        events[nearest(point)].append((injection[index], stage_seed, shaping(point)))
 
     return boundaries, events
+
+
+def _shaped(shader_params: Dict[str, Any], shaping: Dict[str, float]) -> Dict[str, Any]:
+    """Apply one stage's zoom and detail adjustments to a copy of the params."""
+    if not shaping:
+        return shader_params
+
+    shaped = dict(shader_params)
+    multiplier = shaping.get("scale_multiplier", 1.0)
+    offset = shaping.get("octave_offset", 0.0)
+
+    # The node writes every spelling the generators read, so adjust them all.
+    for key in ("scale", "shaderScale"):
+        if key in shaped:
+            shaped[key] = max(_MIN_SCALE, float(shaped[key]) * multiplier)
+    for key in ("octaves", "shaderOctaves"):
+        if key in shaped:
+            shaped[key] = max(1.0, min(_MAX_OCTAVES, float(shaped[key]) + offset))
+    return shaped
 
 
 def _apply_events(
@@ -152,11 +184,12 @@ def _apply_events(
     The shape is read off `noise` rather than carried in from the latent the run
     started with, so a boundary residual cannot be painted at a stale shape.
     """
-    for strength, stage_seed in events:
+    for strength, stage_seed, shaping in events:
         if strength <= 0.0:
             continue
+        stage_params = _shaped(shader_params, shaping)
         generated = shader_noise.generate(
-            tuple(noise.shape), shader_params, shader_type, stage_seed + stream_seed_offset, device,
+            tuple(noise.shape), stage_params, shader_type, stage_seed + stream_seed_offset, device,
             dtype=dtype, temporal_coherence=temporal_coherence,
             decorrelate=decorrelate_channels, allow_sequence=allow_sequence,
         )
@@ -225,6 +258,7 @@ def run(
     normalize_strength: bool = False,
     decorrelate_channels: bool = False,
     shade_non_spatial: bool = False,
+    stage_progression: str = "uniform",
     custom_sigmas: Optional[torch.Tensor] = None,
     disable_pbar: bool = False,
 ) -> Dict[str, Any]:
@@ -241,6 +275,7 @@ def run(
     boundaries, events = _shader_events(
         total_steps, sequential_stages, injection_stages, shader_strength,
         sequential_distribution, injection_distribution, seed, use_temporal_coherence,
+        stage_progression,
     )
     segment_list = schedule.segments(boundaries, total_steps)
 
@@ -250,7 +285,7 @@ def run(
     # Refuse a latent the shaders cannot paint on before any sampling happens, rather
     # than at the first boundary that needs one. At shader_strength 0 there is nothing
     # to paint, so those models still sample through here as a plain KSampler.
-    if any(strength > 0.0 for stage in events.values() for strength, _ in stage):
+    if any(strength > 0.0 for stage in events.values() for strength, _, _ in stage):
         for stream in (_streams(samples) if shade_non_spatial else [primary]):
             shader_noise.require_spatial_latent(tuple(stream.shape), shade_non_spatial)
 

@@ -10,6 +10,7 @@ import pytest
 import torch
 
 from helpers import FakeModel
+from snk.core import schedule
 from snk.core.schedule import (
     MIN_SEGMENT_STEPS,
     SUPPORTED_DISTRIBUTIONS,
@@ -106,3 +107,34 @@ def test_custom_sigmas_are_used_verbatim():
     ascending = torch.tensor([0.0, 0.3, 1.1, 2.7, 6.0, 14.6])
     flipped = build_sigmas(model, 20, "euler", "beta", 1.0, custom_sigmas=ascending)
     assert torch.equal(flipped, custom.float())
+
+
+# --- per-stage shaping ----------------------------------------------------------------
+
+def test_uniform_progression_changes_nothing():
+    for progress in (0.0, 0.5, 1.0):
+        assert schedule.stage_shaping("uniform", progress) == {}
+        assert schedule.stage_shaping("not_a_progression", progress) == {}
+
+
+def test_coarse_to_fine_zooms_in_then_out():
+    """Low noise_scale is large, zoomed-in features; high is small, zoomed-out ones."""
+    start = schedule.stage_shaping("coarse_to_fine", 0.0)
+    end = schedule.stage_shaping("coarse_to_fine", 1.0)
+
+    assert start["scale_multiplier"] < 1.0 < end["scale_multiplier"]
+    assert start["octave_offset"] < 0.0 < end["octave_offset"]
+
+
+def test_fine_to_coarse_is_the_mirror():
+    for progress in (0.0, 0.25, 0.5, 0.75, 1.0):
+        forward = schedule.stage_shaping("coarse_to_fine", progress)
+        backward = schedule.stage_shaping("fine_to_coarse", 1.0 - progress)
+        assert forward == pytest.approx(backward)
+
+
+def test_the_midpoint_is_the_widget_value():
+    """The span is centred, so a shaped run still sits on the settings the user chose."""
+    middle = schedule.stage_shaping("coarse_to_fine", 0.5)
+    assert middle["octave_offset"] == pytest.approx(0.0)
+    assert 1.0 < middle["scale_multiplier"] < 1.5   # geometric span, so not exactly 1.0

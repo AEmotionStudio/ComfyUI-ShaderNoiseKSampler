@@ -286,3 +286,33 @@ def test_sequence_latents_are_still_refused_by_default(recorder):
         run_pipeline(model=FakeModel("flow"), latent={"samples": torch.ones(1, 64, 1024)},
                      shader_strength=0.5)
     assert recorder == []
+
+
+def test_stage_progression_varies_the_shader_across_the_run(recorder):
+    """Every stage used to draw the same shader at the same zoom."""
+    from snk.pipelines.standard import _shader_events
+
+    _, uniform = _shader_events(20, 3, 0, 0.5, "uniform", "uniform", 1, False, "uniform")
+    _, shaped = _shader_events(20, 3, 0, 0.5, "uniform", "uniform", 1, False, "coarse_to_fine")
+
+    assert all(not event[2] for stage in uniform.values() for event in stage)
+    multipliers = [event[2]["scale_multiplier"] for stage in shaped.values() for event in stage]
+    assert len(multipliers) == 3
+    assert sorted(multipliers) == multipliers, "must ramp with position in the schedule"
+    assert multipliers[0] < 1.0 < multipliers[-1]
+
+
+def test_a_shaped_run_still_samples_correctly(recorder):
+    out = run_pipeline(sequential_stages=3, shader_strength=0.4,
+                       stage_progression="coarse_to_fine")
+    assert len(recorder) == 3
+    assert out["samples"].shape == (1, 4, 16, 16)
+    assert torch.isfinite(out["samples"]).all()
+
+
+def test_shaping_leaves_the_callers_params_alone(recorder):
+    """The params dict is shared across stages; shaping must copy, not mutate."""
+    params = dict(SHADER_PARAMS, scale=1.0, octaves=2.0)
+    run_pipeline(sequential_stages=3, shader_strength=0.4, shader_params=params,
+                 stage_progression="coarse_to_fine")
+    assert params["scale"] == 1.0 and params["octaves"] == 2.0
