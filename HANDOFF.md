@@ -243,9 +243,13 @@ centroid and level are not monotone. It needs several prompts with different
 audio character (tonal, percussive, broadband) and repeats per setting before
 anyone claims a direction. Nobody has *listened* to the output.
 
-**The sequence-latent path is untested on a real audio model.** It generates
-correct shapes and finite unit-variance noise, and the pipeline accepts it, but
-no Stable Audio or ACE-Step checkpoint has been run through it.
+**The rank-3 sequence-latent path is untested.** Note this is narrower than it
+first appears: MiniMax H3 *is* an audio model — it generates music, speech and
+sound jointly with video — so the flatness measurement above is a real
+audio-model result, not a proxy. What has never run is the `[B, C, L]` shape
+that Stable Audio and ACE-Step use, because no such checkpoint is installed. It
+generates correct shapes and finite unit-variance noise and the pipeline accepts
+it; nothing more is known.
 
 ~~TripoSplat's second stream is camera parameters.~~ Handled (`c938137`):
 streams carrying fewer than 64 cells per batch item are skipped, which catches
@@ -283,6 +287,60 @@ it is a contained change if the abrupt character switch turns out to be useful.
 
 ---
 
+## Next up: the agreed upgrade (decided, not yet started)
+
+**Legacy compatibility is no longer a constraint.** The pack is upgrading; pre-2.0
+workflows changing output is accepted. That supersedes commit `1b21bcb`
+("mark the legacy pipeline as frozen"), the byte-exact promise in
+`tests/golden_cases.py`, and the auto-switch in
+`web/sampling_mode_migration.js:42`. Nothing below was blocked on anything but
+that decision.
+
+### What to do
+
+1. **Fix `shaders/base.py::expand_channels` at source.** It builds every channel
+   past the first one or two as a pointwise function (`sin`, `abs`) of a mixture
+   of those two. `decorrelate_channels` currently compensates downstream from
+   `core/shader_noise.py`; fixing the generator removes the need for the
+   workaround and makes `domain_warp` mean one thing everywhere instead of two
+   depending on sampling mode.
+2. **Flip `decorrelate_channels` and `normalize_strength` to default on.** Both
+   ship off purely to protect saved workflows. The measured case for each is in
+   items 1 and 2 above.
+3. **Re-purpose the golden suite as regression pins for the *standard* pipeline.**
+   Re-capture from current code and repoint the cases away from legacy. The
+   pre-2.0 reference is given up deliberately; what is kept is a fast bit-exact
+   net against accidental future change, which is the only such net in the
+   project.
+
+### Facts already established, so this does not need re-deriving
+
+- **Only `domain_warp` calls `expand_channels`.** `tensor_field`, `curl_noise`
+  and `temporal_coherent` build their channels by other means and are untouched
+  by a fix there.
+- **Exactly one of the eleven goldens changes: `video_nested`.** The eight image
+  cases call `expand_channels` but it returns early — at 4 channels there is
+  nothing to grow — so they stay byte-identical. `image_styled`, `image_batch`,
+  `video_curl` and `video_temporal` use other generators and never call it.
+- **The suite badly under-covers the change.** One golden moves, but the affected
+  population is every legacy workflow using `domain_warp` on a latent with five
+  or more channels: Flux, SD3, WAN, Hunyuan, H3, LTXV. Only SD 1.5 and SDXL, at
+  four channels, are unaffected. Do not read a small golden diff as a small
+  change.
+- **Rank still tops out near 60% of channels** even at basis 64, because the
+  basis draws are not independent of each other either. Mixing genuinely
+  orthogonal fields rather than random combinations of correlated ones would
+  close the rest of the gap, and belongs with step 1.
+
+### Then optionally
+
+Removing legacy mode altogether — the pipeline, the `sampling_mode` input, the
+migration JS, and the uncalled `core/sampler.py`, `core/blending.py` and
+`core/transforms.py` — was considered and deliberately left out of the scope
+above. It is a large deletion and a separate decision.
+
+---
+
 ## Reproducing the measurements
 
 Scratch workflows and contact sheets live in the session scratchpad, not the
@@ -312,12 +370,6 @@ format, a real dual-shift `ModelSamplingAV` and `MiniMaxH3`'s own
 ---
 
 ## Not on this list, deliberately
-
-**The legacy pipeline stays frozen.** Its contract is reproducing pre-2.0 seeds
-bit-for-bit. It has a known quirk — its inner-model class table sits inside
-`if debugger.enabled:`, so detected channel counts depend on the debug level —
-and fixing it would change output for existing workflows. `tests/golden_cases.py`
-pins it.
 
 **`core/sampler.py`, `core/blending.py` and `core/transforms.py` are uncalled by
 any node** (`CODE_REVIEW.md:243`, which also lists `core/model_compat.py`, removed
