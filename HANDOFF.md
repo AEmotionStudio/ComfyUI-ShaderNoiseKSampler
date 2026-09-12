@@ -17,9 +17,15 @@ are recorded on purpose, because they are the obvious-sounding ideas.
 | 3 | Lean into what the name promises | Done (`86aac9e`) — `ShaderNoiseWalk` |
 | 4 | Shader noise on the audio stream | Done (`36e9e8c`) — works; aesthetic value unproven |
 | 5 | Per-stage shader parameters | Done (`08b7d3b`) — `stage_progression` |
+| + | Travel modes | Done (`5434791`) — `walk` / `drift` / `jump` |
+| + | Presets | Done (`5434791`, tuned `ce4b1ec`) — seven bundles |
 
-Every new capability is an optional input defaulting to off, so no saved workflow
-changes behaviour unless asked.
+Most new capabilities are optional inputs defaulting to off. **One is not:**
+`travel_mode` defaults to `walk`, so the standard pipeline decorrelates unless
+told otherwise. That is deliberate — it is half of step 2 of the upgrade below,
+arriving early — and it is safe because legacy never reaches this code, so the
+golden suite is untouched. `normalize_strength` is still off unless a preset
+turns it on.
 
 ---
 
@@ -27,7 +33,8 @@ changes behaviour unless asked.
 
 **1. The strength ceiling is set by the channel axis**, not by latent size or
 step count. See item 2. Ceilings measured on H3 (608x352, 8 steps,
-`res_multistep`/`simple`, cfg 1.0), **all with `decorrelate_channels` off**:
+`res_multistep`/`simple`, cfg 1.0), **all at the noise the generators natively
+produce** — what `travel_mode` now calls `jump`-ward, before any widening:
 
 | Setting | Usable | Fails by |
 |---|---|---|
@@ -41,8 +48,8 @@ step count. See item 2. Ceilings measured on H3 (608x352, 8 steps,
 | shape masks | ~0.2 | 0.6 (mask drawn into the picture) |
 | `use_temporal_coherence` | ~0.2 | 0.5 (swamps the frame) |
 
-Re-derived on H3 with `decorrelate_channels` on at the current basis of 64, which
-**inverts the ordering**:
+Re-derived on H3 at `travel_mode: walk` (basis 64), which **inverts the
+ordering**:
 
 | Generator | Ceiling without | With |
 |---|---|---|
@@ -144,8 +151,8 @@ spans almost nothing regardless of channel count:
 | `curl_noise` | 3.58 | 10.88 | 22.11 | 25.22 |
 | `tensor_field` | 3.81 | 14.31 | 23.54 | 90.78 |
 
-`decorrelate_channels` fills the axis from `DECORRELATION_BASIS` independent
-renders mixed through a seeded random matrix. Guarded twice, because neither
+Widening fills the axis from `DECORRELATION_BASIS` independent renders mixed
+through a seeded random matrix; `travel_mode` selects how many. Guarded twice, because neither
 guess held alone: generators already wider than the basis are skipped
 (`curl_noise` looks correlated but spans 25 of 128, so a correlation threshold
 was the wrong test), and the remix is kept only when it actually widens the draw
@@ -157,7 +164,7 @@ ignored its seed argument entirely.
 
 ### Left to do
 
-**Fix `_expand_channels` at source.** `decorrelate_channels` works around it from
+**Fix `_expand_channels` at source.** `travel_mode` works around it from
 `core/shader_noise.py`; the generators still produce collapsed output for every
 other caller, including legacy. Doing it properly changes legacy output, which
 `tests/golden_cases.py` pins deliberately, so it needs the same gating
@@ -300,13 +307,13 @@ that decision.
 
 1. **Fix `shaders/base.py::expand_channels` at source.** It builds every channel
    past the first one or two as a pointwise function (`sin`, `abs`) of a mixture
-   of those two. `decorrelate_channels` currently compensates downstream from
+   of those two. `travel_mode: walk` currently compensates downstream from
    `core/shader_noise.py`; fixing the generator removes the need for the
    workaround and makes `domain_warp` mean one thing everywhere instead of two
    depending on sampling mode.
-2. **Flip `decorrelate_channels` and `normalize_strength` to default on.** Both
-   ship off purely to protect saved workflows. The measured case for each is in
-   items 1 and 2 above.
+2. **Flip `normalize_strength` to default on.** Half done: widening is already
+   the default via `travel_mode: walk` (`5434791`). `normalize_strength` still
+   ships off and is only turned on by a preset. The measured case is in item 1.
 3. **Re-purpose the golden suite as regression pins for the *standard* pipeline.**
    Re-capture from current code and repoint the cases away from legacy. The
    pre-2.0 reference is given up deliberately; what is kept is a fast bit-exact
