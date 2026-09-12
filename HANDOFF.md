@@ -19,13 +19,13 @@ are recorded on purpose, because they are the obvious-sounding ideas.
 | 5 | Per-stage shader parameters | Done (`08b7d3b`) — `stage_progression` |
 | + | Travel modes | Done (`5434791`) — `walk` / `drift` / `jump` |
 | + | Presets | Done (`5434791`, tuned `ce4b1ec`) — seven bundles |
+| + | The agreed upgrade | Done — generators fill their own channels, `normalize_strength` on, goldens on the standard pipeline, presets write the widgets |
 
-Most new capabilities are optional inputs defaulting to off. **One is not:**
-`travel_mode` defaults to `walk`, so the standard pipeline decorrelates unless
-told otherwise. That is deliberate — it is half of step 2 of the upgrade below,
-arriving early — and it is safe because legacy never reaches this code, so the
-golden suite is untouched. `normalize_strength` is still off unless a preset
-turns it on.
+Most new capabilities are optional inputs defaulting to off. **Two are not:**
+`travel_mode` defaults to `walk` and `normalize_strength` defaults on. Both are
+part of the upgrade described below, which also changed the generators' own
+output — for legacy too — and re-pointed the golden suite at the standard
+pipeline. The last commit with the old behaviour is tagged `pre-collapse-fix`.
 
 ---
 
@@ -69,6 +69,10 @@ comes from the model's prior rather than a prompt. Coherence is still
 unambiguous, and the control in the same batch — `domain_warp` at 0.75 with
 decorrelation off — reproduced the same green quilt seen earlier under real
 prompts, so the comparison holds.
+
+Under a real prompt at 608x352 that same `walk` held only to about 0.5, so the
+ceilings above are optimistic. The upgrade section below has real-prompt numbers
+from before and after the generators were fixed.
 
 **2. The audio stream moves even when nothing touches it.** Shader noise reaches
 only the spatial stream by default and the audio keeps its Gaussian noise
@@ -126,7 +130,7 @@ An empirical per-type factor fitted across two or three architectures and
 labelled as empirical is defensible — fitting it to one model and presenting it
 as general is not.
 
-**Consider making it the default** in a major version.
+~~Consider making it the default~~ Done in the upgrade below.
 
 ---
 
@@ -164,11 +168,8 @@ ignored its seed argument entirely.
 
 ### Left to do
 
-**Fix `_expand_channels` at source.** `travel_mode` works around it from
-`core/shader_noise.py`; the generators still produce collapsed output for every
-other caller, including legacy. Doing it properly changes legacy output, which
-`tests/golden_cases.py` pins deliberately, so it needs the same gating
-discussion as item 1.
+~~Fix `_expand_channels` at source.~~ Done in the upgrade below — and it was
+not only `expand_channels`.
 
 ~~Tune `DECORRELATION_BASIS`.~~ Done (`7661d7c`): it shipped at 8 on a guess and
 is now 64. On H3 at strength 0.75, basis 8 is still mostly destroyed, 16 is
@@ -178,9 +179,9 @@ runs of thirty to fifty seconds.
 
 ~~Re-derive the ceilings table with it on.~~ Done — see finding (1).
 
-**Rank still tops out around 60% of channels**, because the basis draws are not
-fully independent of each other either. Mixing genuinely orthogonal fields rather
-than random combinations of correlated ones would close the rest of the gap.
+~~Rank still tops out around 60% of channels, because the basis draws are not
+independent.~~ Wrong diagnosis: 0.6 is what random mixing yields. Rendering one
+field per channel reaches 22.7 of 24. See the upgrade below.
 
 ---
 
@@ -294,50 +295,12 @@ it is a contained change if the abrupt character switch turns out to be useful.
 
 ---
 
-## Next up: the agreed upgrade (decided, not yet started)
+## The agreed upgrade — done
 
-**Legacy compatibility is no longer a constraint.** The pack is upgrading; pre-2.0
-workflows changing output is accepted. That supersedes commit `1b21bcb`
-("mark the legacy pipeline as frozen"), the byte-exact promise in
-`tests/golden_cases.py`, and the auto-switch in
-`web/sampling_mode_migration.js:42`. Nothing below was blocked on anything but
-that decision.
-
-### What to do
-
-1. **Fix `shaders/base.py::expand_channels` at source.** It builds every channel
-   past the first one or two as a pointwise function (`sin`, `abs`) of a mixture
-   of those two. `travel_mode: walk` currently compensates downstream from
-   `core/shader_noise.py`; fixing the generator removes the need for the
-   workaround and makes `domain_warp` mean one thing everywhere instead of two
-   depending on sampling mode.
-2. **Flip `normalize_strength` to default on.** Half done: widening is already
-   the default via `travel_mode: walk` (`5434791`). `normalize_strength` still
-   ships off and is only turned on by a preset. The measured case is in item 1.
-3. **Re-purpose the golden suite as regression pins for the *standard* pipeline.**
-   Re-capture from current code and repoint the cases away from legacy. The
-   pre-2.0 reference is given up deliberately; what is kept is a fast bit-exact
-   net against accidental future change, which is the only such net in the
-   project.
-
-### Facts already established, so this does not need re-deriving
-
-- **Only `domain_warp` calls `expand_channels`.** `tensor_field`, `curl_noise`
-  and `temporal_coherent` build their channels by other means and are untouched
-  by a fix there.
-- **Exactly one of the eleven goldens changes: `video_nested`.** The eight image
-  cases call `expand_channels` but it returns early — at 4 channels there is
-  nothing to grow — so they stay byte-identical. `image_styled`, `image_batch`,
-  `video_curl` and `video_temporal` use other generators and never call it.
-- **The suite badly under-covers the change.** One golden moves, but the affected
-  population is every legacy workflow using `domain_warp` on a latent with five
-  or more channels: Flux, SD3, WAN, Hunyuan, H3, LTXV. Only SD 1.5 and SDXL, at
-  four channels, are unaffected. Do not read a small golden diff as a small
-  change.
-- **Rank still tops out near 60% of channels** even at basis 64, because the
-  basis draws are not independent of each other either. Mixing genuinely
-  orthogonal fields rather than random combinations of correlated ones would
-  close the rest of the gap, and belongs with step 1.
+Legacy compatibility stopped being a constraint, so the three agreed steps were
+carried out, plus the preset-to-widget sync. The `pre-collapse-fix` tag marks the
+last commit with the old behaviour; reproducing pre-upgrade output now needs a
+checkout of it, not a test fixture.
 
 ### Why, in one paragraph
 
@@ -351,26 +314,160 @@ the README's own terms, rank-collapsed noise did not give you territory. It gave
 you a different lottery with a strong house bias. Decorrelation roughly triples
 the range over which the shader steers instead of overwrites.
 
-### Three consequences to plan for
+### What the plan got wrong
 
-**Step 2 is the one that delivers.** Steps 1 and 3 are cleanup around it. Both
-fixes currently default to off, so a user installing today gets rank-1 noise and
-a strength dial that means eight different things depending on blend mode. The
-project already knows better and does not act on it, which is further from the
-stated goal than before the fixes existed.
+- **The collapse had three sources, not one.** `expand_channels` returned early at
+  four channels, so fixing it alone would have changed nothing for SD 1.5 or SDXL:
+  the rank 1.00 there came from `domain_warp.py`'s `repeat(1, 4, 1, 1)`.
+  `temporal_coherent` broadcast one field to every channel with `.expand()` — rank
+  1.00 at every count, and it is the shader the `video` preset picks. `curl_noise`
+  padded its colour path with copies.
+- **Seven goldens moved, not one:** every `domain_warp` case, plus `video_curl`.
+  `image_batch`, `image_styled`, `video_temporal` and `image_zero_strength` held
+  byte-identical, which is how the fix was checked before re-capturing.
+- **"Rank tops out near 60% because the basis draws are not independent" was the
+  wrong diagnosis.** One render per channel reaches 22.7 of 24. The 0.6 is what a
+  random mixing matrix yields: 0.52 to 0.64 of the basis, measured across all four
+  generators at 16, 24 and 128 channels.
+- **`drift` was already broken for the wide generators.** `tensor_field` and
+  `curl_noise` spanned enough that the widening guard returned their noise
+  untouched, so `drift` silently equalled `walk` for them. Once every generator is
+  wide it would have done so for all four.
 
-**The migration becomes a lie.** `web/sampling_mode_migration.js` silently routes
-any pre-2.0 workflow into `legacy`, and the 2.0.0 changelog gives the reason as
-"so their seeds keep reproducing". Fix `expand_channels` and that migration still
-fires but no longer delivers what it exists for. Either drop it, or redefine
-`legacy` explicitly as "the old pipeline *structure*" rather than "the old
-output", and say so in the changelog.
+### As built
 
-**A golden failure changes meaning.** Today it says "you broke backwards
-compatibility". Afterwards it says "you changed the sampler". Both are worth
-having and they are not the same signal. Re-capturing also gives up the only
-bit-exact record of pre-2.0 behaviour: after it, reproducing the old output
-needs a `git checkout`, not a test fixture.
+1. **`BaseNoiseGenerator.fill_channels`** (`shaders/base.py`) replaces
+   `expand_channels`. Each channel up to `CHANNEL_BASIS` (64) is its own render at
+   `seed + 6151 * c`; channels past that are QR-orthogonalised mixtures of those
+   renders. Channel 0 is the generator's own draw, so a one-channel request is
+   unchanged. That keeps `jump` byte-identical to the tag for all four generators
+   (verified), and with it the H3-calibrated `jump` and `stamp` presets. The extra
+   renders run inside a forked RNG. 6151 was checked against the mod-10000 seed
+   hashing inside `curl_noise`: none of the first 64 channels collide.
+   `domain_warp`, `temporal_coherent` and `curl_noise` call it. `tensor_field`
+   already rendered per channel and is untouched; `fast_high_channel_noise` still
+   tiles, on purpose.
+
+   | effective rank | before | after |
+   |---|---|---|
+   | `domain_warp` at 4 / 24 / 128 channels | 1.00 / 2.13 / 2.43 | 3.91 / 22.72 / 69.56 |
+   | `temporal_coherent` at 4 / 24 / 128 | 1.00 / 1.00 / 1.00 | 3.93 / 22.67 / 66.08 |
+   | `curl_noise` at 128 | 25.07 | 59.23 |
+
+   Per-channel rendering was chosen over remixing a basis, although remixing was
+   already in the code, for two reasons. It is cheaper at H3's 24 channels: 24
+   renders instead of 64. And it keeps each channel a real shader field; a sum of
+   many independent fields drifts toward Gaussian, so some of what remixing bought
+   was the shader being washed out.
+
+2. **The travel-mode guard is direction-aware** (`core/shader_noise.py::_maybe_decorrelate`).
+   A basis below the widest (`drift`, `jump`) narrows unconditionally. Widening is
+   skipped once the draw exceeds `_MIX_RANK_YIELD` (0.65, just above the best remix
+   measured), so `walk` hands the generator's noise straight through instead of
+   rendering 64 more draws and discarding them. On a four-channel latent `drift`
+   and `walk` are the same by construction.
+3. **`normalize_strength` defaults on.** `multiply`, the default blend mode, is the
+   calibration reference and is unaffected.
+4. **The goldens are pinned to the standard pipeline.** `test_legacy_golden.py`
+   became `test_golden.py`, and every input only the standard pipeline reads is set
+   explicitly in `NODE_DEFAULTS`, so a changed default shows up as an edit.
+5. **Choosing a preset writes the widgets** (`web/src/preset_widgets.ts`). The
+   table comes from `GET /shader_noise_ksampler/presets`, so it has one source.
+   Editing a controlled widget to another value drops the preset back to `custom`.
+   A saved workflow is never rewritten on load. The Python override stays the
+   authority, because API submissions and the Walk node never run the JS.
+
+`test_blend_calibration_is_current` no longer compares `difference` on an absolute
+tolerance. Its whole curve is below the tolerance, and after the fix it sat 0.002
+from failing by luck. Every other mode stays within 0.049 of the table, so the table
+itself was not re-measured.
+
+### Measured on real weights
+
+**SD 1.5** at 512x512, 20 steps, cfg 7, `euler`/`normal`, seed 8888. `domain_warp`
+on `walk`, before and after, same two prompts:
+
+| | portrait holds to | landscape holds to |
+|---|---|---|
+| before | ~0.30 | ~0.30 |
+| after | ~0.35 | ~0.45 |
+
+A modest gain, not the large one predicted for four-channel models. Two other
+changes are visible. Small strength steps now make small moves: after the fix, 0.25
+and 0.30 are near-identical neighbours, where before 0.30 had already re-composed
+the frame. And the failure mode changed from a red, black and cyan field to a
+full-colour one, since all four channels now carry structure. `curl_noise` at four
+channels is pixel-identical before and after, as it must be.
+
+Those ceilings are judgements made by looking at one image per strength. One
+exactly-defined number backs them. The mean pixel distance between the portrait
+and the landscape at the same strength (64x64, RGB, 0 to 1) measures how much the
+prompt still matters: 0.24 at strength 0, falling toward 0 once both prompts
+become the same pattern.
+
+| strength | 0.30 | 0.40 | 0.45 | 0.50 | 0.75 |
+|---|---|---|---|---|---|
+| before | 0.20 | 0.14 | 0.12 | 0.10 | 0.03 |
+| after | 0.24 | 0.20 | 0.22 | 0.18 | 0.05 |
+
+So the prompt keeps mattering further up the range, and both versions stop being
+about the prompt by 0.75. Step-to-step distance agrees in the usable region
+(0.25 to 0.30: 0.19 before, 0.09 after). Distance from the strength-0 image does
+not separate the two versions at all, because it cannot tell a coherent new
+picture from a broken one.
+
+**MiniMax H3** under a real prompt: the forge scene, which is dark and so lets
+structure survive. 608x352, 56 frames, 8 steps, `res_multistep`/`simple`, cfg 1.0,
+two stages, seed 8888, `walk`. The before runs went through the ComfyUI server
+while it still held the tagged code; the after runs went through the same server,
+restarted. The strength-0 frame is pixel-identical between the two.
+
+| | 0.50 | 0.75 | 1.00 |
+|---|---|---|---|
+| `domain_warp` before | clean | purple cast, striping, re-composed | rainbow field |
+| `domain_warp` after | clean | **clean**, faint tint in one corner | degraded, subject still there |
+| `temporal_coherent` before | clean | rainbow dot grid | rainbow dot grid |
+| `temporal_coherent` after | clean, re-composed | rainbow dot grid | rainbow dot grid |
+
+`domain_warp`'s ceiling moved from about 0.5 to about 0.75, and the seed keeps
+anchoring the scene further up the range. `temporal_coherent` did not move: it
+fails into a dot grid, which is the generator's spatial character and not
+something channel width touches. The `video` preset's 0.35 sits below both.
+
+That H3 ceiling rests on looking at the middle frame of each clip, from one
+prompt and one seed, on a 0.25 grid. No metric backs it: distance from the
+strength-0 frame is the same before and after for `domain_warp` (0.19 at 0.75 in
+both), because what changed is whether the destination is still a picture, not
+how far away it is. Temporal behaviour across frames was not assessed.
+
+**Audio level is an unreliable ceiling signal here.** After the fix,
+`temporal_coherent` rose steadily with strength (-24.3 to -15.6 dB), but
+`domain_warp` did not track strength in either version, although its picture
+changed the most. Judge ceilings from frames.
+
+With `normalize_strength` on, all eight blend modes at 0.30 stay the same coherent
+scene, but they are not the same image. Each sits 0.07 to 0.09 from the `multiply`
+frame, about as far as `multiply` itself sits from strength 0 (0.08); `difference`,
+which saturates, re-composes (0.17). There was no run with normalisation off, so
+this shows only that no mode is over-driven at 0.30, not that the calibration works
+on H3. The model-free table in item 1 is still the evidence for that. The audio
+spread across the eight is 3.4 dB.
+
+### Left to do
+
+- **CHANGELOG.** There is no entry for `travel_mode`, presets or anything in this
+  section, and the 2.1.0 entry still documents `decorrelate_channels`, which was
+  replaced before it shipped.
+- **The migration is now a lie.** `web/sampling_mode_migration.js` still routes
+  pre-2.0 workflows to `legacy` "so their seeds keep reproducing", but `legacy`
+  shares the generators, so its output changed too. Drop the migration, or redefine
+  `legacy` as the old pipeline *structure* and say so in the changelog.
+- **Re-calibrate the presets** against real prompts at a working resolution: the
+  noise they were fitted to has changed. `jump` and `stamp` are exempt, being
+  byte-identical.
+- **Widget ordering.** `preset` still reads last; a major version should move it
+  to the top of the required block.
+- Removing legacy mode altogether remains a separate decision.
 
 ### Watch the widget count
 
@@ -379,13 +476,6 @@ individually justified; the trend is still real. The README sells a compass and
 the panel increasingly sells expertise. Before adding the next toggle, consider
 whether presets over the existing knobs would serve better than another knob —
 `stage_progression` is already shaped that way and is the pattern to copy.
-
-### Then optionally
-
-Removing legacy mode altogether — the pipeline, the `sampling_mode` input, the
-migration JS, and the uncalled `core/sampler.py`, `core/blending.py` and
-`core/transforms.py` — was considered and deliberately left out of the scope
-above. It is a large deletion and a separate decision.
 
 ---
 
@@ -420,15 +510,16 @@ it is "jump somewhere that is not quite a town".
 `travel_mode` replaces the `decorrelate_channels` boolean, over the same
 `DECORRELATION_BASIS`: `walk` 64, `drift` 4, `jump` 1. Measured rank for
 `domain_warp` on H3's 24 channels: native 2.06, jump 1.00, drift 3.73, walk
-14.36.
+14.36. Since the upgrade the generator itself spans 22.7, `walk` passes that
+through untouched, and `drift` narrows it to about 3.7.
 
 Two things it needed. `jump` bypasses the widening guards, which exist precisely
 to stop a remix narrowing the noise. And it forces rank 1 for *every* generator,
 including `tensor_field` at its native 90 of 128 — otherwise `shader_type` would
 not be a usable coordinate in jump-space.
 
-`walk` is the default, so the standard pipeline now decorrelates unless told
-otherwise. Legacy never reaches this code, so the golden suite is untouched.
+`walk` is the default. Legacy never reaches the travel-mode code, though since
+the upgrade it does share the wider generators.
 
 On real H3, `jump` produces an orange-and-black texture field on the forge
 prompt's own palette, and `stamp` at 0.90 with `hexgrid` draws an unmistakable
@@ -463,12 +554,8 @@ likewise needed 0.90 rather than 0.70, and `hexgrid` rather than `spiral` — at
 
 ### Left to do
 
-**The preset overrides at execution time, so the widgets lie.** Select
-`explore` and the `shader_strength` widget still reads whatever it read before,
-while the run uses 0.30. The honest fix is to set the widgets from JS on
-selection, the way `shader_renderer.js` already mirrors inputs with
-`syncFromInputs`. Until then the tooltip names exactly which inputs a preset
-takes over.
+~~The preset overrides at execution time, so the widgets lie.~~ Done in the
+upgrade below: choosing a preset writes the widgets.
 
 **Widget ordering.** `preset` is appended at the end of the optional block
 because ComfyUI maps saved values by position. It is the front door and reads
