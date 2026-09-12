@@ -12,6 +12,7 @@ from .nodes import (
     AdvancedImageComparer,
     VideoComparer,
 )
+from .shader_noise_walk import ShaderNoiseWalk
 from .shader_to_tensor import ShaderToTensor
 
 # Import shader registry
@@ -177,6 +178,7 @@ def register_shader_generator(shader_type: str, generator_function):
 NODE_CLASS_MAPPINGS = {
     "ShaderNoiseKSampler": ShaderNoiseKSampler,
     "ShaderNoiseKSamplerDirect": DirectShaderNoiseKSampler,
+    "ShaderNoiseWalk": ShaderNoiseWalk,
     "AdvancedImageComparer": AdvancedImageComparer,
     "Video Comparer": VideoComparer,
 }
@@ -185,6 +187,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ShaderNoiseKSampler": "Shader Noise KSampler",
     "ShaderNoiseKSamplerDirect": "Shader Noise KSampler (Direct)",
+    "ShaderNoiseWalk": "Shader Noise Walk",
     "AdvancedImageComparer": "Advanced Image Comparer",
     "Video Comparer": "Video Comparer",
 }
