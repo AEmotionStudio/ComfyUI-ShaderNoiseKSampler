@@ -332,12 +332,114 @@ that decision.
   orthogonal fields rather than random combinations of correlated ones would
   close the rest of the gap, and belongs with step 1.
 
+### Why, in one paragraph
+
+The rank finding is not a performance issue, it is a question of what the tool
+is. If the shader spans one channel of four, what reaches the latent is not a
+navigational field, it is a single pattern stamped across every channel at once.
+Below about 0.25 that reads as a nudge and the node works as the README
+describes. Above it the destination stops depending on where you started —
+which is why 0.5 and 0.75 produced the same green quilt whatever the prompt. In
+the README's own terms, rank-collapsed noise did not give you territory. It gave
+you a different lottery with a strong house bias. Decorrelation roughly triples
+the range over which the shader steers instead of overwrites.
+
+### Three consequences to plan for
+
+**Step 2 is the one that delivers.** Steps 1 and 3 are cleanup around it. Both
+fixes currently default to off, so a user installing today gets rank-1 noise and
+a strength dial that means eight different things depending on blend mode. The
+project already knows better and does not act on it, which is further from the
+stated goal than before the fixes existed.
+
+**The migration becomes a lie.** `web/sampling_mode_migration.js` silently routes
+any pre-2.0 workflow into `legacy`, and the 2.0.0 changelog gives the reason as
+"so their seeds keep reproducing". Fix `expand_channels` and that migration still
+fires but no longer delivers what it exists for. Either drop it, or redefine
+`legacy` explicitly as "the old pipeline *structure*" rather than "the old
+output", and say so in the changelog.
+
+**A golden failure changes meaning.** Today it says "you broke backwards
+compatibility". Afterwards it says "you changed the sampler". Both are worth
+having and they are not the same signal. Re-capturing also gives up the only
+bit-exact record of pre-2.0 behaviour: after it, reproducing the old output
+needs a `git checkout`, not a test fixture.
+
+### Watch the widget count
+
+The Direct node now carries 25 required and 8 optional inputs. Each was
+individually justified; the trend is still real. The README sells a compass and
+the panel increasingly sells expertise. Before adding the next toggle, consider
+whether presets over the existing knobs would serve better than another knob —
+`stage_progression` is already shaped that way and is the pattern to copy.
+
 ### Then optionally
 
 Removing legacy mode altogether — the pipeline, the `sampling_mode` input, the
 migration JS, and the uncalled `core/sampler.py`, `core/blending.py` and
 `core/transforms.py` — was considered and deliberately left out of the scope
 above. It is a large deletion and a separate decision.
+
+---
+
+## Proposed: keep the collapse as a travel mode
+
+Do not simply delete the rank-1 behaviour when fixing `expand_channels`. It is a
+second navigational primitive, and the project already speaks in travel
+metaphors — vehicle, map, compass, driving between towns.
+
+|  | rank-collapsed | decorrelated |
+|---|---|---|
+| what sets the destination | **shader parameters** | the seed |
+| role of the seed | fades as strength rises | anchors throughout |
+| coherent range | narrow, about 0.25 | wide, about 0.75 |
+| push per unit strength | strong | gentle |
+
+The two are a trade, not a ranking: collapse buys a harder push per unit of
+strength at the cost of a narrower range before the picture stops being a
+picture.
+
+**It is controllable, which is the bar for calling it travel rather than
+breakage.** At strength 0.6 the shape masks rendered `spiral`, `hexgrid`, `rays`
+and `vignette` as four clearly distinct, recognisable images, in the prompt's own
+palette. Shader parameters map to reproducible, meaningfully different
+destinations. What they do *not* map to is scenes — in this regime the model is
+being fed out-of-distribution input, so the destinations are texture and pattern
+fields. That is a real limit, not a detail: this is not "jump to another town",
+it is "jump somewhere that is not quite a town".
+
+### Shape of it
+
+Replace the `decorrelate_channels` boolean with one control over channel rank,
+named for what it does rather than how it works:
+
+    walk    full decorrelation. Seed anchors, shader perturbs. Wide coherent
+            range. The default, and what the README already describes.
+    drift   partial, a small basis. Between the two.
+    jump    deliberate rank 1. Shader parameters set the destination and the
+            seed stops mattering. Texture and pattern fields in the prompt's
+            material.
+
+`DECORRELATION_BASIS` is already the knob underneath: `walk` is 64, `jump` is 1,
+`drift` is something like 2 to 4. The machinery exists, and the no-regression
+guard in `_maybe_decorrelate` would need relaxing for `jump`, since that mode
+deliberately *wants* the narrower draw.
+
+### Worth testing first
+
+- Does `drift` produce anything the other two do not, or is the interesting
+  behaviour bimodal? If bimodal, ship two modes rather than three.
+- Do `jump` destinations stay distinct across shader *types* and `noise_scale`,
+  or does everything converge to similar quilts at rank 1? The shape-mask
+  evidence says distinct, but that was one axis at one strength.
+- Is `jump` reproducible across models? If the destination is set by the shader
+  rather than the seed, the same parameters should land somewhere recognisably
+  similar on SD 1.5 and on H3. If they do, that is a genuinely new thing: a
+  prompt-independent, model-independent coordinate system. If they do not, it is
+  a per-model curiosity.
+
+That last question is the one worth answering first, and it is cheap: same
+shader parameters, `jump` mode, SD 1.5 and H3, compare.
 
 ---
 
