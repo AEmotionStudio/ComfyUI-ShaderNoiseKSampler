@@ -382,7 +382,7 @@ above. It is a large deletion and a separate decision.
 
 ---
 
-## Proposed: keep the collapse as a travel mode
+## Built: the collapse kept as a travel mode (`5434791`)
 
 Do not simply delete the rank-1 behaviour when fixing `expand_channels`. It is a
 second navigational primitive, and the project already speaks in travel
@@ -408,38 +408,64 @@ being fed out-of-distribution input, so the destinations are texture and pattern
 fields. That is a real limit, not a detail: this is not "jump to another town",
 it is "jump somewhere that is not quite a town".
 
-### Shape of it
+### As built
 
-Replace the `decorrelate_channels` boolean with one control over channel rank,
-named for what it does rather than how it works:
+`travel_mode` replaces the `decorrelate_channels` boolean, over the same
+`DECORRELATION_BASIS`: `walk` 64, `drift` 4, `jump` 1. Measured rank for
+`domain_warp` on H3's 24 channels: native 2.06, jump 1.00, drift 3.73, walk
+14.36.
 
-    walk    full decorrelation. Seed anchors, shader perturbs. Wide coherent
-            range. The default, and what the README already describes.
-    drift   partial, a small basis. Between the two.
-    jump    deliberate rank 1. Shader parameters set the destination and the
-            seed stops mattering. Texture and pattern fields in the prompt's
-            material.
+Two things it needed. `jump` bypasses the widening guards, which exist precisely
+to stop a remix narrowing the noise. And it forces rank 1 for *every* generator,
+including `tensor_field` at its native 90 of 128 — otherwise `shader_type` would
+not be a usable coordinate in jump-space.
 
-`DECORRELATION_BASIS` is already the knob underneath: `walk` is 64, `jump` is 1,
-`drift` is something like 2 to 4. The machinery exists, and the no-regression
-guard in `_maybe_decorrelate` would need relaxing for `jump`, since that mode
-deliberately *wants* the narrower draw.
+`walk` is the default, so the standard pipeline now decorrelates unless told
+otherwise. Legacy never reaches this code, so the golden suite is untouched.
 
-### Worth testing first
+On real H3, `jump` produces an orange-and-black texture field on the forge
+prompt's own palette, and `stamp` at 0.90 with `hexgrid` draws an unmistakable
+grid of glowing cells. Both behave as described.
 
-- Does `drift` produce anything the other two do not, or is the interesting
-  behaviour bimodal? If bimodal, ship two modes rather than three.
-- Do `jump` destinations stay distinct across shader *types* and `noise_scale`,
-  or does everything converge to similar quilts at rank 1? The shape-mask
-  evidence says distinct, but that was one axis at one strength.
-- Is `jump` reproducible across models? If the destination is set by the shader
-  rather than the seed, the same parameters should land somewhere recognisably
-  similar on SD 1.5 and on H3. If they do, that is a genuinely new thing: a
-  prompt-independent, model-independent coordinate system. If they do not, it is
-  a per-model curiosity.
+### Still worth testing
 
-That last question is the one worth answering first, and it is cheap: same
-shader parameters, `jump` mode, SD 1.5 and H3, compare.
+- **Is `jump` reproducible across models?** The one that matters. If the shader
+  sets the destination and the seed fades, the same parameters should land
+  somewhere recognisably similar on SD 1.5 and on H3. If so it is a
+  prompt-independent, model-independent coordinate system — a genuinely new
+  thing. If not, a per-model curiosity. Cheap to answer: same parameters, `jump`,
+  both models, compare.
+- Does `drift` produce anything the other two do not, or is the behaviour
+  bimodal? If bimodal, ship two modes rather than three.
+- Do `jump` destinations stay distinct across shader *types* and `noise_scale`?
+  Shape masks vary the destination clearly; the other axes are untested.
+
+## Presets (`5434791`)
+
+Seven bundles over the six settings that only mean anything together:
+`custom`, `nudge`, `explore`, `roam`, `video`, `jump`, `stamp`. `apply_preset`
+takes an `exclude` set and the Walk node passes the parameter it ramps, so a
+preset pinning `shader_strength` cannot flatten a strength ramp.
+
+**Calibrate preset values against a real prompt at a real working resolution.**
+`roam` first shipped at 0.60, taken from a sweep with zero conditioning at
+448x256 where `domain_warp` held to 0.75. Under an actual prompt at 608x352 it
+showed colour bands at 0.55, and the value had to come down to 0.45. `stamp`
+likewise needed 0.90 rather than 0.70, and `hexgrid` rather than `spiral` — at
+0.70 a spiral mask just reads as a stylised subject, not as the mask.
+
+### Left to do
+
+**The preset overrides at execution time, so the widgets lie.** Select
+`explore` and the `shader_strength` widget still reads whatever it read before,
+while the run uses 0.30. The honest fix is to set the widgets from JS on
+selection, the way `shader_renderer.js` already mirrors inputs with
+`syncFromInputs`. Until then the tooltip names exactly which inputs a preset
+takes over.
+
+**Widget ordering.** `preset` is appended at the end of the optional block
+because ComfyUI maps saved values by position. It is the front door and reads
+last. A major version should move it to the top of the required block.
 
 ---
 

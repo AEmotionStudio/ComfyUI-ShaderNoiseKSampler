@@ -42,9 +42,15 @@ PRESET_KEYS = (
     "stage_progression", "shape_type", "normalize_strength",
 )
 
-# Values come from measured behaviour on MiniMax H3 and SD 1.5, not taste. Every
-# preset turns normalize_strength on, so its strength number means the same thing
-# whatever blend mode it names.
+# Values come from measured behaviour, not taste, and every preset turns
+# normalize_strength on so its strength number means the same thing whatever blend
+# mode it names.
+#
+# Calibrate these against a real prompt at a real working resolution. The first
+# cut of `roam` was set to 0.60 from a sweep run with zero conditioning at
+# 448x256, where domain_warp held to 0.75. Under an actual prompt at 608x352 it
+# was already showing colour bands at 0.55, so the number did not survive the
+# change of conditions it was measured under.
 PRESETS = {
     "custom": {},
     "nudge": dict(
@@ -58,7 +64,7 @@ PRESETS = {
         normalize_strength=True,
     ),
     "roam": dict(
-        shader_type="domain_warp", shader_strength=0.60, blend_mode="multiply",
+        shader_type="domain_warp", shader_strength=0.45, blend_mode="multiply",
         travel_mode="walk", stage_progression="coarse_to_fine", shape_type="none",
         normalize_strength=True,
     ),
@@ -73,8 +79,8 @@ PRESETS = {
         normalize_strength=True,
     ),
     "stamp": dict(
-        shader_type="domain_warp", shader_strength=0.70, blend_mode="multiply",
-        travel_mode="jump", stage_progression="uniform", shape_type="spiral",
+        shader_type="domain_warp", shader_strength=0.90, blend_mode="multiply",
+        travel_mode="jump", stage_progression="uniform", shape_type="hexgrid",
         normalize_strength=True,
     ),
 }
