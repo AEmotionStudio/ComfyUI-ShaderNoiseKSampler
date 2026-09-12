@@ -71,6 +71,22 @@ what was wrong was how a multi-stream latent crossed a stage boundary.
   strength is read on `multiply`'s scale and the rest are rescaled to match. On
   H3 across six modes at 0.30, the spread in audio level fell from 4.6 dB to
   2.1 dB.
+- **`Shader Noise Walk` node.** Ramps one parameter (`shader_strength`,
+  `phase_shift`, `noise_scale`, `warp_strength`, `octaves`,
+  `shape_mask_strength`, `color_intensity` or `seed`) across a batch in a single
+  run, with the model resident throughout — five H3 runs at 608x352/56 frames
+  took 125s total. Output is a batched latent for the comparer nodes. Multi-stream
+  latents batch stream by stream.
+- **`shade_non_spatial` (optional, default off).** Paints the streams that carry
+  no picture: an audio stream across stereo x time, a sequence latent as a single
+  row. Unblocks Stable Audio 1/3, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D and
+  TripoSplat, which were refused outright. On H3 it biases the sound toward tonal
+  content (spectral flatness 0.104 -> 0.066) while leaving the picture clean.
+- **`stage_progression` (optional, default `uniform`).** Varies the shader across
+  the run rather than drawing the same one at every stage: `coarse_to_fine`
+  starts zoomed in on large features with fewer octaves and ends zoomed out on
+  small ones with more, `fine_to_coarse` reverses it. Centred on your widget
+  values, spanning 0.5x to 2x noise_scale and plus or minus one octave.
 - **`decorrelate_channels` (optional, default off).** The generators built every
   channel past the first one or two as a pointwise function of those two, so
   `domain_warp` returned noise spanning a single channel at SD's four and about
