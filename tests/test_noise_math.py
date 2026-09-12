@@ -47,6 +47,28 @@ def test_zero_strength_returns_base_untouched(noise_pair, mode):
     assert torch.equal(mix_noise(base, shader, mode, 0.0), base)
 
 
+@pytest.mark.parametrize("mode", SUPPORTED_MODES)
+def test_the_blend_is_continuous_from_zero_strength(noise_pair, mode):
+    """
+    Strength 0 returns base untouched, so a strength just above 0 must return almost
+    exactly base too. Rescaling to mean 0 and deviation 1 instead moved the noise by
+    the base's own sampling offsets at any strength above 0 -- on SD 1.5, as far as
+    a whole 0.05 step of shader.
+    """
+    base, shader = noise_pair
+    assert (mix_noise(base, shader, mode, 1e-6) - base).abs().max() < 1e-3
+
+
+@pytest.mark.parametrize("mode", SUPPORTED_MODES)
+def test_the_blend_keeps_the_base_noise_statistics(mode):
+    generator = torch.Generator().manual_seed(4)
+    base = torch.randn(2, 4, 32, 32, generator=generator) * 1.2 + 0.1
+    shader = torch.randn(2, 4, 32, 32, generator=generator)
+    mixed = mix_noise(base, shader, mode, 0.5)
+    assert torch.allclose(mixed.mean(dim=(2, 3)), base.mean(dim=(2, 3)), atol=1e-4)
+    assert torch.allclose(mixed.std(dim=(2, 3)), base.std(dim=(2, 3)), atol=1e-4)
+
+
 def test_mix_actually_changes_the_noise(noise_pair):
     """A blend must do something: same distribution, different structure."""
     base, shader = noise_pair

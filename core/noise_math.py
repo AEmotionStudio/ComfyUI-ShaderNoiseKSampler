@@ -10,9 +10,10 @@ soft_light at strength 1.0, which reaches the model as a colour cast and as
 washed-out or burnt contrast.
 
 So the compositing modes run in uniform space: map the noise through the normal
-CDF to (0, 1), composite there, map back, then interpolate by strength and
-re-standardise. The mode still shapes the *structure* of the noise, but what
-reaches the sampler keeps the distribution the model was trained on.
+CDF to (0, 1), composite there, map back, interpolate by strength, and give the
+result the base noise's own mean and deviation. The mode still shapes the
+*structure* of the noise, but what reaches the sampler keeps the distribution the
+model was trained on.
 
 Legacy mode keeps the old, unnormalised behaviour on purpose.
 """
@@ -115,6 +116,22 @@ def standardize(noise: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     return (noise - mean) / std.clamp_min(eps)
 
 
+def _match_statistics(result: torch.Tensor, reference: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """
+    Give `result` the per-sample, per-channel mean and deviation of `reference`.
+
+    A reference channel with no spread keeps unit statistics instead, so a flat
+    input cannot erase the blend.
+    """
+    dims = tuple(range(2, reference.ndim)) if reference.ndim > 2 else (-1,)
+    mean = reference.mean(dim=dims, keepdim=True)
+    std = reference.std(dim=dims, keepdim=True)
+    flat = std <= eps
+    mean = torch.where(flat, torch.zeros_like(mean), mean)
+    std = torch.where(flat, torch.ones_like(std), std)
+    return standardize(result, eps) * std + mean
+
+
 def _to_unit(x: torch.Tensor) -> torch.Tensor:
     """N(0, 1) -> (0, 1) through the normal CDF."""
     return torch.special.ndtr(x)
@@ -156,7 +173,14 @@ def mix_noise(base: torch.Tensor, shader: torch.Tensor, mode: str, strength: flo
             same value hands over the same amount of shader in every mode
 
     Returns:
-        Noise with mean 0 and standard deviation 1 per sample and channel.
+        Noise with the per-sample, per-channel mean and standard deviation of
+        `base`.
+
+    The result takes the base noise's own statistics rather than exactly 0 and 1,
+    so it is continuous with strength: strength 0 returns base untouched, and as
+    strength approaches 0 the result approaches base. Forcing 0 and 1 moved the
+    noise by the base's own sampling offsets at any strength above 0, which on
+    SD 1.5 moved the image as far as a whole 0.05 step of shader.
     """
     if strength <= 0.0:
         return base
@@ -175,12 +199,12 @@ def mix_noise(base: torch.Tensor, shader: torch.Tensor, mode: str, strength: flo
         # Variance preserving for independent unit-variance inputs:
         # cos^2 + sin^2 = 1, unlike (1-k)*b + k*s which dips to 0.71 at k=0.5.
         theta = strength * math.pi / 2.0
-        return math.cos(theta) * b + math.sin(theta) * s
+        return _match_statistics(math.cos(theta) * b + math.sin(theta) * s, base)
     if mode == "add":
-        return standardize(b + s * strength)
+        return _match_statistics(b + s * strength, base)
 
     blended = _from_unit(_composite(_to_unit(b), _to_unit(s), mode))
-    return standardize(b * (1.0 - strength) + blended * strength)
+    return _match_statistics(b * (1.0 - strength) + blended * strength, base)
 
 
 def transform_noise(noise: torch.Tensor, transform: str) -> torch.Tensor:
