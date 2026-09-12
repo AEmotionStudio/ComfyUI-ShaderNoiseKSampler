@@ -80,7 +80,9 @@ class Runs:
         row = self.rows[key]
         if row.get("image"):
             return Image.open(row["image"]).convert("RGB")
-        frames = Path(row["_manifest"]).parent / f"frames_{self.model}"
+        # One folder per manifest: runs in different manifests share names, and a
+        # frame cached from one must never stand in for another's.
+        frames = Path(row["_manifest"]).parent / f"frames_{Path(row['_manifest']).stem}"
         frames.mkdir(exist_ok=True)
         png = frames / f"{row['name']}.png"
         if not png.exists():
