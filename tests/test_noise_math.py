@@ -9,6 +9,7 @@ contrast at the model's input.
 import pytest
 import torch
 
+from snk.core import noise_math
 from snk.core.noise_math import (
     SUPPORTED_MODES,
     SUPPORTED_TRANSFORMS,
@@ -107,3 +108,96 @@ def test_video_latents_are_supported():
     mixed = mix_noise(video, torch.randn_like(video), "soft_light", 0.5)
     assert mixed.shape == video.shape
     assert abs(mixed.std().item() - 1.0) < 0.05
+
+
+# --- blend-mode strength calibration -------------------------------------------------
+
+def _shader_fraction(mixed, shader):
+    """Cosine between the mixed noise and the shader: the shader's share of the result."""
+    a = mixed.flatten().double(); b = shader.flatten().double()
+    a = a - a.mean(); b = b - b.mean()
+    return float((a @ b) / (a.norm() * b.norm()))
+
+
+def _fixture(shape=(1, 8, 48, 48), shader_type="domain_warp", shape_type="none"):
+    from snk.core import shader_noise
+    params = {"scale": 1.0, "octaves": 2.0, "warp_strength": 0.7, "phase_shift": 0.5,
+              "time": 0.0, "shape_type": shape_type, "color_scheme": "none", "intensity": 0.8}
+    torch.manual_seed(0)
+    base = torch.randn(shape)
+    shader = noise_math.standardize(
+        shader_noise.generate(shape, params, shader_type, 8888, torch.device("cpu")))
+    return base, shader
+
+
+def test_blend_modes_disagree_wildly_without_normalisation():
+    """The reason the calibration exists: one number, twenty-plus different meanings."""
+    base, shader = _fixture()
+    fractions = {m: _shader_fraction(noise_math.mix_noise(base, shader, m, 0.5), shader)
+                 for m in noise_math.SUPPORTED_MODES}
+
+    assert fractions["normal"] > 0.6, fractions
+    assert fractions["difference"] < 0.1, fractions
+    assert fractions["normal"] / fractions["difference"] > 10, fractions
+
+
+def test_normalisation_makes_one_strength_mean_one_thing():
+    base, shader = _fixture()
+    target = _shader_fraction(
+        noise_math.mix_noise(base, shader, noise_math.CALIBRATION_REFERENCE, 0.3), shader)
+
+    for mode in noise_math.SUPPORTED_MODES:
+        got = _shader_fraction(
+            noise_math.mix_noise(base, shader, mode, 0.3, normalize=True), shader)
+        if mode == "difference":
+            continue  # cannot reach the reference scale at all; saturates instead
+        assert abs(got - target) < 0.05, f"{mode}: {got:.3f} vs target {target:.3f}"
+
+
+def test_the_reference_mode_is_left_alone():
+    """Workflows that never change blend_mode must reproduce exactly."""
+    base, shader = _fixture()
+    for k in (0.1, 0.3, 0.75):
+        plain = noise_math.mix_noise(base, shader, noise_math.CALIBRATION_REFERENCE, k)
+        normed = noise_math.mix_noise(base, shader, noise_math.CALIBRATION_REFERENCE, k, normalize=True)
+        assert torch.equal(plain, normed)
+
+
+def test_normalisation_is_off_by_default():
+    base, shader = _fixture()
+    for mode in ("add", "soft_light", "normal"):
+        assert torch.equal(noise_math.mix_noise(base, shader, mode, 0.4),
+                           noise_math.mix_noise(base, shader, mode, 0.4, normalize=False))
+
+
+def test_a_saturating_mode_clamps_instead_of_failing():
+    """difference tops out far below the reference; it must saturate, not raise."""
+    base, shader = _fixture()
+    assert noise_math.normalized_strength("difference", 0.9) == 1.0
+    out = noise_math.mix_noise(base, shader, "difference", 0.9, normalize=True)
+    assert torch.isfinite(out).all()
+
+
+@pytest.mark.parametrize("shader_type,shape_type,shape", [
+    ("domain_warp", "none", (1, 8, 48, 48)),
+    ("tensor_field", "none", (1, 16, 32, 32)),
+    ("curl_noise", "none", (1, 4, 40, 40)),
+    ("domain_warp", "spiral", (1, 8, 48, 48)),
+    ("domain_warp", "none", (1, 12, 5, 24, 24)),
+])
+def test_blend_calibration_is_current(shader_type, shape_type, shape):
+    """
+    Re-measure the table and fail on drift.
+
+    One static table serves every shader type, shape mask and latent rank because
+    mix_noise standardises its operands first, so the geometry barely moves. If a
+    blend formula changes, this catches it rather than letting the calibration
+    quietly lie.
+    """
+    base, shader = _fixture(shape, shader_type, shape_type)
+    for mode, curve in noise_math.BLEND_SHADER_FRACTION.items():
+        for index in (4, 10, 16):           # strengths 0.2, 0.5, 0.8
+            k = index / (len(curve) - 1)
+            got = _shader_fraction(noise_math.mix_noise(base, shader, mode, k), shader)
+            assert abs(got - curve[index]) < 0.08, (
+                f"{mode} at {k:.2f}: measured {got:.3f}, table says {curve[index]:.3f}")

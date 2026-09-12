@@ -45,6 +45,7 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                 "sequential_distribution": (["uniform", "linear_decrease", "linear_increase", "gaussian", "first_stronger", "last_stronger"], {"default": "linear_decrease", "tooltip": "How shader strength is distributed across sequential stages"}),
                 "injection_distribution": (["uniform", "linear_decrease", "linear_increase", "gaussian", "first_stronger", "last_stronger"], {"default": "linear_decrease", "tooltip": "How shader strength is distributed across injection stages"}),
                 "fast_high_channel_noise": ("BOOLEAN", {"default": False, "tooltip": "Use a faster, simplified noise generation method for models with many channels (>16), like LTXV"}),
+                "normalize_strength": ("BOOLEAN", {"default": False, "tooltip": "Make shader_strength mean the same thing in every blend mode. Untouched, the modes differ by up to twenty-three times at the same setting: at 0.5 normal hands the sampler 0.71 of the shader and difference only 0.03. With this on, strength is read on multiply's scale, so the default mode is unchanged and the others are rescaled to match -- soft_light needs about 1.6x its old number, add and hard_light about half. difference cannot reach the top of the scale at all and saturates. Off by default so existing workflows reproduce; standard sampling only."}),
             },
         }
 
@@ -61,7 +62,8 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                shader_type="domain_warp", shape_type="none", color_scheme="none", noise_scale=1.0, octaves=1.0,
                warp_strength=0.5, shape_mask_strength=1.0, phase_shift=0.5, color_intensity=0.8,
                sampling_mode="standard", sequential_distribution="linear_decrease",
-               injection_distribution="linear_decrease", fast_high_channel_noise=False, custom_sigmas=None,
+               injection_distribution="linear_decrease", fast_high_channel_noise=False,
+               normalize_strength=False, custom_sigmas=None,
                # Accepted for the legacy path and for older callers; not exposed as inputs.
                debug_level="0-Off", denoise_visualization_frequency="25% intervals", target_attribute_changes=""):
         """Run the shader noise sampler with direct parameter inputs."""
@@ -168,6 +170,7 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
             sequential_distribution=sequential_distribution,
             injection_distribution=injection_distribution,
             use_temporal_coherence=use_temporal_coherence,
+            normalize_strength=normalize_strength,
             custom_sigmas=custom_sigmas,
         )
 
@@ -179,5 +182,6 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
             "blend_mode": blend_mode,
             "noise_transform": noise_transform,
             "sampling_mode": sampling_mode,
+            "normalize_strength": normalize_strength,
         }
         return {"ui": {"images": [], "shader_info": shader_info}, "result": (result,)}
