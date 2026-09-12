@@ -20,6 +20,7 @@ are recorded on purpose, because they are the obvious-sounding ideas.
 | + | Travel modes | Done (`5434791`) — `walk` / `drift` / `jump` |
 | + | Presets | Done (`5434791`, tuned `ce4b1ec`) — seven bundles |
 | + | The agreed upgrade | Done — generators fill their own channels, `normalize_strength` on, goldens on the standard pipeline, presets write the widgets |
+| + | Blend keeps the base noise's statistics | Done (`f44aeb5`) — the road away from strength 0 starts at the seed's own image |
 
 Most new capabilities are optional inputs defaulting to off. **Two are not:**
 `travel_mode` defaults to `walk` and `normalize_strength` defaults on. Both are
@@ -459,19 +460,23 @@ spread across the eight is 3.4 dB.
 
 ### Left to do
 
-- **CHANGELOG.** There is no entry for `travel_mode`, presets or anything in this
-  section, and the 2.1.0 entry still documents `decorrelate_channels`, which was
-  replaced before it shipped.
+- ~~CHANGELOG~~ Done: an Unreleased section covers everything since 2.1.0.
 - **The migration is now a lie.** `web/sampling_mode_migration.js` still routes
   pre-2.0 workflows to `legacy` "so their seeds keep reproducing", but `legacy`
   shares the generators, so its output changed too. Drop the migration, or redefine
-  `legacy` as the old pipeline *structure* and say so in the changelog.
+  `legacy` as the old pipeline *structure*. The changelog lists it as a known issue;
+  the `sampling_mode` tooltip still makes the old claim.
 - **Re-calibrate the presets** against real prompts at a working resolution: the
   noise they were fitted to has changed. `jump` and `stamp` are exempt, being
   byte-identical.
 - **Widget ordering.** `preset` still reads last; a major version should move it
   to the top of the required block.
 - Removing legacy mode altogether remains a separate decision.
+- **The golden suite never injects shader noise at a stage boundary.** Its stub
+  sampler (`tests/helpers.py::recorded_sampling`) never calls the progress callback,
+  and the pipeline applies boundary events only when it does, so the multi-stage
+  goldens pin the first stage alone. `test_standard_pipeline.py` does cover
+  boundaries.
 
 ### Watch the widget count
 
@@ -519,7 +524,9 @@ whether latent distance means anything to the eye.
   instead produced wrong `jump` numbers in a first pass, since corrected.
 
 Every run is one stage: `domain_warp`, `multiply`, `normalize_strength` on, octaves
-2, warp 0.7.
+2, warp 0.7. Everything above "Fixed: the blend keeps the base noise's statistics"
+was measured before that fix, which left SD 1.5 essentially unchanged from 0.25 up
+and brought H3 nearer its seed's image across most of the range.
 
 ### SD 1.5
 
@@ -610,7 +617,7 @@ staying home (image home 0.90, 0.78, 0.89).
 
 Strengths 0.001, 0.05, 0.10, 0.15 and 0.20 on both models, with streets at 0.10. Each
 step is the distance between neighbouring strengths, averaged over seeds, in image
-towns; latent distances agree.
+towns; latent distances agree. Measured before the fix below.
 
 | step | SD 1.5 | H3 |
 |---|---|---|
@@ -621,13 +628,12 @@ towns; latent distances agree.
 | 0.15 to 0.20 | 0.28 | 0.28 |
 | 0.20 to 0.25 | 0.24 | 0.40 |
 
-- **Strength 0 is not the start of the road.** At exactly 0 the base noise reaches the
-  sampler untouched. Above 0, `mix_noise` first rescales every channel of it to mean 0
-  and deviation 1, and only then blends. At 0.001 that rescale is the whole change to
-  the starting noise (on SD 1.5 the shader's part is 0.08, against 1.7 to 4.2 for the
-  rescale), the result carries no trace of the field, and still the image moves as far
-  as an ordinary step or further. Some seeds show it as a new picture (SD 1.5 seed 1234
-  goes from one grayscale man to another); others barely move (seed 4242).
+- **Strength 0 was not the start of the road.** At exactly 0 the base noise reaches the
+  sampler untouched; above 0, `mix_noise` rescaled every channel of it to mean 0 and
+  deviation 1 before blending. At 0.001 that rescale was the whole change to the
+  starting noise (on SD 1.5 the shader's part is 0.08, against 1.7 to 4.2 for the
+  rescale), the result carried no trace of the field, and still the image moved as far
+  as an ordinary step or further. Fixed below.
 - **After that the road moves in hops, not a glide.** Each 0.05 moves a quarter to half
   a town on average, and per seed it alternates between near-identical runs and new
   pictures. SD 1.5 seed 1234 holds the same portrait from 0.05 to 0.25 (steps 0.11 to
@@ -643,10 +649,36 @@ towns; latent distances agree.
 - **Streets at 0.10** move 0.28 to 0.59 image towns on SD 1.5 and 0.37 to 0.73 on H3,
   `phase_shift` 1.0 the least on both.
 
-The rescale is worth revisiting. Matching the blend to the base noise's own mean and
-deviation, instead of forcing 0 and 1, would keep strength 0 bit-identical to a stock
-KSampler, keep the statistics the model receives from ComfyUI, and make the road
-continuous from 0. Not done and not tested: it changes every non-zero-strength output.
+### Fixed: the blend keeps the base noise's statistics (`f44aeb5`)
+
+`mix_noise` now gives its result the base noise's own per-channel mean and deviation
+instead of exactly 0 and 1. Strength 0 is still bit-identical, checked on every seed of
+both models, and as strength approaches 0 the result approaches the base. Both models
+were re-rendered from 0 to 0.50 with streets at 0.10, and compared with the runs above.
+
+| image towns | SD 1.5 before | SD 1.5 after | H3 before | H3 after |
+|---|---|---|---|---|
+| starting noise moved at 0.001 | 1.3 to 3.2% | 0.06% | 1.0 to 1.1% | 0.06% |
+| image step, 0 to 0.001 | 0.32 | 0.03 | 0.48 | 0.38 |
+| far from home at 0.05 | 0.41 | 0.28 | 0.59 | 0.38 |
+| far from home at 0.25 | 0.73 | 0.71 | 0.66 | 0.50 |
+| far from home at 0.50 | 1.08 | 1.08 | 0.87 | 0.80 |
+
+- **SD 1.5's road now starts at the seed's own image.** Per seed the first step fell to
+  0.01, 0.07, 0.00 and 0.02, from 0.38, 0.51, 0.09 and 0.29; seed 8888 is the same man
+  from 0 through 0.25. From 0.25 up it is essentially unchanged.
+- **H3's first step shrank but did not vanish**: per seed 0.18, 0.69 and 0.26, from
+  0.41, 0.60 and 0.44. Its starting noise moves 0.06 per cent at 0.001, which is the
+  shader's own share, so the pipeline's jump is gone and the rest is H3 responding to a
+  very small change. Two things inflate it: one middle frame is compared, where a
+  slightly different hammer timing moves hands a long way, and H3's seeds look alike, so
+  a town is small.
+- **Unchanged on both**: how much of the field reaches the result, and the
+  seed-dependent hops after the first step.
+
+The first analysis of H3's after-runs silently reused the before-runs' video frames,
+because frames were cached by run name for each model. `839ca1f` gives each manifest
+its own cache, and the numbers here come from fresh frames.
 
 ### What the two models say together
 
