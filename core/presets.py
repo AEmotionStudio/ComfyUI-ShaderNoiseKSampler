@@ -89,7 +89,7 @@ PRESET_DESCRIPTIONS = {
     "custom": "your own widget values, nothing overridden",
     "nudge": "the smallest change that is still visible",
     "explore": "the recommended starting point",
-    "roam": "as far as the picture reliably holds together",
+    "roam": "further from the seed: the shader visibly reshapes the picture, the prompt still reads",
     "video": "tuned for video latents, using the 4D time-aware shader",
     "jump": "destination set by the shader instead of the seed; texture, not a scene",
     "stamp": "jump with a shape mask, so the mask is drawn in the prompt's material",
