@@ -41,8 +41,27 @@ step count. See item 2. Ceilings measured on H3 (608x352, 8 steps,
 | shape masks | ~0.2 | 0.6 (mask drawn into the picture) |
 | `use_temporal_coherence` | ~0.2 | 0.5 (swamps the frame) |
 
-With `decorrelate_channels` on, `domain_warp` is clean at 0.5 on H3 and 0.25 on
-SD 1.5 where both previously failed.
+Re-derived on H3 with `decorrelate_channels` on at the current basis of 64, which
+**inverts the ordering**:
+
+| Generator | Ceiling without | With |
+|---|---|---|
+| `domain_warp` | ~0.25 | **~0.75** (degrades at 1.0) |
+| `temporal_coherent` | ~0.35 | **~0.75** |
+| `tensor_field` | ~0.5 | ~0.5 — unchanged, decorrelation skips it |
+| `curl_noise` | ~0.2 | ~0.2 — unchanged, skipped |
+
+The two generators decorrelation fixes now beat the two it skips, reversing the
+earlier finding that `tensor_field` was the most tolerant: rank was what limited
+`domain_warp`, and nothing else was. The generators that already span their
+channels are limited by their spatial character instead, which decorrelation
+does not touch.
+
+That sweep ran with zero conditioning (no text encoder resident), so the content
+comes from the model's prior rather than a prompt. Coherence is still
+unambiguous, and the control in the same batch — `domain_warp` at 0.75 with
+decorrelation off — reproduced the same green quilt seen earlier under real
+prompts, so the comparison holds.
 
 **2. The audio stream moves even when nothing touches it.** Shader noise reaches
 only the spatial stream by default and the audio keeps its Gaussian noise
@@ -144,12 +163,17 @@ other caller, including legacy. Doing it properly changes legacy output, which
 `tests/golden_cases.py` pins deliberately, so it needs the same gating
 discussion as item 1.
 
-**Tune `DECORRELATION_BASIS`.** It is 8, chosen to bound cost at LTXV's 128
-channels. Nobody has tested whether 4 is as good or 16 better. Cost is roughly
-linear: 2-12x the noise-generation time, small against sampling but not free.
+~~Tune `DECORRELATION_BASIS`.~~ Done (`7661d7c`): it shipped at 8 on a guess and
+is now 64. On H3 at strength 0.75, basis 8 is still mostly destroyed, 16 is
+coherent and 32 is clean. The cost the old value guarded against did not exist —
+worst measured case is about a second per draw, one draw per stage boundary, on
+runs of thirty to fifty seconds.
 
-**Re-derive the ceilings table with it on.** Every number in finding (1) was
-measured with it off, and the knobs interact.
+~~Re-derive the ceilings table with it on.~~ Done — see finding (1).
+
+**Rank still tops out around 60% of channels**, because the basis draws are not
+fully independent of each other either. Mixing genuinely orthogonal fields rather
+than random combinations of correlated ones would close the rest of the gap.
 
 ---
 
@@ -223,9 +247,9 @@ anyone claims a direction. Nobody has *listened* to the output.
 correct shapes and finite unit-variance noise, and the pipeline accepts it, but
 no Stable Audio or ACE-Step checkpoint has been run through it.
 
-**TripoSplat's second stream is camera parameters**, not audio. Enabling this
-there paints the camera. A per-stream opt-in would be safer than the current
-all-or-nothing.
+~~TripoSplat's second stream is camera parameters.~~ Handled (`c938137`):
+streams carrying fewer than 64 cells per batch item are skipped, which catches
+the `[B, 1, 5]` camera while leaving H3's 414-cell audio painted.
 
 ---
 
