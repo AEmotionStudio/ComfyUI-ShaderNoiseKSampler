@@ -6,7 +6,6 @@ This package provides the central logic for shader noise sampling:
 - constants: Magic numbers and default values
 - blending: Blend mode implementations
 - transforms: Noise transforms
-- model_compat: Model detection and channel handling
 - sampler: Core sampling logic
 """
 
@@ -25,8 +24,6 @@ from .constants import (
     SUPPORTED_TRANSFORMS,
     SUPPORTED_SHADER_TYPES,
     SUPPORTED_DISTRIBUTIONS,
-    MODEL_CHANNEL_COUNTS,
-    VIDEO_MODEL_CHANNELS,
 )
 
 from .blending import (
@@ -41,11 +38,6 @@ from .transforms import (
     match_noise_shape,
 )
 
-from .model_compat import (
-    get_model_channel_count,
-    detect_latent_format,
-    build_noise_shape,
-)
 
 from .sampler import (
     calculate_stage_strengths,
@@ -85,8 +77,6 @@ __all__ = [
     "SUPPORTED_TRANSFORMS",
     "SUPPORTED_SHADER_TYPES",
     "SUPPORTED_DISTRIBUTIONS",
-    "MODEL_CHANNEL_COUNTS",
-    "VIDEO_MODEL_CHANNELS",
     # Blending
     "blend_noises",
     # Transforms
@@ -95,10 +85,6 @@ __all__ = [
     "resize_noise_spatial",
     "resize_noise_channels",
     "match_noise_shape",
-    # Model compatibility
-    "get_model_channel_count",
-    "detect_latent_format",
-    "build_noise_shape",
     # Sampler
     "calculate_stage_strengths",
     "calculate_step_ranges",

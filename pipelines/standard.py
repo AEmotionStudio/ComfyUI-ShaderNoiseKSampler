@@ -7,9 +7,14 @@ instead of independent restarts.
 
 At a boundary the latent is split back into a denoised estimate and its noise,
 the noise is re-mixed with shader noise, and the next segment resumes from that
-pair. The split happens in the model's internal space (`latent_format.process_in`
+pair. The split happens in the model's internal space (`model.process_latent_in`
 and `model_sampling.noise_scaling`), which makes it exact: at shader_strength 0
 the segmented run reproduces an uninterrupted one, for both EPS and flow models.
+
+Nothing here detects the model. The noise shape is whatever the latent is, so any
+channel count works, and multi-stream latents are handled per stream -- MiniMax
+H3 arrives as a NestedTensor of a video stream and an audio stream. Only the
+first stream is painted; the rest keep the Gaussian noise ComfyUI gave them.
 
 What this fixes relative to legacy, all covered by tests:
 - stages no longer restart from maximum noise (flow models discarded the
@@ -50,6 +55,26 @@ def _rebuild(reference, streams: Sequence[torch.Tensor]):
         return streams[0]
     from comfy.nested_tensor import NestedTensor
     return NestedTensor(list(streams))
+
+
+def _latent_space(model):
+    """
+    The transforms ComfyUI applies around a sample() call, as (into, out of).
+
+    These belong to the model rather than the latent format. MiniMax H3 overrides
+    them to carry its audio stream scaled onto the video sigma schedule, and
+    `CFGGuider.inner_sample` calls the model's versions -- so inverting through
+    the format alone would leave H3's audio off by `audio_scale`. Reading them
+    through `get_model_object` also picks up a node's object_patches.
+    """
+    latent_format = model.get_model_object("latent_format")
+    resolved = []
+    for on_model, on_format in (("process_latent_in", "process_in"), ("process_latent_out", "process_out")):
+        try:
+            resolved.append(model.get_model_object(on_model))
+        except (AttributeError, KeyError):  # a wrapper that only carries the format
+            resolved.append(getattr(latent_format, on_format))
+    return tuple(resolved)
 
 
 def _shader_events(
@@ -93,7 +118,6 @@ def _shader_events(
 
 def _apply_events(
     noise: torch.Tensor,
-    latent_shape: Tuple[int, ...],
     events: Sequence[Tuple[float, int]],
     shader_params: Dict[str, Any],
     shader_type: str,
@@ -103,12 +127,17 @@ def _apply_events(
     dtype: torch.dtype,
     temporal_coherence: bool,
 ) -> torch.Tensor:
-    """Mix each stage's shader noise into `noise`, in order."""
+    """
+    Mix each stage's shader noise into `noise`, in order.
+
+    The shape is read off `noise` rather than carried in from the latent the run
+    started with, so a boundary residual cannot be painted at a stale shape.
+    """
     for strength, stage_seed in events:
         if strength <= 0.0:
             continue
         generated = shader_noise.generate(
-            latent_shape, shader_params, shader_type, stage_seed, device,
+            tuple(noise.shape), shader_params, shader_type, stage_seed, device,
             dtype=dtype, temporal_coherence=temporal_coherence,
         )
         generated = noise_math.transform_noise(generated, noise_transform)
@@ -116,26 +145,31 @@ def _apply_events(
     return noise
 
 
-def _split_noise(out, x0_internal, sigma, model_sampling, latent_format):
+def _split_noise(out, x0_internal, sigma, model_sampling, model):
     """
     Split a segment's result into (denoised estimate, its noise), in internal space.
 
     `noise_scaling(sigma, zeros, L)` is what the next sample() call applies to a
     latent, so inverting through it keeps EPS and flow models on the same path.
-    """
-    streams_out = _streams(out)
-    streams_x0 = _streams(x0_internal)
-    latents, noises = [], []
 
-    for tensor, x0 in zip(streams_out, streams_x0):
-        internal = latent_format.process_in(tensor.to(x0.device, x0.dtype))
-        zeros = torch.zeros_like(internal)
-        x_at_sigma = model_sampling.noise_scaling(sigma, zeros, internal)
+    The latent-space transforms come from the model rather than being handed in,
+    so this stays the inverse of what the next sample() call will really do. They
+    run on the whole latent, not stream by stream, so a model that treats its
+    streams differently -- MiniMax H3 scales audio by `audio_scale` -- sees the
+    shape it expects.
+    """
+    process_in, process_out = _latent_space(model)
+    streams_x0 = _streams(x0_internal)
+    aligned = [t.to(x0.device, x0.dtype) for t, x0 in zip(_streams(out), streams_x0)]
+    streams_internal = _streams(process_in(_rebuild(out, aligned)))
+
+    noises = []
+    for internal, x0 in zip(streams_internal, streams_x0):
+        x_at_sigma = model_sampling.noise_scaling(sigma, torch.zeros_like(internal), internal)
         x0_at_sigma = model_sampling.noise_scaling(sigma, torch.zeros_like(x0), x0)
         noises.append((x_at_sigma - x0_at_sigma) / sigma)
-        latents.append(latent_format.process_out(x0))
 
-    return _rebuild(out, latents), _rebuild(out, noises)
+    return process_out(x0_internal), _rebuild(out, noises)
 
 
 def _segment_callback(preview, offset: int, total_steps: int, captured: Dict[str, Any]):
@@ -189,18 +223,22 @@ def run(
 
     primary = _streams(samples)[0]
     device, dtype = primary.device, primary.dtype
-    latent_shape = tuple(primary.shape)
+
+    # Refuse a latent the shaders cannot paint on before any sampling happens, rather
+    # than at the first boundary that needs one. At shader_strength 0 there is nothing
+    # to paint, so those models still sample through here as a plain KSampler.
+    if any(strength > 0.0 for stage in events.values() for strength, _ in stage):
+        shader_noise.require_spatial_latent(tuple(primary.shape))
 
     noise = comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
     noise_streams = _streams(noise)
     noise_streams[0] = _apply_events(
-        noise_streams[0].to(device), latent_shape, events.get(boundaries[0], []), shader_params,
+        noise_streams[0].to(device), events.get(boundaries[0], []), shader_params,
         shader_type, blend_mode, noise_transform, device, dtype, use_temporal_coherence,
     )
     noise = _rebuild(samples, noise_streams)
 
     model_sampling = model.get_model_object("model_sampling")
-    latent_format = model.get_model_object("latent_format")
     noise_mask = latent.get("noise_mask", None)
     preview = None if disable_pbar else latent_preview.prepare_callback(model, total_steps)
 
@@ -226,11 +264,11 @@ def run(
             continue
 
         current, residual = _split_noise(
-            result, captured["x0"], sigmas[end], model_sampling, latent_format
+            result, captured["x0"], sigmas[end], model_sampling, model
         )
         residual_streams = _streams(residual)
         residual_streams[0] = _apply_events(
-            residual_streams[0], latent_shape, events.get(end, []), shader_params, shader_type,
+            residual_streams[0], events.get(end, []), shader_params, shader_type,
             blend_mode, noise_transform, device, dtype, use_temporal_coherence,
         )
         noise = _rebuild(residual, residual_streams)

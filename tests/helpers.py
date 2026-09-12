@@ -41,6 +41,7 @@ def load_pack():
 load_pack()
 
 import comfy.latent_formats  # noqa: E402  (needs COMFY_ROOT on sys.path)
+import comfy.model_base  # noqa: E402
 import comfy.model_sampling  # noqa: E402
 import comfy.sample  # noqa: E402
 
@@ -53,26 +54,80 @@ class _FlowSampling(comfy.model_sampling.ModelSamplingDiscreteFlow, comfy.model_
     pass
 
 
+class _AVSampling(comfy.model_sampling.ModelSamplingAV, comfy.model_sampling.CONST):
+    """How comfy.model_base.model_sampling composes ModelType.FLOW_AV."""
+
+
+# MiniMax H3's own shifts, so audio_scale is the real 12.0 / 3.0 = 4.0.
+_H3_CONFIG = types.SimpleNamespace(sampling_settings={"shift": 12.0, "audio_shift": 3.0})
+
+
+class _H3LatentSpace(comfy.model_base.MiniMaxH3):
+    """
+    MiniMaxH3's process_latent_in/out without the diffusion network.
+
+    Only these two methods are wanted: they are the reason a model's latent space
+    is not interchangeable with its latent format's.
+    """
+
+    def __init__(self, latent_format, model_sampling, latent_shapes):
+        torch.nn.Module.__init__(self)
+        self.latent_format = latent_format
+        self.model_sampling = model_sampling
+        self.latent_shapes = latent_shapes
+
+
 class FakeModel:
     """
     Minimal ModelPatcher stand-in. It carries the real model_sampling and
     latent_format objects that ComfyUI and the pipelines read, so noise math
     is exercised exactly; only the diffusion network itself is missing.
+
+    ``kind="av"`` stands in for MiniMax H3: a MiniMaxH3AV format, a dual-shift
+    ModelSamplingAV, and the model's own process_latent_in/out, which carry the
+    audio stream at audio_scale.
     """
+
+    #: per-stream shapes of the AV latent the "av" kind expects, video first
+    AV_SHAPES = [(1, 24, 7, 12, 12), (1, 32, 2, 40)]
 
     def __init__(self, kind="eps"):
         if kind == "eps":
             self.sampling, self.latent_format = _EpsSampling(), comfy.latent_formats.SD15()
         elif kind == "flow":
             self.sampling, self.latent_format = _FlowSampling(), comfy.latent_formats.Wan21()
+        elif kind == "av":
+            self.sampling = _AVSampling(_H3_CONFIG)
+            self.latent_format = comfy.latent_formats.MiniMaxH3AV()
         else:
             raise ValueError(f"unknown model kind: {kind}")
-        self.model = types.SimpleNamespace(latent_format=self.latent_format, model_sampling=self.sampling)
+        self.kind = kind
+        if kind == "av":
+            self.model = _H3LatentSpace(self.latent_format, self.sampling, self.AV_SHAPES)
+        else:
+            self.model = types.SimpleNamespace(
+                latent_format=self.latent_format,
+                model_sampling=self.sampling,
+                process_latent_in=self.latent_format.process_in,
+                process_latent_out=self.latent_format.process_out,
+            )
         self.load_device = torch.device("cpu")
         self.model_options = {}
 
     def get_model_object(self, name):
-        return {"model_sampling": self.sampling, "latent_format": self.latent_format}[name]
+        return {
+            "model_sampling": self.sampling,
+            "latent_format": self.latent_format,
+            "process_latent_in": self.model.process_latent_in,
+            "process_latent_out": self.model.process_latent_out,
+        }[name]
+
+    def empty_latent(self):
+        """A zeroed latent of the shape this kind samples, nested for "av"."""
+        if self.kind == "av":
+            from comfy.nested_tensor import NestedTensor
+            return NestedTensor(tuple(torch.zeros(s) for s in self.AV_SHAPES))
+        return torch.zeros(1, self.latent_format.latent_channels, 16, 16)
 
 
 def snapshot(value):

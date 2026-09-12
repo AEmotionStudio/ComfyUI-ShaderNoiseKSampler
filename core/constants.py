@@ -79,63 +79,8 @@ SUPPORTED_DISTRIBUTIONS = [
     "last_stronger",
 ]
 
-# Model-specific channel counts
-# Maps model class names to their latent channel counts
-MODEL_CHANNEL_COUNTS = {
-    # Standard models (4 channels)
-    "SD1.5": 4,
-    "SD2.1": 4,
-    "SDXL": 4,
-    "SD3": 16,
-    
-    # Flux models
-    "Flux": 16,
-    "FluxGuidance": 16,
-    
-    # Video models
-    "WAN2.1": 16,
-    "HunyuanVideo": 16,
-    "LTXV": 128,
-    "CosmosVideo": 16,
-    "CogVideoX": 16,
-    
-    # Audio models
-    "ACEStep": 8,
-    
-    # AnimateDiff
-    "AnimateDiff": 4,
-}
-
-# Model name patterns for detection
-# Used when exact class name isn't available
-MODEL_NAME_PATTERNS = {
-    "sd3": 16,
-    "sdxl": 4,
-    "sd1.5": 4,
-    "sd2.1": 4,
-    "flux": 16,
-    "wan": 16,
-    "hunyuan": 16,
-    "ltxv": 128,
-    "cosmos": 16,
-    "cogvideo": 16,
-    "animatediff": 4,
-    "acestep": 8,
-}
-
 # High channel threshold for fast mode
 HIGH_CHANNEL_THRESHOLD = 16
-
-# Video model channel counts (subset of MODEL_CHANNEL_COUNTS for quick lookup)
-VIDEO_MODEL_CHANNELS = {
-    "WAN2.1": 16,
-    "HunyuanVideo": 16,
-    "LTXV": 128,
-    "CosmosVideo": 16,
-    "CogVideoX": 16,
-    "Mochi": 12,
-    "AnimateDiff": 4,
-}
 
 # Visualization types
 VISUALIZATION_TYPES = {

@@ -26,18 +26,41 @@ from .params import ShaderParams
 _FRACTION_EPSILON = 1e-3
 
 
+class UnsupportedLatentError(ValueError):
+    """The latent has no 2D spatial grid for a shader to draw on."""
+
+
+def require_spatial_latent(shape: Tuple[int, ...]) -> None:
+    """
+    Refuse latents the shaders cannot draw on, naming what was wrong.
+
+    Every shader paints a height x width grid, so it needs [B, C, H, W] or
+    [B, C, T, H, W]. Some models instead carry a plain sequence -- audio
+    (Stable Audio, ACE-Step 1.5, MiniMax Music 3), Hunyuan3D's occupancy grid
+    and TripoSplat's [B, tokens, channels] -- where there is no grid to paint.
+    """
+    if len(shape) in (4, 5):
+        return
+    raise UnsupportedLatentError(
+        f"shader noise needs a latent with a 2D spatial grid, either [B, C, H, W] or "
+        f"[B, C, T, H, W], but this model's latent is {len(shape)}D {tuple(shape)}. "
+        f"Sequence latents (Stable Audio, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D, "
+        f"TripoSplat) have no grid to draw on. Set shader_strength to 0.0 to sample "
+        f"them with this node as a plain KSampler."
+    )
+
+
 def latent_layout(shape: Tuple[int, ...]) -> Dict[str, int]:
     """
     Describe a latent shape the way ComfyUI lays it out.
 
     Returns batch, channels, frames (1 for images), height and width.
     """
+    require_spatial_latent(shape)
     if len(shape) == 5:
         batch, channels, frames, height, width = shape
-    elif len(shape) == 4:
-        (batch, channels, height, width), frames = shape, 1
     else:
-        raise ValueError(f"expected a 4D or 5D latent shape, got {tuple(shape)}")
+        (batch, channels, height, width), frames = shape, 1
     return {"batch": batch, "channels": channels, "frames": frames, "height": height, "width": width}
 
 

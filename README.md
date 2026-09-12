@@ -1,6 +1,6 @@
 # ComfyUI-ShaderNoiseKSampler
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
@@ -109,7 +109,7 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
     -   Adjust `noise_scale`, `octaves`, `warp_strength`, `phase_shift`, and more for each stage.
 -   **💾 Parameter Management**: Save your shader parameter configurations. Not necessary with (direct) node version.
 -   **📊 "Show Shader Matrix" Button**: Access comprehensive, interactive documentation and visualizations directly within ComfyUI (Alt+M shortcut).
--   **🤝 Compatibility**: Works with various models including SD 1.5, SDXL, Flux, WAN2.1, Hunyuan, and more (see Model Compatibility section).
+-   **🤝 Compatibility**: Shape-driven rather than a model list — any image or video latent at any channel count, including multi-stream video+audio latents like MiniMax H3 (see Model Compatibility section).
 -   **🧠 Latent Space Cartography**: Create a map of the territory surrounding your seed, developing an intuitive understanding of how to navigate to specific effects.
 -   **🔄 Persistent Identities in Variation**: Observe how similar elements persist across parameter adjustments, revealing how the model encodes concepts and their relationships.
 -   **💎 Discovery of "Hidden Gems"**: Find interesting variations that exist in the spaces "between" seeds that random sampling might statistically miss.
@@ -283,36 +283,32 @@ Generally, `ShaderNoiseKSampler` aims for broad compatibility. The following are
 
 ### 🧱 Model Compatibility
 
-The `ShaderNoiseKSampler` also aims to be compatible with a variety of models. Compatibility often depends on the model's latent channel structure. The node attempts to automatically detect the channel count for many common models.
+In `standard` sampling mode there is no model detection at all. The noise takes
+its shape from the latent you hand the node, so **any model whose latent is
+`[B, C, H, W]` or `[B, C, T, H, W]` works, at any channel count** — 3 channels for
+the pixel-space models up to 256, without a list to be added to.
 
-| Model Family / Name                | Category     | Status                               | Channels (Expected) | Notes                                                                 |
-| ---------------------------------- | ------------ | ------------------------------------ | ------------------- | --------------------------------------------------------------------- |
-| SD 1.5 / SD_X4                     | Image        | Compatible                           | 4                   | Standard 4-channel models.                                            |
-| SDXL / SDXL Refiner                | Image        | Compatible                           | 4                   | Standard 4-channel models.                                            |
-| Stable Cascade B                   | Image        | Compatible                           | 4                   | Formerly "Stable Cascade (Decoder/Non-Prior)".                         |
-| Stable Cascade (Prior)             | Image        | Compatible                           | 16                  | Higher channel count.                                                 |
-| SD3                                | Image        | Compatible                           | 16                  | Higher channel count.                                                 |
-| Flux.1 / Flux                      | Image        | Compatible                           | 16                  | Higher channel count.                                                 |
-| HunyuanDiT                         | Image        | Compatible                           | 4                   | Standard 4-channel model, similar to SD1.5/SDXL.                      |
-| Chroma                             | Image        | Compatible                           | 4                   | Assumed 4-channel VAE based on related models.                        |
-| HiDream / Flow                     | Image        | Compatible                           | 16                  | Higher channel count.                                                 |
-| WAN / Warp / Pixel / Anime (WAN2.1) | Video (3D)   | Compatible                           | 16                  | Higher channel count.                                                 |
-| Mochi                              | Video (3D)   | Compatible                           | 12                  | May require specific handling.                                        |
-| LTXV                               | Video (3D)   | Compatible                           | 128                 | Very high channel count. Special configuration or specific noise handling might be beneficial. |
-| CosmosVideo / Cosmos1CV8x8x8       | Video (3D)   | Compatible                           | 16                  | Channel count confirmed.                                              |
-| HunyuanVideo                       | Video (3D)   | Compatible                           | 16                  | Official docs mention a 16x VAE channel compression. Effective channels for noise may differ or require specific handling. |
-| AnimateDiff (on SD 1.5)            | Video (3D)   | Compatible                           | 4                   | Uses 4 channels from the base SD 1.5 model.                           |
-| Stable Video Diffusion (SVD)       | Video (3D)   | Compatible                           | 4                   | Latent diffusion model, likely 4 channels.                            |
-| ACEStep / ACE                      | Audio (1D)   | Compatible                           | 8                   | Compatibility with 2D noise may vary.                               |
-| StableAudio1                       | Audio (1D)   | Untested                             | 64                  | Compatibility with 2D noise is uncertain.                           |
-| Hunyuan3Dv2                        | 3D Model     | Untested                             | 64                  | 1D channels. Compatibility with 2D noise is uncertain.              |
-| Hunyuan3Dv2mini                    | 3D Model     | Untested                             | 64                  | 1D channels. Compatibility with 2D noise is uncertain.              |
-| **Other Models**                   |              |                                      |                     |                                                                       |
-| Generic 4-channel models           | Image        | Compatible (by default)              | 4                   | Most other standard diffusion models.                                 |
-| Models with >16 channels (unlisted)| Various      | Untested / May Require Configuration | Varies              | Models with very high channel counts may require specific configurations or might exhibit different performance characteristics.                  |
-| Other non-standard architecture    | Various      | Untested                             | Varies              | Results may vary.                                                     |
+| Latent shape | Works | Examples |
+| --- | --- | --- |
+| `[B, C, H, W]` (image) | Yes, any `C` | SD 1.5, SDXL, SD3, Flux, Flux 2, Chroma, HiDream, Qwen-Image, Z-Image, PixelDiT, Trellis2, HunyuanImage 2.1 |
+| `[B, C, T, H, W]` (video) | Yes, any `C` | WAN 2.1 / 2.2, HunyuanVideo and 1.5, LTXV, Mochi, Cosmos, CogVideoX, SeedVR2, Anima |
+| `NestedTensor` of streams | Yes — the first stream is painted | **MiniMax H3** (video + audio), LTXAV |
+| `[B, C, L]` (sequence) | No — refused with a named error | Stable Audio 1 / 3, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D v2, TripoSplat |
 
-**Note on Channel Detection:** The `ShaderNoiseKSampler` includes logic to infer model channel counts (see `get_model_channel_count` in `shader_noise_ksampler.py`). If you encounter issues with a new or untested model, understanding its latent channel structure is important. For models with very high channel counts, performance or compatibility might vary, and specific noise generation approaches could be more suitable.
+**MiniMax H3** arrives as a paired video + audio latent. The shader paints the
+video stream; the audio stream keeps exactly the Gaussian noise a stock KSampler
+would have given it, because it has no spatial grid to paint. Note that H3 itself
+only supports batch size 1.
+
+**Sequence latents** carry no height and width, so there is nothing for a shader
+to draw on. Rather than quietly producing something meaningless, the node refuses
+with a message naming the shape. Setting `shader_strength` to `0.0` leaves
+nothing to paint, and the node then samples those models as a plain KSampler.
+
+> [!NOTE]
+> The above describes `standard` mode. `legacy` mode keeps its original
+> channel-count detection, along with its quirks, so that pre-2.0 workflows
+> reproduce their seeds unchanged — it is frozen, not maintained.
 
 ## 🔬 Shader Noise Deep Dive (Brief Overview)
 

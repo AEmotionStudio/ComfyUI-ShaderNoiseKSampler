@@ -17,7 +17,7 @@ from ..utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colo
 from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
 from ..utils.noise_utils import create_coordinate_grid
 from ..core.params import ShaderParams, get_param_value
-from ..core.constants import DEFAULT_CHANNELS, MODEL_CHANNEL_COUNTS
+from ..core.constants import DEFAULT_CHANNELS
 
 logger = logging.getLogger(__name__)
 

@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-09-11
+
+Compatibility release for ComfyUI 0.34.0's model roster, MiniMax H3 in
+particular. The `standard` pipeline already took its noise shape from the latent
+rather than from a table of model names, so most of the roster needed nothing;
+what was wrong was how a multi-stream latent crossed a stage boundary.
+
+### Fixed
+- **MiniMax H3 multi-stage runs.** H3's latent is a `NestedTensor` of a video
+  stream `[B,24,T,H,W]` and an audio stream `[B,32,2,T]`, and the model — not its
+  latent format — carries audio scaled onto the video sigma schedule
+  (`audio_scale` = `shift / audio_shift` = 4.0). The boundary split inverted
+  through `latent_format.process_in`, which for `MiniMaxH3AV` is an identity, so
+  the audio residual handed to the next segment was off by that factor of 4. It
+  now inverts through the model's own `process_latent_in` / `process_latent_out`,
+  which is what `CFGGuider.inner_sample` actually applies. No change for any
+  other model: `BaseModel.process_latent_in` just calls the format.
+
+  Measured on real H3 weights (MiniMax H3 Max, int8), two stages at
+  `shader_strength` 0, where a segmented run must reproduce an uninterrupted one:
+
+  | | video max error | audio max error |
+  | --- | --- | --- |
+  | before | 9.3e-01 (stream max 4.80) | 1.3e+00 (stream max 1.35) |
+  | after | 4.8e-07 | 2.4e-07 |
+
+  The audio stream was almost entirely wrong, and because H3 denoises both
+  streams in one packed sequence the error reached the video through the DiT's
+  joint attention — so this degraded picture as well as sound.
+- **Shader noise at a stage boundary reads its shape from the noise it is about
+  to paint**, instead of a shape captured before the run started.
+
+### Changed
+- **Latents with no spatial grid are refused by name.** Sequence latents
+  (`[B, C, L]`: Stable Audio 1 / 3, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D,
+  TripoSplat) have no height and width for a shader to draw on. They now raise
+  `UnsupportedLatentError` naming the shape, before sampling starts, rather than
+  a bare `ValueError` from inside noise generation. At `shader_strength` 0.0
+  there is nothing to paint, so those models sample through as a plain KSampler.
+- **Verified across the roster, not assumed**: noise generation is exercised at
+  every channel count ComfyUI ships — 3, 4, 8, 12, 16, 24, 32, 48, 64, 128 and
+  256 — for both image and video latents.
+
+### Removed
+- **`core/model_compat.py`**, along with the `MODEL_CHANNEL_COUNTS`,
+  `MODEL_NAME_PATTERNS` and `VIDEO_MODEL_CHANNELS` tables. Nothing called it. Its
+  tables stopped at LTXV, its `model_type == "FLOW"` branch was unreachable
+  (`str(ModelType.FLOW).upper()` is `"MODELTYPE.FLOW"`), and its 5-D layout guess
+  defaulted to `[B,F,C,H,W]`, which ComfyUI never produces. The `legacy` mode's
+  own detector is untouched, so pre-2.0 workflows still reproduce their seeds.
+
 ## [2.0.0] - 2026-09-11
 
 Sampling correctness release. Stages, `denoise` and `custom_sigmas` now do what

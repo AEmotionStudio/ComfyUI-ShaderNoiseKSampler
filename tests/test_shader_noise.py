@@ -7,10 +7,12 @@ matched the channel count -- which is exactly what a 61-frame Wan or Hunyuan
 clip looks like: (61-1)//4+1 = 16 latent frames and 16 channels. Time evolution
 then ran across channels, with no error raised.
 """
+import re
+
 import pytest
 import torch
 
-from snk.core.shader_noise import generate, latent_layout
+from snk.core.shader_noise import UnsupportedLatentError, generate, latent_layout
 
 CPU = torch.device("cpu")
 PARAMS = {
@@ -27,11 +29,32 @@ def test_layout_reads_comfy_latent_shapes():
 
 @pytest.mark.parametrize("shape", [(1, 3), (1, 4, 8, 8, 8, 8)])
 def test_layout_rejects_unsupported_ranks(shape):
-    with pytest.raises(ValueError):
+    with pytest.raises(UnsupportedLatentError):
         latent_layout(shape)
 
 
-@pytest.mark.parametrize("shape", [(1, 4, 32, 32), (2, 4, 16, 16), (1, 16, 5, 8, 8), (1, 16, 3, 16, 16)])
+@pytest.mark.parametrize("shape", [(1, 64, 1024), (1, 128, 860), (1, 8192, 16)])
+def test_layout_names_the_sequence_latents_it_cannot_paint(shape):
+    """Stable Audio, MiniMax Music 3 and TripoSplat: rank 3, no spatial grid."""
+    with pytest.raises(UnsupportedLatentError, match=rf"3D {re.escape(str(shape))}"):
+        latent_layout(shape)
+
+
+@pytest.mark.parametrize("shape", [
+    (1, 4, 32, 32), (2, 4, 16, 16), (1, 16, 5, 8, 8), (1, 16, 3, 16, 16),
+    # every channel count in ComfyUI's roster, image and video
+    (1, 3, 16, 16),      # pixel space: Z-Image, PixelDiT, HiDream-O1, SenseNova, Chroma Radiance
+    (1, 8, 16, 16),      # ACE-Step 1.0
+    (1, 12, 3, 8, 8),    # Mochi
+    (1, 24, 5, 8, 8),    # MiniMax H3, video stream
+    (1, 32, 16, 16),     # Trellis2
+    (1, 32, 5, 8, 8),    # HunyuanVideo 1.5
+    (1, 48, 3, 8, 8),    # Wan 2.2
+    (1, 64, 16, 16),     # HunyuanImage 2.1
+    (1, 128, 16, 16),    # Flux 2, Ideogram 4, Lens, Ernie, MageFlow
+    (1, 128, 3, 8, 8),   # LTXV
+    (1, 256, 16, 16),    # Stable Audio 3's channel count
+])
 def test_generated_noise_matches_the_latent_shape(shape):
     noise = generate(shape, PARAMS, "domain_warp", 8888, CPU)
     assert tuple(noise.shape) == shape
