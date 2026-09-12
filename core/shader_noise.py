@@ -126,6 +126,66 @@ def _render_octaves(generator, params: Dict[str, Any], layout, seed, device) -> 
     return noise
 
 
+# Independent draws combined to fill the channel axis. Caps both the effective
+# rank and the cost: 8 renders instead of one per channel, which matters at
+# LTXV's 128 channels.
+DECORRELATION_BASIS = 8
+
+# Arbitrary but fixed, so a seed still reproduces.
+_MIX_SEED_STRIDE = 7919
+
+def effective_channel_rank(noise: torch.Tensor) -> float:
+    """
+    Participation ratio of the channel covariance spectrum: how many channels the
+    noise really spans. Full for i.i.d. noise, ~1 when every channel is a copy.
+    """
+    channels = noise.shape[1]
+    if channels < 2:
+        return float(channels)
+    flat = noise.reshape(noise.shape[0], channels, -1)[0].float()
+    flat = flat - flat.mean(dim=1, keepdim=True)
+    flat = flat / flat.norm(dim=1, keepdim=True).clamp_min(1e-8)
+    spectrum = torch.linalg.svdvals(flat) ** 2
+    weights = spectrum / spectrum.sum().clamp_min(1e-12)
+    return float(torch.exp(-(weights * weights.clamp_min(1e-12).log()).sum()))
+
+
+def _decorrelate(latent_shape, params, shader_type, seed, device, dtype,
+                 temporal_coherence, generator) -> torch.Tensor:
+    """
+    Fill the channel axis with independent draws instead of copies of one.
+
+    The generators build extra channels as pointwise functions of the first one
+    or two (`shaders/base.py::_expand_channels`), so the result is effectively
+    rank 1-2 however many channels are asked for -- exactly rank 1.00 for
+    domain_warp at 4 channels. Samplers expect i.i.d. noise, and that collapse is
+    what makes the shader's own pattern surface in the picture so readily.
+
+    Here each output channel is a different mixture of `DECORRELATION_BASIS`
+    independent renders, so the rank is min(channels, basis) while the spatial
+    character of the shader is preserved -- every basis element is still that
+    shader.
+    """
+    channels = latent_shape[1]
+    basis = min(channels, DECORRELATION_BASIS)
+    single = (latent_shape[0], 1) + tuple(latent_shape[2:])
+
+    draws = torch.stack([
+        generate(single, params, shader_type, seed + _MIX_SEED_STRIDE * i, device,
+                 dtype=dtype, temporal_coherence=temporal_coherence, generator=generator)
+        for i in range(basis)
+    ])                                              # [basis, B, 1, ...]
+
+    mixer = torch.Generator(device="cpu").manual_seed(seed)
+    weights = torch.randn(channels, basis, generator=mixer, dtype=torch.float32)
+    weights = weights / weights.norm(dim=1, keepdim=True).clamp_min(1e-8)
+    weights = weights.to(device=device, dtype=dtype)
+
+    flat = draws.reshape(basis, -1)                 # [basis, everything]
+    mixed = (weights @ flat).reshape((channels,) + draws.shape[1:])
+    return torch.cat([mixed[c] for c in range(channels)], dim=1)
+
+
 def generate(
     latent_shape: Tuple[int, ...],
     params: Any,
@@ -135,6 +195,7 @@ def generate(
     dtype: torch.dtype = torch.float32,
     temporal_coherence: bool = False,
     generator=None,
+    decorrelate: bool = False,
 ) -> torch.Tensor:
     """
     Generate shader noise matching a latent's shape.
@@ -157,7 +218,9 @@ def generate(
     with torch.random.fork_rng(devices=devices):
         if layout["frames"] == 1 and len(latent_shape) == 4:
             noise = _render_octaves(generator, base_params, layout, seed, device)
-            return _fit(noise, latent_shape, device, dtype)
+            return _maybe_decorrelate(
+                _fit(noise, latent_shape, device, dtype), decorrelate, latent_shape,
+                params, shader_type, seed, device, dtype, temporal_coherence)
 
         frames = []
         span = max(layout["frames"] - 1, 1)
@@ -168,7 +231,9 @@ def generate(
             frames.append(_render_octaves(generator, frame_params, layout, frame_seed, device))
 
     stacked = torch.stack(frames, dim=2)  # [B, C, T, H, W]
-    return _fit(stacked, latent_shape, device, dtype)
+    return _maybe_decorrelate(
+        _fit(stacked, latent_shape, device, dtype), decorrelate, latent_shape,
+        params, shader_type, seed, device, dtype, temporal_coherence)
 
 
 def _fit(noise: torch.Tensor, target_shape, device, dtype) -> torch.Tensor:
@@ -182,3 +247,26 @@ def _fit(noise: torch.Tensor, target_shape, device, dtype) -> torch.Tensor:
     slices = tuple(slice(0, min(a, b)) for a, b in zip(noise.shape, target_shape))
     corrected[slices] = noise[slices]
     return corrected
+
+
+def _maybe_decorrelate(noise, decorrelate, latent_shape, params, shader_type, seed,
+                       device, dtype, temporal_coherence):
+    """Remix the channel axis only when the draw actually collapsed."""
+    if not decorrelate or noise.shape[1] < 2:
+        return noise
+
+    # Cheap reject first: remixing can only reach about min(channels, basis)
+    # independent directions, so a draw already at least that wide is left alone.
+    # This is why the guard is on rank and not on correlation -- curl_noise looks
+    # correlated but already spans 25 of 128 channels.
+    stock_rank = effective_channel_rank(noise)
+    if stock_rank >= min(noise.shape[1], DECORRELATION_BASIS) * 0.9:
+        return noise
+
+    # The basis draws are not guaranteed independent either: at four channels
+    # curl_noise remixes to a *lower* rank than it started with. Rather than tune
+    # a threshold per generator, keep whichever is actually wider, so turning this
+    # on can never make the noise narrower than leaving it off.
+    remixed = _decorrelate(tuple(latent_shape), params, shader_type, seed, device,
+                           dtype, temporal_coherence, None)
+    return remixed if effective_channel_rank(remixed) > stock_rank else noise

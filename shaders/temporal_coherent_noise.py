@@ -74,17 +74,24 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         base_seed = params.get("base_seed", seed)
         shape_type = params.shape_type
         shape_strength = params.shape_strength
-        
+
+        # Hold the seed only when temporal coherence asks for it, the way
+        # domain_warp does. Reading base_seed unconditionally ignored the seed
+        # argument entirely: the node always sets base_seed, so every stage and
+        # every channel drew the same field, and only `time` still varied.
+        use_temporal_coherence = params.use_temporal_coherence
+        current_seed = base_seed if use_temporal_coherence else seed
+
         # Create coordinate grid in [-1, 1] range
         coords = create_coordinate_grid(batch_size, height, width, device, range_type="symmetric")
-        
+
         # Set consistent seed
-        torch.manual_seed(base_seed)
-        
+        torch.manual_seed(current_seed)
+
         # Generate temporal coherent noise
         result = TemporalCoherentNoiseGenerator.temporal_spectral_noise(
             coords, scale, warp_strength, phase_shift, octaves,
-            frequency_range, time, device, base_seed
+            frequency_range, time, device, current_seed
         )
         
         # Apply shape mask

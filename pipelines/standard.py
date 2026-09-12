@@ -127,6 +127,7 @@ def _apply_events(
     dtype: torch.dtype,
     temporal_coherence: bool,
     normalize_strength: bool = False,
+    decorrelate_channels: bool = False,
 ) -> torch.Tensor:
     """
     Mix each stage's shader noise into `noise`, in order.
@@ -140,6 +141,7 @@ def _apply_events(
         generated = shader_noise.generate(
             tuple(noise.shape), shader_params, shader_type, stage_seed, device,
             dtype=dtype, temporal_coherence=temporal_coherence,
+            decorrelate=decorrelate_channels,
         )
         generated = noise_math.transform_noise(generated, noise_transform)
         noise = noise_math.mix_noise(noise, generated, blend_mode, strength, normalize_strength)
@@ -204,6 +206,7 @@ def run(
     injection_distribution: str = "linear_decrease",
     use_temporal_coherence: bool = False,
     normalize_strength: bool = False,
+    decorrelate_channels: bool = False,
     custom_sigmas: Optional[torch.Tensor] = None,
     disable_pbar: bool = False,
 ) -> Dict[str, Any]:
@@ -237,7 +240,7 @@ def run(
     noise_streams[0] = _apply_events(
         noise_streams[0].to(device), events.get(boundaries[0], []), shader_params,
         shader_type, blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-        normalize_strength,
+        normalize_strength, decorrelate_channels,
     )
     noise = _rebuild(samples, noise_streams)
 
@@ -273,7 +276,7 @@ def run(
         residual_streams[0] = _apply_events(
             residual_streams[0], events.get(end, []), shader_params, shader_type,
             blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-            normalize_strength,
+            normalize_strength, decorrelate_channels,
         )
         noise = _rebuild(residual, residual_streams)
 

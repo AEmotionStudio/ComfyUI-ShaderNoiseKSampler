@@ -12,7 +12,9 @@ import re
 import pytest
 import torch
 
-from snk.core.shader_noise import UnsupportedLatentError, generate, latent_layout
+from snk.core.shader_noise import (
+    UnsupportedLatentError, effective_channel_rank, generate, latent_layout,
+)
 
 CPU = torch.device("cpu")
 PARAMS = {
@@ -116,3 +118,58 @@ def test_unknown_shader_type_raises_a_clear_error():
     """
     with pytest.raises(ValueError, match="unknown shader type"):
         generate((1, 4, 16, 16), PARAMS, "not_a_real_shader", 8888, CPU)
+
+
+# --- channel decorrelation ------------------------------------------------------------
+
+@pytest.mark.parametrize("shape,shader_type,collapsed", [
+    ((1, 4, 48, 48), "domain_warp", True),
+    ((1, 4, 48, 48), "temporal_coherent", True),
+    ((1, 16, 32, 32), "domain_warp", True),
+    ((1, 24, 5, 16, 16), "temporal_coherent", True),
+    ((1, 16, 32, 32), "tensor_field", False),
+])
+def test_generators_collapse_the_channel_axis(shape, shader_type, collapsed):
+    """
+    The defect decorrelation exists for: extra channels are built as pointwise
+    functions of the first one or two, so the draw spans far fewer channels than
+    it has. tensor_field is the exception and must stay the exception.
+    """
+    noise = generate(shape, PARAMS, shader_type, 8888, CPU)
+    rank = effective_channel_rank(noise)
+    if collapsed:
+        assert rank < shape[1] * 0.5, f"{shader_type}: rank {rank:.2f} of {shape[1]}"
+    else:
+        assert rank > shape[1] * 0.7, f"{shader_type}: rank {rank:.2f} of {shape[1]}"
+
+
+@pytest.mark.parametrize("shape", [(1, 4, 48, 48), (1, 16, 32, 32), (1, 24, 5, 16, 16), (1, 128, 16, 16)])
+@pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent"])
+def test_decorrelation_never_narrows_the_noise(shape, shader_type):
+    """
+    Turning it on must never leave the noise spanning fewer channels than leaving
+    it off. The basis draws are not guaranteed independent -- curl_noise at four
+    channels remixes worse than it started -- so generate() keeps whichever is
+    wider rather than trusting the remix.
+    """
+    stock = generate(shape, PARAMS, shader_type, 8888, CPU)
+    fixed = generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True)
+    assert fixed.shape == stock.shape
+    assert torch.isfinite(fixed).all()
+    assert effective_channel_rank(fixed) >= effective_channel_rank(stock) - 1e-6
+
+
+def test_decorrelation_actually_helps_where_it_should():
+    shape = (1, 24, 5, 16, 16)
+    for shader_type in ("domain_warp", "temporal_coherent"):
+        stock = effective_channel_rank(generate(shape, PARAMS, shader_type, 8888, CPU))
+        fixed = effective_channel_rank(generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True))
+        assert fixed > stock * 2, f"{shader_type}: {stock:.2f} -> {fixed:.2f}"
+
+
+def test_decorrelation_is_off_by_default_and_reproducible():
+    shape = (1, 16, 32, 32)
+    assert torch.equal(generate(shape, PARAMS, "domain_warp", 1, CPU),
+                       generate(shape, PARAMS, "domain_warp", 1, CPU, decorrelate=False))
+    assert torch.equal(generate(shape, PARAMS, "domain_warp", 1, CPU, decorrelate=True),
+                       generate(shape, PARAMS, "domain_warp", 1, CPU, decorrelate=True))
