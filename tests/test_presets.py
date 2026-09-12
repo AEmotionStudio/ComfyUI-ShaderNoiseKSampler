@@ -23,8 +23,13 @@ def test_the_modes_are_ordered_by_how_wide_they_leave_the_noise(shape):
                                       decorrelate=True, basis=basis_for(mode))
         ranks[mode] = shader_noise.effective_channel_rank(noise)
 
-    assert ranks["jump"] <= ranks["drift"] <= ranks["walk"], ranks
     assert ranks["jump"] == pytest.approx(1.0, abs=0.01), "jump is a deliberate collapse"
+    if shape[1] > basis_for("drift"):
+        # Strict, so drift collapsing into walk fails instead of passing as equal.
+        assert ranks["jump"] < ranks["drift"] < ranks["walk"], ranks
+    else:
+        # Four channels are all the directions there are: drift has nothing to narrow.
+        assert ranks["jump"] < ranks["drift"] == ranks["walk"], ranks
 
 
 @pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise",

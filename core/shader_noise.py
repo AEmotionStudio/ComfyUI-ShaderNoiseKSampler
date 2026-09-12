@@ -20,6 +20,7 @@ from typing import Any, Dict, Tuple
 
 import torch
 
+from .constants import CHANNEL_BASIS
 from .params import ShaderParams
 
 # Below this the fractional part is not worth a second render.
@@ -132,19 +133,21 @@ def _render_octaves(generator, params: Dict[str, Any], layout, seed, device) -> 
     return noise
 
 
-# Independent draws combined to fill the channel axis, capped so a very wide
-# latent cannot demand one render per channel.
+# The widest basis a travel mode asks for. The generators fill their own channel
+# axis to the same cap (shaders/base.py::fill_channels), so a draw arrives here
+# already spanning about this many directions; see _maybe_decorrelate for what
+# that leaves this module to do.
 #
-# Set from measurement, not guessed. On MiniMax H3 at strength 0.75, where stock
-# noise is a solid quilted texture, a basis of 8 is still mostly destroyed, 16 is
-# coherent and 32 is clean. The achieved rank runs at roughly 85-90% of the basis
-# until it hits the channel count, so 64 gives full independence to everything up
-# to 64 channels and takes LTXV's 128 from rank 7.6 to 43.
-#
-# The cost this cap was originally guarding against turned out not to exist: the
-# worst case measured is about a second per draw, on a run that takes thirty to
-# fifty, and a draw happens once per stage boundary.
-DECORRELATION_BASIS = 64
+# 64 was set from measurement on MiniMax H3 at strength 0.75, where noise spanning
+# one channel is a solid quilted texture: a basis of 8 was still mostly destroyed,
+# 16 coherent and 32 clean.
+DECORRELATION_BASIS = CHANNEL_BASIS
+
+# What a random remix of a basis actually reaches, as a share of the directions
+# it aims at. Measured at 16, 24 and 128 channels across all four generators: 0.52
+# to 0.64. A draw already wider than that cannot be widened by remixing, so it is
+# left alone rather than rendered a second time and thrown away.
+_MIX_RANK_YIELD = 0.65
 
 # Arbitrary but fixed, so a seed still reproduces.
 _MIX_SEED_STRIDE = 7919
@@ -168,18 +171,16 @@ def effective_channel_rank(noise: torch.Tensor) -> float:
 def _decorrelate(latent_shape, params, shader_type, seed, device, dtype,
                  temporal_coherence, generator, basis_size=None) -> torch.Tensor:
     """
-    Fill the channel axis with independent draws instead of copies of one.
+    Rebuild the channel axis as mixtures of `basis_size` independent renders.
 
-    The generators build extra channels as pointwise functions of the first one
-    or two (`shaders/base.py::_expand_channels`), so the result is effectively
-    rank 1-2 however many channels are asked for -- exactly rank 1.00 for
-    domain_warp at 4 channels. Samplers expect i.i.d. noise, and that collapse is
-    what makes the shader's own pattern surface in the picture so readily.
+    Each output channel is a different random mixture of the renders, so the draw
+    spans about min(channels, basis) directions -- in practice about 0.6 of that,
+    since random mixing is not orthogonal -- and every channel keeps the shader's
+    spatial character.
 
-    Here each output channel is a different mixture of `DECORRELATION_BASIS`
-    independent renders, so the rank is min(channels, basis) while the spatial
-    character of the shader is preserved -- every basis element is still that
-    shader.
+    The generators span their own channels now, so this is how a travel mode
+    narrows a draw on purpose: `drift` down to four directions, `jump` to one. It
+    still widens a draw that arrives narrow, though no shipped generator does.
     """
     channels = latent_shape[1]
     basis = min(channels, DECORRELATION_BASIS if basis_size is None else max(1, basis_size))
@@ -279,11 +280,13 @@ def _fit(noise: torch.Tensor, target_shape, device, dtype) -> torch.Tensor:
 def _maybe_decorrelate(noise, decorrelate, latent_shape, params, shader_type, seed,
                        device, dtype, temporal_coherence, basis=None):
     """
-    Remix the channel axis.
+    Remix the channel axis to the width a travel mode asks for.
 
-    Widening is guarded, because it is an improvement that might not be one.
-    Narrowing is not, because a caller asking for a basis of 1 wants the collapse
-    and the guards exist precisely to prevent it.
+    Direction decides what is guarded. Narrowing is a request -- `drift` and
+    `jump` want fewer directions than the generator drew -- so it is never
+    second-guessed. Widening is an improvement that might not be one, so it is
+    skipped when the draw is already as wide as a remix could make it, and kept
+    only when it actually came out wider.
     """
     if not decorrelate or noise.shape[1] < 2:
         return noise
@@ -295,18 +298,26 @@ def _maybe_decorrelate(noise, decorrelate, latent_shape, params, shader_type, se
         return _decorrelate(tuple(latent_shape), params, shader_type, seed, device,
                             dtype, temporal_coherence, None, basis_size=1)
 
-    # Cheap reject first: remixing can only reach about min(channels, basis)
-    # independent directions, so a draw already at least that wide is left alone.
-    # This is why the guard is on rank and not on correlation -- curl_noise looks
-    # correlated but already spans 25 of 128 channels.
+    target = min(noise.shape[1], size)
     stock_rank = effective_channel_rank(noise)
-    if stock_rank >= min(noise.shape[1], size) * 0.9:
+
+    # `drift` arrives asking for four directions out of a draw spanning twenty-odd.
+    # Before the generators filled their own channels, a basis of four widened the
+    # noise and this branch was unreachable; without it the widening guard below
+    # sees a wide draw, leaves it alone, and drift silently becomes walk. Only a
+    # basis below the widest counts: at 128 channels a draw can exceed 64 directions,
+    # and walk asking for 64 is not a request to come down to them.
+    if size < DECORRELATION_BASIS and target < stock_rank:
+        return _decorrelate(tuple(latent_shape), params, shader_type, seed, device,
+                            dtype, temporal_coherence, None, basis_size=size)
+
+    # A remix reaches about _MIX_RANK_YIELD of its target, so a draw already wider
+    # is left alone. The guard is on rank rather than correlation because noise
+    # that looks correlated can still span most of its channels.
+    if stock_rank >= target * _MIX_RANK_YIELD:
         return noise
 
-    # The basis draws are not guaranteed independent either: at four channels
-    # curl_noise remixes to a *lower* rank than it started with. Rather than tune
-    # a threshold per generator, keep whichever is actually wider, so asking to
-    # widen can never make the noise narrower than leaving it alone.
+    # Keep whichever is actually wider, so asking to widen can never narrow.
     remixed = _decorrelate(tuple(latent_shape), params, shader_type, seed, device,
                            dtype, temporal_coherence, None, basis_size=size)
     return remixed if effective_channel_rank(remixed) > stock_rank else noise

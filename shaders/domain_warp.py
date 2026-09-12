@@ -106,11 +106,13 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         shape_type = params.shape_type
         shape_strength = params.shape_strength
         
+        applied_mask = None
         if shape_type not in ["none", "0"] and shape_strength > 0:
             try:
                 mask_seed = base_seed if use_temporal_coherence else seed
                 shape_mask = apply_shape_mask(coords, shape_type, time, mask_seed, shape_strength)
                 result = torch.lerp(result, result * shape_mask, shape_strength)
+                applied_mask = shape_mask
             except Exception as e:
                 logger.warning(f"Error applying shape mask: {e}")
         
@@ -123,17 +125,25 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         color_intensity = params.color_intensity
         
         if color_scheme not in ["none", "0"] and color_intensity > 0:
+            # A palette maps one field to three colours that cannot help but
+            # correlate. Those three are kept; the alpha it also returns is the
+            # field itself again, so it is dropped rather than spent on a channel.
             result = DomainWarpGenerator._apply_color_variations(
                 result, coords, params, device, seed, warp_type
-            )
-        else:
-            # Replicate channel for basic output
-            result = result.repeat(1, 4, 1, 1)
-        
-        # Expand to target channels if needed
-        result = BaseNoiseGenerator.expand_channels(result, target_channels, params, device, seed)
-        
-        return result
+            )[:, :3]
+
+        # The same shape mask applies to every channel: it is a spatial shape, and
+        # apply_shape_mask reseeds the global RNG, so it is drawn once above.
+        def draw(channel_seed):
+            field = DomainWarpGenerator._domain_warp_with_phase(
+                coords, device, octaves, channel_seed, 0, warp_type,
+                scale, warp_strength, phase_shift, time
+            ) * contrast
+            if applied_mask is not None:
+                field = torch.lerp(field, field * applied_mask, shape_strength)
+            return torch.clamp(field, -1.0, 1.0).permute(0, 3, 1, 2)
+
+        return BaseNoiseGenerator.fill_channels(draw, result, target_channels, current_seed)
     
     @staticmethod
     def get_domain_warp(batch_size, height, width, shader_params, device="cuda", seed=0):

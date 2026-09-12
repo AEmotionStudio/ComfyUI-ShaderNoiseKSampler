@@ -7,13 +7,19 @@ must inherit from, ensuring consistent interface and shared functionality.
 
 import torch
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Tuple
+from typing import Callable, Dict, Any, Optional, Tuple
 
 from ..utils.color_utils import apply_color_scheme
 from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
 from ..utils.noise_utils import create_coordinate_grid
 from ..core.params import ShaderParams, get_param_value
-from ..core.constants import DEFAULT_CHANNELS
+from ..core.constants import CHANNEL_BASIS, DEFAULT_CHANNELS
+
+# Seed step between a draw's channels. Prime and unrelated to
+# core.shader_noise._MIX_SEED_STRIDE, and checked against the mod-10000 seed
+# hashing curl_noise does internally: no two of the first 64 channels land on
+# the same internal seed.
+_CHANNEL_SEED_STRIDE = 6151
 
 
 class BaseNoiseGenerator(ABC):
@@ -189,60 +195,67 @@ class BaseNoiseGenerator(ABC):
         return normalized * (target_max - target_min) + target_min
     
     @staticmethod
-    def expand_channels(
-        noise: torch.Tensor,
+    def fill_channels(
+        render: Callable[[int], torch.Tensor],
+        base: torch.Tensor,
         target_channels: int,
-        params: ShaderParams,
-        device: torch.device,
-        seed: int = 0
+        seed: int,
     ) -> torch.Tensor:
         """
-        Expand noise tensor to target number of channels.
-        
+        Fill the channel axis with independent draws of the generator's field.
+
+        A sampler expects every latent channel to carry its own noise. Building the
+        extra channels out of the first one or two -- copying them, or passing them
+        through sin and abs -- leaves the draw spanning about one channel however
+        many it has: rank 1.00 for domain_warp at four. The shader then stops
+        steering the sample and starts overwriting it.
+
         Args:
-            noise: Input noise tensor [B, C, H, W]
-            target_channels: Target number of channels
-            params: Shader parameters
-            device: Target device
-            seed: Random seed for channel generation
-            
+            render: draws one field [B, 1, H, W] at the seed it is given
+            base: channels the generator has already drawn, kept as the first ones.
+                Channel 0 is the generator's own draw at `seed`, so a one-channel
+                request comes back exactly as it did before this existed -- which
+                matters, because core.shader_noise builds the travel-mode basis
+                from one-channel draws.
+            target_channels: channels to return
+            seed: the seed channel 0 was drawn with
+
         Returns:
-            Expanded noise tensor [B, target_channels, H, W]
+            [B, target_channels, H, W]
+
+        Channels up to CHANNEL_BASIS are each rendered. Past it, the rest are
+        mixtures of those renders through a seeded orthogonal matrix, which keeps
+        the mixtures from re-correlating what the renders kept apart.
         """
-        batch, current_channels, height, width = noise.shape
-        
-        if current_channels >= target_channels:
-            return noise[:, :target_channels]
-        
-        # Create additional channels through variations
-        additional_channels = []
-        
-        for c in range(current_channels, target_channels):
-            variation_seed = seed + 500 + (c * 100)
-            torch.manual_seed(variation_seed)
-            
-            # Mix existing channels with slight variations
-            if current_channels >= 2:
-                mix_ratio = (c * 0.2) % 1.0
-                mixed = noise[:, 0:1] * mix_ratio + noise[:, 1:2] * (1.0 - mix_ratio)
-            else:
-                mixed = noise[:, 0:1].clone()
-            
-            # Apply unique transformation based on channel number
-            if c % 3 == 0:
-                mixed = torch.sin(mixed * 3.14159)
-            elif c % 3 == 1:
-                mixed = torch.abs(mixed) * 2.0 - 1.0
-            
-            # Normalize
-            mixed = (mixed - mixed.mean()) / (mixed.std() + 1e-8)
-            additional_channels.append(mixed)
-        
-        if additional_channels:
-            extra = torch.cat(additional_channels, dim=1)
-            noise = torch.cat([noise, extra], dim=1)
-        
-        return noise
+        if base.shape[1] >= target_channels:
+            return base[:, :target_channels]
+
+        seed = int(seed.item() if isinstance(seed, torch.Tensor) else seed)
+        rendered = min(target_channels, max(CHANNEL_BASIS, base.shape[1]))
+
+        # Generators reseed the global RNG inside each render. Forking leaves the
+        # caller's RNG exactly where channel 0 left it.
+        devices = [base.device.index if base.device.index is not None else torch.cuda.current_device()] \
+            if base.device.type == "cuda" else []
+        with torch.random.fork_rng(devices=devices):
+            extra = [render(seed + _CHANNEL_SEED_STRIDE * c).to(base)
+                     for c in range(base.shape[1], rendered)]
+        channels = torch.cat([base, *extra], dim=1)
+
+        remaining = target_channels - rendered
+        if remaining <= 0:
+            return channels
+
+        mixer = torch.Generator(device="cpu").manual_seed(seed)
+        if remaining >= rendered:
+            weights = torch.linalg.qr(
+                torch.randn(remaining, rendered, generator=mixer, dtype=torch.float64)).Q
+        else:
+            weights = torch.linalg.qr(
+                torch.randn(rendered, remaining, generator=mixer, dtype=torch.float64)).Q.T
+        weights = weights / weights.norm(dim=1, keepdim=True).clamp_min(1e-12)
+        mixed = torch.einsum("mc,bchw->bmhw", weights.to(device=base.device, dtype=base.dtype), channels)
+        return torch.cat([channels, mixed], dim=1)
     
     @staticmethod
     def get_target_channels(

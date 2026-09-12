@@ -12,6 +12,7 @@ import re
 import pytest
 import torch
 
+from snk.core.constants import CHANNEL_BASIS
 from snk.core.shader_noise import (
     UnsupportedLatentError, effective_channel_rank, generate, latent_layout,
 )
@@ -120,37 +121,67 @@ def test_unknown_shader_type_raises_a_clear_error():
         generate((1, 4, 16, 16), PARAMS, "not_a_real_shader", 8888, CPU)
 
 
-# --- channel decorrelation ------------------------------------------------------------
+# --- channel width --------------------------------------------------------------------
 
-@pytest.mark.parametrize("shape,shader_type,collapsed", [
-    ((1, 4, 48, 48), "domain_warp", True),
-    ((1, 4, 48, 48), "temporal_coherent", True),
-    ((1, 16, 32, 32), "domain_warp", True),
-    ((1, 24, 5, 16, 16), "temporal_coherent", True),
-    ((1, 16, 32, 32), "tensor_field", False),
-])
-def test_generators_collapse_the_channel_axis(shape, shader_type, collapsed):
-    """
-    The defect decorrelation exists for: extra channels are built as pointwise
-    functions of the first one or two, so the draw spans far fewer channels than
-    it has. tensor_field is the exception and must stay the exception.
-    """
-    noise = generate(shape, PARAMS, shader_type, 8888, CPU)
-    rank = effective_channel_rank(noise)
-    if collapsed:
-        assert rank < shape[1] * 0.5, f"{shader_type}: rank {rank:.2f} of {shape[1]}"
-    else:
-        assert rank > shape[1] * 0.7, f"{shader_type}: rank {rank:.2f} of {shape[1]}"
+ALL_SHADERS = ["domain_warp", "temporal_coherent", "curl_noise", "tensor_field"]
 
+
+@pytest.mark.parametrize("shape", [(1, 4, 48, 48), (1, 16, 32, 32), (1, 24, 5, 16, 16)])
+@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+def test_generators_span_their_channel_axis(shape, shader_type):
+    """
+    Every channel carries a field of its own. domain_warp used to copy one field
+    four times and temporal_coherent broadcast one field to every channel -- rank
+    1.00 whatever the latent -- which is what made the shader overwrite the
+    picture instead of steering it.
+    """
+    rank = effective_channel_rank(generate(shape, PARAMS, shader_type, 8888, CPU))
+    assert rank > shape[1] * 0.6, f"{shader_type}: rank {rank:.2f} of {shape[1]}"
+
+
+@pytest.mark.parametrize("shader_type", ["domain_warp", "temporal_coherent", "curl_noise"])
+def test_a_latent_wider_than_the_basis_still_spans_the_basis(shader_type):
+    """Past CHANNEL_BASIS the channels are mixtures, which must not re-collapse the draw."""
+    rank = effective_channel_rank(generate((1, 128, 3, 8, 8), PARAMS, shader_type, 8888, CPU))
+    assert rank > CHANNEL_BASIS * 0.8, f"{shader_type}: rank {rank:.2f}"
+
+
+@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+def test_channel_zero_is_the_one_channel_draw(shader_type):
+    """
+    The travel-mode basis is built from one-channel draws. Filling the other
+    channels must not move channel 0, or jump and drift would change underneath
+    the presets calibrated against them.
+    """
+    wide = generate((1, 24, 5, 16, 16), PARAMS, shader_type, 8888, CPU)
+    single = generate((1, 1, 5, 16, 16), PARAMS, shader_type, 8888, CPU)
+    assert torch.equal(wide[:, :1], single)
+
+
+def test_filling_channels_leaves_the_global_rng_alone():
+    """The generators reseed torch inside every render; that must not leak to the caller."""
+    from snk.shaders.base import BaseNoiseGenerator
+
+    def render(seed):
+        torch.manual_seed(seed)
+        return torch.rand(1, 1, 8, 8)
+
+    torch.manual_seed(1234)
+    expected = torch.rand(4)
+    torch.manual_seed(1234)
+    BaseNoiseGenerator.fill_channels(render, torch.zeros(1, 1, 8, 8), 16, 7)
+    assert torch.equal(torch.rand(4), expected)
+
+
+# --- travel-mode remixing -------------------------------------------------------------
 
 @pytest.mark.parametrize("shape", [(1, 4, 48, 48), (1, 16, 32, 32), (1, 24, 5, 16, 16), (1, 128, 16, 16)])
-@pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent"])
+@pytest.mark.parametrize("shader_type", ALL_SHADERS)
 def test_decorrelation_never_narrows_the_noise(shape, shader_type):
     """
-    Turning it on must never leave the noise spanning fewer channels than leaving
-    it off. The basis draws are not guaranteed independent -- curl_noise at four
-    channels remixes worse than it started -- so generate() keeps whichever is
-    wider rather than trusting the remix.
+    Asking for the widest basis must never leave the noise spanning fewer
+    channels than leaving it off. A remix reaches only about 0.6 of its basis, so
+    generate() keeps whichever is wider rather than trusting it.
     """
     stock = generate(shape, PARAMS, shader_type, 8888, CPU)
     fixed = generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True)
@@ -159,12 +190,42 @@ def test_decorrelation_never_narrows_the_noise(shape, shader_type):
     assert effective_channel_rank(fixed) >= effective_channel_rank(stock) - 1e-6
 
 
-def test_decorrelation_actually_helps_where_it_should():
+@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+def test_widening_leaves_an_already_wide_draw_alone(shader_type):
+    """
+    The generators draw wider than a remix could make them, so walk hands their
+    noise through untouched instead of rendering a basis and throwing it away.
+    """
     shape = (1, 24, 5, 16, 16)
-    for shader_type in ("domain_warp", "temporal_coherent"):
-        stock = effective_channel_rank(generate(shape, PARAMS, shader_type, 8888, CPU))
-        fixed = effective_channel_rank(generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True))
-        assert fixed > stock * 2, f"{shader_type}: {stock:.2f} -> {fixed:.2f}"
+    stock = generate(shape, PARAMS, shader_type, 8888, CPU)
+    assert torch.equal(stock, generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True))
+
+
+def test_widening_still_rescues_a_narrow_draw():
+    """No shipped generator arrives narrow any more, but one that does must be widened."""
+    def one_field_everywhere(params, height, width, batch_size, device, seed, target_channels):
+        field = torch.randn(batch_size, 1, height, width, generator=torch.Generator().manual_seed(seed))
+        return field.expand(-1, target_channels, -1, -1).clone()
+
+    shape = (1, 24, 5, 16, 16)
+    stock = generate(shape, PARAMS, "domain_warp", 8888, CPU, generator=one_field_everywhere)
+    widened = generate(shape, PARAMS, "domain_warp", 8888, CPU, generator=one_field_everywhere,
+                       decorrelate=True)
+    assert effective_channel_rank(stock) < 1.5
+    assert effective_channel_rank(widened) > 10
+
+
+@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+def test_a_narrow_basis_narrows_a_wide_draw(shader_type):
+    """
+    drift asks for four directions out of a draw spanning twenty-odd. The widening
+    guard must not mistake that for a remix that failed to help and skip it.
+    """
+    shape = (1, 24, 5, 16, 16)
+    stock = effective_channel_rank(generate(shape, PARAMS, shader_type, 8888, CPU))
+    drifted = effective_channel_rank(
+        generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True, basis=4))
+    assert drifted < 4.5 < stock, f"{shader_type}: stock {stock:.2f}, drift {drifted:.2f}"
 
 
 def test_decorrelation_is_off_by_default_and_reproducible():

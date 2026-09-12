@@ -3,9 +3,8 @@ Travel modes and presets: the two ways to drive this node without reading
 tooltips.
 
 `TRAVEL_MODES` names what the channel rank of the shader noise actually does.
-The generators build extra channels as pointwise functions of the first one or
-two, so a draw spans far fewer channels than it has -- rank 1.00 for domain_warp
-at SD's four. Widening that is what lets the shader steer instead of overwrite.
+The generators fill every channel with a field of its own, so a draw spans nearly
+all of them, and that width is what lets the shader steer instead of overwrite.
 Narrowing it deliberately is the opposite and is useful for its own reasons, so
 both are exposed rather than one being called correct.
 
@@ -15,11 +14,12 @@ type; picking one at a time is how people end up at 0.6 with a shape mask and an
 image made of hexagons.
 """
 
-# Independent renders mixed to fill the channel axis, per mode.
+# Directions the shader noise is left spanning, per mode.
 #
-#   walk   the seed anchors and the shader perturbs around it. Wide coherent
-#          range: domain_warp holds to about 0.75 on MiniMax H3.
-#   drift  between the two.
+#   walk   the seed anchors and the shader perturbs around it. The generator's
+#          own full width, nothing remixed: the wide coherent range.
+#   drift  mixed down to four directions. Between the two, and the same as walk
+#          on a four-channel latent, where four is all there is.
 #   jump   the shader's parameters set the destination and the seed fades out.
 #          Narrow coherent range, strong push per unit of strength, and the
 #          result is a texture or pattern field in the prompt's material rather

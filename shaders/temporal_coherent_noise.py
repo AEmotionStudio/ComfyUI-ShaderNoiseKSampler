@@ -95,6 +95,7 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         )
         
         # Apply shape mask
+        mask = None
         if shape_type not in ["none", "0"] and shape_strength > 0:
             # Convert coords to [0, 1] range for shape mask
             coords_01 = (coords + 1.0) / 2.0
@@ -104,11 +105,19 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         # Clamp and convert to BCHW
         result = torch.clamp(result, -1.0, 1.0)
         result = result.permute(0, 3, 1, 2)  # [B, 1, H, W]
-        
-        # Expand to target channels
-        result = result.expand(-1, target_channels, -1, -1).clone()
-        
-        return result
+
+        # Every channel is a field of its own. This used to broadcast the one
+        # field above to all of them, which is rank 1.00 at any channel count.
+        def draw(channel_seed):
+            field = TemporalCoherentNoiseGenerator.temporal_spectral_noise(
+                coords, scale, warp_strength, phase_shift, octaves,
+                frequency_range, time, device, channel_seed
+            )
+            if mask is not None:
+                field = torch.lerp(field, field * mask, shape_strength)
+            return torch.clamp(field, -1.0, 1.0).permute(0, 3, 1, 2)
+
+        return BaseNoiseGenerator.fill_channels(draw, result, target_channels, current_seed)
     
     @staticmethod
     def get_temporal_noise(batch_size, height, width, shader_params, device="cuda", base_seed=0):

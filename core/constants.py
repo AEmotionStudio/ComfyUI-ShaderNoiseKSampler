@@ -11,6 +11,12 @@ HASH_CONSTANT = 43758.5453
 # Default number of channels for latent space
 DEFAULT_CHANNELS = 4
 
+# Independent renders a generator draws to fill a latent's channel axis. Channels
+# past this are mixtures of those renders, so a very wide latent does not cost one
+# render per channel. 64 is the basis travel_mode's walk was measured at on
+# MiniMax H3 (7661d7c), and it covers every latent ComfyUI ships short of LTXV's 128.
+CHANNEL_BASIS = 64
+
 # Maximum octaves for FBM noise to prevent DoS
 MAX_OCTAVES = 20
 

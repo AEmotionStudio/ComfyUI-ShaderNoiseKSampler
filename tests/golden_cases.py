@@ -1,12 +1,15 @@
 """
-Golden cases for the legacy sampling pipeline.
+Golden cases for the standard sampling pipeline.
 
-`capture_golden.py` records what the pre-refactor node sends to
-comfy.sample.sample for each case. `test_legacy_golden.py` replays the cases
-in legacy mode and requires identical calls and outputs, so legacy stays
-bit-for-bit reproducible for workflows saved before 2.0.
+`capture_golden.py` records what the Direct node sends to comfy.sample.sample
+for each case. `test_golden.py` replays them and requires identical calls and
+outputs: a fast bit-exact net against changing the sampler by accident.
+
+A failure here means the sampler's output changed, not that backwards
+compatibility broke. These fixtures were re-captured when the generators
+stopped collapsing the channel axis; the pre-2.0 output they used to pin is at
+the `pre-collapse-fix` tag.
 """
-import inspect
 import os
 
 import torch
@@ -21,6 +24,12 @@ NODE_DEFAULTS = dict(
     noise_transform="none", use_temporal_coherence=False, shader_type="domain_warp", shape_type="none",
     color_scheme="none", noise_scale=1.0, octaves=1.0, warp_strength=0.5, shape_mask_strength=1.0,
     phase_shift=0.5, color_intensity=0.8,
+    # Pinned rather than left to the node's defaults, so flipping a default shows
+    # up as a deliberate edit here instead of silently rewriting what a fixture
+    # means.
+    sampling_mode="standard", preset="custom", travel_mode="walk", normalize_strength=True,
+    stage_progression="uniform", shade_non_spatial=False, sequential_distribution="linear_decrease",
+    injection_distribution="linear_decrease", fast_high_channel_noise=False,
 )
 
 # Keys that describe the test setup rather than node inputs.
@@ -62,7 +71,7 @@ def make_latent(setup):
 
 
 def run_case(name):
-    """Run one case through the Direct node in legacy mode; return the recorded calls and output."""
+    """Run one case through the Direct node; return the recorded calls and output."""
     from snk.direct_shader_ksampler import DirectShaderNoiseKSampler
 
     spec = {**NODE_DEFAULTS, **CASES[name]}
@@ -71,9 +80,6 @@ def run_case(name):
         spec["custom_sigmas"] = CUSTOM_SIGMAS.clone()
 
     node = DirectShaderNoiseKSampler()
-    if "sampling_mode" in inspect.signature(node.sample).parameters:
-        spec["sampling_mode"] = "legacy"
-
     with recorded_sampling() as calls:
         result = node.sample(model=FakeModel(setup.get("kind", "eps")), positive=[], negative=[],
                              latent_image=make_latent(setup), **spec)

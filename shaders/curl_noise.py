@@ -99,6 +99,7 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         velocity = CurlNoiseGenerator.apply_warp_intensity(velocity, warp_strength)
         
         # Apply shape mask to velocity
+        mask = None
         if shape_type not in ["none", "0"] and shape_strength > 0:
             mask = apply_shape_mask(coords, shape_type, time, base_seed, shape_strength)
             velocity = torch.lerp(velocity, velocity * mask, shape_strength)
@@ -121,15 +122,37 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         )
         advected_bchw = advected.permute(0, 3, 1, 2)
         
+        # Every extra channel draws its own velocity field, under the same warp and
+        # shape mask as the one above.
+        def velocity_at(channel_seed):
+            field = CurlNoiseGenerator.apply_warp_intensity(
+                CurlNoiseGenerator.get_velocity_field(
+                    coords * scale, time, octaves, device, channel_seed, use_temporal_coherence
+                ), warp_strength)
+            if mask is not None:
+                field = torch.lerp(field, field * mask, shape_strength)
+            return field
+
         # Generate channels
         if color_scheme not in ["none", "0"] and color_intensity > 0 and target_channels >= 3:
+            def magnitude_at(channel_seed):
+                v = velocity_at(channel_seed).permute(0, 3, 1, 2)
+                m = torch.sqrt(v[:, 0:1] ** 2 + v[:, 1:2] ** 2)
+                return m / (m.max() + 1e-8)
+
             result = CurlNoiseGenerator._apply_color_scheme(
-                vx, vy, color_scheme, color_intensity, target_channels, device, time
+                vx, vy, color_scheme, color_intensity, target_channels, device, time,
+                magnitude_at, current_seed
             )
         else:
+            def advected_at(channel_seed):
+                return CurlNoiseGenerator.advect(
+                    coords * scale, velocity_at(channel_seed), time, dt, octaves, scale,
+                    device, channel_seed, use_temporal_coherence
+                ).permute(0, 3, 1, 2)
+
             result = CurlNoiseGenerator._generate_channels(
-                advected_bchw, vx, vy, coords, velocity, target_channels, 
-                params, device, current_seed, use_temporal_coherence
+                advected_bchw, vx, vy, advected_at, target_channels, params, current_seed
             )
         
         # Scale to [-1, 1]
@@ -168,7 +191,9 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         color_intensity: float,
         target_channels: int,
         device: torch.device,
-        time: float
+        time: float,
+        render,
+        seed: int,
     ) -> torch.Tensor:
         """Apply color scheme based on velocity field."""
         vmag = torch.sqrt(vx**2 + vy**2)
@@ -214,25 +239,19 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         
         result = torch.cat([r, g, b], dim=1)
         
-        # Add extra channels if needed
-        if target_channels > 3:
-            extra = vmag.repeat(1, target_channels - 3, 1, 1)
-            result = torch.cat([result, extra], dim=1)
-        
-        return result
+        # Channels past the palette's three are each the magnitude of a velocity
+        # field of their own, instead of copies of this one's.
+        return BaseNoiseGenerator.fill_channels(render, result, target_channels, seed)
     
     @staticmethod
     def _generate_channels(
         advected: torch.Tensor,
         vx: torch.Tensor,
         vy: torch.Tensor,
-        coords: torch.Tensor,
-        velocity: torch.Tensor,
+        render,
         target_channels: int,
         params: ShaderParams,
-        device: torch.device,
         seed: int,
-        use_temporal_coherence: bool
     ) -> torch.Tensor:
         """Generate channels without color scheme."""
         vmag = torch.sqrt(vx**2 + vy**2)
@@ -244,42 +263,14 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
             # Fast mode: tile base channels
             base = torch.cat([vx, vy, vmag, advected], dim=1)
             num_repeats = math.ceil(target_channels / base.shape[1])
-            result = torch.cat([base] * num_repeats, dim=1)[:, :target_channels]
-        else:
-            # Normal mode: generate structured channels
-            channels = [advected, vx, vy, vmag]
-            
-            for c in range(4, target_channels):
-                variation_seed = seed + 500 + (c * 100)
-                torch.manual_seed(variation_seed)
+            return torch.cat([base] * num_repeats, dim=1)[:, :target_channels]
 
-                time_offset = c * 0.05
-                octaves = params.octaves
-                time = params.time
-                
-                c_velocity = CurlNoiseGenerator.get_velocity_field(
-                    coords, time + time_offset, int(octaves + c * 0.1), device, variation_seed, use_temporal_coherence
-                )
-                
-                component_idx = c % 2
-                if c_velocity.shape[-1] > component_idx:
-                    component = c_velocity[..., component_idx:component_idx+1]
-                else:
-                    component = c_velocity[..., 0:1]
-                
-                # Apply transformation
-                if c % 3 == 0:
-                    component = torch.sin(component * 3.14159)
-                elif c % 3 == 1:
-                    component = torch.abs(component) * 2.0 - 1.0
-
-                extra = component.permute(0, 3, 1, 2)
-                extra = (extra - extra.mean()) / (extra.std() + 1e-8)
-                channels.append(extra)
-            
-            result = torch.cat(channels, dim=1)
-        
-        return result
+        # The four native channels are different fields already. Every channel past
+        # them is an advected field drawn from a velocity field of its own -- not one
+        # component of a reseeded field put through sin or abs on a repeating cycle,
+        # which held this generator to 25 of 128 channels.
+        native = torch.cat([advected, vx, vy, vmag], dim=1)
+        return BaseNoiseGenerator.fill_channels(render, native, target_channels, seed)
     
     @staticmethod
     def get_velocity_field(p, time, octaves, device, seed, use_temporal_coherence=False):

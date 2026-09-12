@@ -1,8 +1,9 @@
 """
-Record golden outputs for the legacy sampling pipeline.
+Record golden outputs for the standard sampling pipeline.
 
-Only run this against code whose legacy behaviour is known-good (it was first
-run on the pre-2.0 code). Existing files are kept unless --force is given.
+Re-capturing blesses whatever the sampler does now, so only run it after a
+change to the output that was intended. Existing files are kept unless --force
+is given.
 
     ~/ComfyUI/venv/bin/python tests/capture_golden.py [--force] [case ...]
 """
