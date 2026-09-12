@@ -132,10 +132,19 @@ def _render_octaves(generator, params: Dict[str, Any], layout, seed, device) -> 
     return noise
 
 
-# Independent draws combined to fill the channel axis. Caps both the effective
-# rank and the cost: 8 renders instead of one per channel, which matters at
-# LTXV's 128 channels.
-DECORRELATION_BASIS = 8
+# Independent draws combined to fill the channel axis, capped so a very wide
+# latent cannot demand one render per channel.
+#
+# Set from measurement, not guessed. On MiniMax H3 at strength 0.75, where stock
+# noise is a solid quilted texture, a basis of 8 is still mostly destroyed, 16 is
+# coherent and 32 is clean. The achieved rank runs at roughly 85-90% of the basis
+# until it hits the channel count, so 64 gives full independence to everything up
+# to 64 channels and takes LTXV's 128 from rank 7.6 to 43.
+#
+# The cost this cap was originally guarding against turned out not to exist: the
+# worst case measured is about a second per draw, on a run that takes thirty to
+# fifty, and a draw happens once per stage boundary.
+DECORRELATION_BASIS = 64
 
 # Arbitrary but fixed, so a seed still reproduces.
 _MIX_SEED_STRIDE = 7919
