@@ -30,7 +30,7 @@ class UnsupportedLatentError(ValueError):
     """The latent has no 2D spatial grid for a shader to draw on."""
 
 
-def require_spatial_latent(shape: Tuple[int, ...]) -> None:
+def require_spatial_latent(shape: Tuple[int, ...], allow_sequence: bool = False) -> None:
     """
     Refuse latents the shaders cannot draw on, naming what was wrong.
 
@@ -38,8 +38,11 @@ def require_spatial_latent(shape: Tuple[int, ...]) -> None:
     [B, C, T, H, W]. Some models instead carry a plain sequence -- audio
     (Stable Audio, ACE-Step 1.5, MiniMax Music 3), Hunyuan3D's occupancy grid
     and TripoSplat's [B, tokens, channels] -- where there is no grid to paint.
+
+    `allow_sequence` opts those in as a 1 x length strip, which is well defined
+    even though it is not what the shaders were written for.
     """
-    if len(shape) in (4, 5):
+    if len(shape) in (4, 5) or (allow_sequence and len(shape) == 3):
         return
     raise UnsupportedLatentError(
         f"shader noise needs a latent with a 2D spatial grid, either [B, C, H, W] or "
@@ -50,17 +53,20 @@ def require_spatial_latent(shape: Tuple[int, ...]) -> None:
     )
 
 
-def latent_layout(shape: Tuple[int, ...]) -> Dict[str, int]:
+def latent_layout(shape: Tuple[int, ...], allow_sequence: bool = False) -> Dict[str, int]:
     """
     Describe a latent shape the way ComfyUI lays it out.
 
-    Returns batch, channels, frames (1 for images), height and width.
+    Returns batch, channels, frames (1 for images), height and width. A sequence
+    latent, when opted in, reads as a single row: height 1, width the length.
     """
-    require_spatial_latent(shape)
+    require_spatial_latent(shape, allow_sequence)
     if len(shape) == 5:
         batch, channels, frames, height, width = shape
-    else:
+    elif len(shape) == 4:
         (batch, channels, height, width), frames = shape, 1
+    else:
+        (batch, channels, width), frames, height = shape, 1, 1
     return {"batch": batch, "channels": channels, "frames": frames, "height": height, "width": width}
 
 
@@ -196,6 +202,7 @@ def generate(
     temporal_coherence: bool = False,
     generator=None,
     decorrelate: bool = False,
+    allow_sequence: bool = False,
 ) -> torch.Tensor:
     """
     Generate shader noise matching a latent's shape.
@@ -207,7 +214,17 @@ def generate(
     The result is returned unnormalised; core.noise_math.mix_noise standardises
     both sides when blending.
     """
-    layout = latent_layout(tuple(latent_shape))
+    latent_shape = tuple(latent_shape)
+    if allow_sequence and len(latent_shape) == 3:
+        # Paint it as a one-row strip, then fold the row away again. Audio latents
+        # and Hunyuan3D's occupancy grid arrive this way.
+        batch, channels, length = latent_shape
+        strip = generate((batch, channels, 1, length), params, shader_type, seed, device,
+                         dtype=dtype, temporal_coherence=temporal_coherence,
+                         generator=generator, decorrelate=decorrelate)
+        return strip.reshape(latent_shape)
+
+    layout = latent_layout(latent_shape)
     generator = generator or resolve_generator(shader_type)
     base_params = _as_dict(params)
     base_time = float(base_params.get("time", 0.0) or 0.0)

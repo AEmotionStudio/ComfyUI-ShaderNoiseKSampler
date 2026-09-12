@@ -77,6 +77,21 @@ def _latent_space(model):
     return tuple(resolved)
 
 
+# Keeps one stream's pattern from being another's; arbitrary but fixed.
+_STREAM_SEED_STRIDE = 104729
+
+
+def _paintable(streams, shade_non_spatial: bool):
+    """
+    Which streams get shader noise.
+
+    Only the first by default: it is the spatial one, and the rest -- MiniMax H3
+    and LTXAV's audio -- have no grid to paint. With `shade_non_spatial` they all
+    do, which is the point of the option.
+    """
+    return range(len(streams)) if shade_non_spatial else [0]
+
+
 def _shader_events(
     total_steps: int,
     sequential_stages: int,
@@ -128,6 +143,8 @@ def _apply_events(
     temporal_coherence: bool,
     normalize_strength: bool = False,
     decorrelate_channels: bool = False,
+    allow_sequence: bool = False,
+    stream_seed_offset: int = 0,
 ) -> torch.Tensor:
     """
     Mix each stage's shader noise into `noise`, in order.
@@ -139,9 +156,9 @@ def _apply_events(
         if strength <= 0.0:
             continue
         generated = shader_noise.generate(
-            tuple(noise.shape), shader_params, shader_type, stage_seed, device,
+            tuple(noise.shape), shader_params, shader_type, stage_seed + stream_seed_offset, device,
             dtype=dtype, temporal_coherence=temporal_coherence,
-            decorrelate=decorrelate_channels,
+            decorrelate=decorrelate_channels, allow_sequence=allow_sequence,
         )
         generated = noise_math.transform_noise(generated, noise_transform)
         noise = noise_math.mix_noise(noise, generated, blend_mode, strength, normalize_strength)
@@ -207,6 +224,7 @@ def run(
     use_temporal_coherence: bool = False,
     normalize_strength: bool = False,
     decorrelate_channels: bool = False,
+    shade_non_spatial: bool = False,
     custom_sigmas: Optional[torch.Tensor] = None,
     disable_pbar: bool = False,
 ) -> Dict[str, Any]:
@@ -233,15 +251,18 @@ def run(
     # than at the first boundary that needs one. At shader_strength 0 there is nothing
     # to paint, so those models still sample through here as a plain KSampler.
     if any(strength > 0.0 for stage in events.values() for strength, _ in stage):
-        shader_noise.require_spatial_latent(tuple(primary.shape))
+        for stream in (_streams(samples) if shade_non_spatial else [primary]):
+            shader_noise.require_spatial_latent(tuple(stream.shape), shade_non_spatial)
 
     noise = comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
     noise_streams = _streams(noise)
-    noise_streams[0] = _apply_events(
-        noise_streams[0].to(device), events.get(boundaries[0], []), shader_params,
-        shader_type, blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-        normalize_strength, decorrelate_channels,
-    )
+    for index in _paintable(noise_streams, shade_non_spatial):
+        noise_streams[index] = _apply_events(
+            noise_streams[index].to(device), events.get(boundaries[0], []), shader_params,
+            shader_type, blend_mode, noise_transform, device, dtype, use_temporal_coherence,
+            normalize_strength, decorrelate_channels, shade_non_spatial,
+            stream_seed_offset=index * _STREAM_SEED_STRIDE,
+        )
     noise = _rebuild(samples, noise_streams)
 
     model_sampling = model.get_model_object("model_sampling")
@@ -273,11 +294,13 @@ def run(
             result, captured["x0"], sigmas[end], model_sampling, model
         )
         residual_streams = _streams(residual)
-        residual_streams[0] = _apply_events(
-            residual_streams[0], events.get(end, []), shader_params, shader_type,
-            blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-            normalize_strength, decorrelate_channels,
-        )
+        for index in _paintable(residual_streams, shade_non_spatial):
+            residual_streams[index] = _apply_events(
+                residual_streams[index], events.get(end, []), shader_params, shader_type,
+                blend_mode, noise_transform, device, dtype, use_temporal_coherence,
+                normalize_strength, decorrelate_channels, shade_non_spatial,
+                stream_seed_offset=index * _STREAM_SEED_STRIDE,
+            )
         noise = _rebuild(residual, residual_streams)
 
     return {**latent, "samples": current}

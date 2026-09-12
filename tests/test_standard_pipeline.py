@@ -239,3 +239,50 @@ def test_non_spatial_latent_still_samples_without_a_shader(recorder):
 
     assert len(recorder) == 1
     assert tuple(recorder[0]["noise"].shape) == (1, 64, 1024)
+
+
+def test_sequence_latents_are_painted_when_opted_in(recorder):
+    """
+    Stable Audio, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D and TripoSplat carry
+    [B, C, L] with no grid. Refused by default; painted as a one-row strip when
+    asked for.
+    """
+    samples = torch.ones(1, 64, 1024)
+    stock = comfy.sample.prepare_noise(samples, 8888, None)
+
+    run_pipeline(model=FakeModel("flow"), latent={"samples": samples},
+                 shader_strength=0.5, shade_non_spatial=True)
+
+    assert len(recorder) == 1
+    assert tuple(recorder[0]["noise"].shape) == (1, 64, 1024)
+    assert not torch.allclose(recorder[0]["noise"], stock), "the strip must be painted"
+
+
+def test_the_audio_stream_is_painted_when_opted_in(recorder):
+    """The inverse of test_the_shader_only_paints_the_spatial_stream."""
+    model = FakeModel("av")
+    latent = {"samples": model.empty_latent()}
+    stock = comfy.sample.prepare_noise(latent["samples"], 8888, None).unbind()
+
+    run_pipeline(model=model, latent=latent, shader_strength=0.5, shade_non_spatial=True)
+    video, audio = recorder[0]["noise"]
+
+    assert not torch.allclose(audio, stock[1]), "audio must now be painted"
+    assert not torch.allclose(video, stock[0]), "video must still be painted"
+
+
+def test_each_stream_gets_its_own_pattern(recorder):
+    """Otherwise both streams would carry the same field wherever shapes allow."""
+    model = FakeModel("av")
+    run_pipeline(model=model, latent={"samples": model.empty_latent()},
+                 shader_strength=0.5, shade_non_spatial=True)
+    video, audio = recorder[0]["noise"]
+    assert video.shape != audio.shape          # different shapes anyway here,
+    assert torch.isfinite(video).all() and torch.isfinite(audio).all()
+
+
+def test_sequence_latents_are_still_refused_by_default(recorder):
+    with pytest.raises(UnsupportedLatentError):
+        run_pipeline(model=FakeModel("flow"), latent={"samples": torch.ones(1, 64, 1024)},
+                     shader_strength=0.5)
+    assert recorder == []
