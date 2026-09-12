@@ -45,6 +45,26 @@ what was wrong was how a multi-stream latent crossed a stage boundary.
   every channel count ComfyUI ships — 3, 4, 8, 12, 16, 24, 32, 48, 64, 128 and
   256 — for both image and video latents.
 
+### Added
+- **`temporal_coherent` is selectable.** It shipped, was registered and passed
+  its own tests, but was missing from the Direct node's `shader_type` list, so
+  no workflow could reach it. It is 4D simplex noise with time as a real axis,
+  built for animation — on MiniMax H3 it degrades more gracefully than the other
+  three (faint striping at 0.35 where `domain_warp` shows blocks) and is the only
+  type whose audio level barely moves with strength. Two tests now assert the
+  dropdown and the generator registry agree in both directions.
+
+### Changed
+- **Tooltips rewritten from measurements.** `shader_strength`, `blend_mode`,
+  `shader_type`, `shape_type` and `use_temporal_coherence` previously implied the
+  full 0.0–1.0 range was usable. On video models it is not: H3 holds to about
+  0.25 with `domain_warp`/`multiply` and is gone by 0.75, `curl_noise` and shape
+  masks need roughly half that, and `use_temporal_coherence` — whose description
+  claimed it "helps maintain frame-to-frame consistency" — swamps the picture at
+  0.5 because holding one seed across frames reinforces the pattern instead of
+  averaging it out. The tooltips now say so, and rank the blend modes by how
+  aggressive they are.
+
 ### Removed
 - **`core/model_compat.py`**, along with the `MODEL_CHANNEL_COUNTS`,
   `MODEL_NAME_PATTERNS` and `VIDEO_MODEL_CHANNELS` tables. Nothing called it. Its

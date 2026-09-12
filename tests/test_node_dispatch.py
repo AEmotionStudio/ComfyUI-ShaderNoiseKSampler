@@ -104,3 +104,31 @@ def test_injection_stages_never_leave_a_one_step_segment(sampler_calls):
 def test_standard_mode_is_the_default(sampler_calls):
     run_node(sequential_stages=2)
     assert all(call["sigmas"] is not None for call in sampler_calls)
+
+
+def test_every_advertised_shader_type_can_actually_be_resolved():
+    """
+    The dropdown must not offer a pattern the generator registry cannot build.
+
+    It did: `temporal_coherent` shipped, was registered, and passed its own
+    tests, but was missing from the node's combo, so no workflow could select
+    it. Nothing tied the advertised list to the registry until this.
+    """
+    from snk.core.shader_noise import resolve_generator
+
+    advertised = DirectShaderNoiseKSampler.INPUT_TYPES()["required"]["shader_type"][0]
+    assert advertised, "the node must advertise at least one shader type"
+    for shader_type in advertised:
+        assert callable(resolve_generator(shader_type)), shader_type
+
+
+def test_the_node_offers_every_registered_generator():
+    """The other direction: a shipped generator that no workflow can reach is dead weight."""
+    from snk.shaders.registry import get_shader, list_shaders
+
+    advertised = set(DirectShaderNoiseKSampler.INPUT_TYPES()["required"]["shader_type"][0])
+    # aliases point at a generator already reachable under its canonical name
+    canonical = {name for name in list_shaders()
+                 if not any(get_shader(name) is get_shader(other) and other in advertised
+                            for other in advertised)}
+    assert not canonical - advertised, f"registered but unreachable from the node: {sorted(canonical - advertised)}"
