@@ -100,3 +100,31 @@ def test_the_seed_is_coerced_to_int64():
     as_float = simplex_2d(p, torch.tensor(seeds, dtype=torch.float32).reshape(2, 1, 1, 1, 1), False)
     assert torch.equal(as_int, as_float)
     assert torch.equal(as_int[0], simplex_2d(p, 8888, rotate=False))
+
+
+@pytest.mark.parametrize("shader_type", ["domain_warp", "curl_noise",
+                                         "temporal_coherent", "tensor_field"])
+@pytest.mark.parametrize("hw", RAGGED + ALIGNED)
+def test_channel_zero_survives_batching_at_every_shape(shader_type, hw):
+    """
+    Channel 0 of a wide draw must be the one-channel draw at the same seed, and
+    the existing test for that only checks vector-aligned shapes.
+
+    That matters because batching materialises the channel axis, and a draw over
+    N times as many elements vectorises its tail differently. tensor_field batched
+    channel 0 along with the rest and broke this at 22x38 by 6e-07 -- small, but it
+    is the identity every travel-mode basis rests on. The fix was to keep channel 0
+    on the scalar path, which is what the other three already did by virtue of
+    handing it to fill_channels as `base`.
+    """
+    from snk.core.shader_noise import generate
+
+    params = {
+        "scale": 1.0, "octaves": 3.0, "warp_strength": 0.5, "phase_shift": 0.5,
+        "shape_type": "none", "color_scheme": "none", "color_intensity": 0.8,
+        "shape_mask_strength": 1.0, "time": 0.0, "base_seed": 8888,
+        "use_temporal_coherence": False,
+    }
+    wide = generate((1, 24) + hw, params, shader_type, 8888, torch.device("cpu"))
+    single = generate((1, 1) + hw, params, shader_type, 8888, torch.device("cpu"))
+    assert torch.equal(wide[:, :1], single)

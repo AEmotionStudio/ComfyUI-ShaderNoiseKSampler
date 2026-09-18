@@ -22,6 +22,11 @@ from ..core.constants import DEFAULT_CHANNELS
 logger = logging.getLogger(__name__)
 
 
+def _as_field(value, reference):
+    """Round a per-channel scalar into the field's dtype, no earlier than needed."""
+    return value.to(reference.dtype) if torch.is_tensor(value) else value
+
+
 @shader_generator("tensor_field", metadata={"description": "Tensor field noise for directional patterns"})
 class TensorFieldGenerator(BaseNoiseGenerator):
     """
@@ -111,7 +116,18 @@ class TensorFieldGenerator(BaseNoiseGenerator):
             if len(hoisted_mask.shape) == 3:
                 hoisted_mask = hoisted_mask.unsqueeze(-1)
 
-        for i in range(target_channels):
+        # Channels 0-2 are the palette's own when a colour scheme is active, each
+        # with its own bespoke parameters; everything past them is formulaic and
+        # goes through in a single batched draw below.
+        # Channel 0 always stays on the scalar path, the way the other three
+        # generators keep theirs outside fill_channels. Every travel-mode basis is
+        # built from one-channel draws, and a test pins channel 0 of a wide draw to
+        # be that same draw; batching it would break the identity at shapes whose
+        # per-slice element count is not vector-aligned.
+        scalar_channels = 3 if (color_scheme != "none" and color_intensity > 0) else 1
+        scalar_channels = min(scalar_channels, target_channels)
+
+        for i in range(scalar_channels):
             current_seed = loop_seed + 700 + (i * 130)
             torch.manual_seed(current_seed)
             
@@ -176,6 +192,40 @@ class TensorFieldGenerator(BaseNoiseGenerator):
             channel = channel.permute(0, 3, 1, 2)
             all_channels.append(channel)
         
+        if target_channels > scalar_channels:
+            indices = range(scalar_channels, target_channels)
+            perturbed, seeds, times, vizzes, scales, warps = [], [], [], [], [], []
+            for i in indices:
+                channel_seed = loop_seed + 700 + (i * 130)
+                # A generator of its own on the coordinates' own device, which is
+                # bit-identical to the global manual_seed + randn_like this replaces
+                # and does not disturb the caller's stream.
+                channel_generator = torch.Generator(device=coords.device).manual_seed(channel_seed)
+                perturbation = torch.randn(coords.shape, generator=channel_generator,
+                                           device=coords.device, dtype=coords.dtype)
+                perturbed.append(torch.clamp(
+                    coords + perturbation * (0.005 + i * 0.001), 0.0, 1.0).unsqueeze(0))
+                seeds.append(channel_seed)
+                times.append(time + (i * 0.02))
+                vizzes.append((viz_type + i) % 4)
+                scales.append(scale * (1.0 + ((i % 5 - 2) * 0.03)))
+                warps.append(warp_strength * (1.0 + ((i % 7 - 3) * 0.03)))
+
+            def column(values, dtype=torch.float32):
+                return torch.tensor(values, device=device, dtype=dtype).reshape(-1, 1, 1, 1, 1)
+
+            fields = TensorFieldGenerator.tensor_field_many(
+                torch.cat(perturbed, dim=0), vizzes, column(scales), column(warps),
+                column(times, torch.float64), device, column(seeds, torch.int64),
+                use_temporal_coherence
+            )
+            fields = torch.clamp(fields * (1.0 + phase_shift), -1.0, 1.0)
+            if hoisted_mask is not None:
+                fields = torch.clamp(
+                    torch.lerp(fields, fields * hoisted_mask, shape_strength), -1.0, 1.0)
+            # [N, B, H, W, 1] -> [B, N, H, W]
+            all_channels.append(fields.squeeze(-1).permute(1, 0, 2, 3))
+
         # Concatenate all channels
         result = torch.cat(all_channels, dim=1)
         
@@ -328,6 +378,43 @@ class TensorFieldGenerator(BaseNoiseGenerator):
         return result
             
     @staticmethod
+    def tensor_field_many(p, viz_types, scale, warp_strength, time, device, seed,
+                          use_temporal_coherence=False):
+        """
+        `tensor_field` for a whole channel axis at once.
+
+        The expensive part -- five simplex evaluations inside
+        compute_tensor_properties -- does not depend on the visualisation, so it
+        runs once for every channel together. The four visualisations are then
+        cheap elementwise reads of the same eigen-decomposition, so all four are
+        computed and each channel takes the one its index asks for. That is less
+        work than grouping the channels by visualisation and making four calls.
+
+        `p` is [N, B, H, W, 2]; `scale`, `warp_strength`, `time` and `seed` are
+        [N, 1, 1, 1, 1]; `viz_types` is a sequence of N integers in [0, 4).
+        """
+        lambda1, lambda2, v1, v2 = TensorFieldGenerator.compute_tensor_properties(
+            p, scale, warp_strength, time, device, seed, use_temporal_coherence
+        )
+        angle = torch.atan2(v1[..., 1:2], v1[..., 0:1])
+        options = torch.stack([
+            (torch.abs(lambda1) + torch.abs(lambda2)) * 0.5,
+            lambda1 - lambda2,
+            torch.sin(angle * 4.0 + _as_field(time, angle)),
+            v1[..., 0:1] * v1[..., 1:2] * 2.0,
+        ])                                              # [4, N, B, H, W, 1]
+
+        chooser = torch.tensor(list(viz_types), device=options.device, dtype=torch.int64)
+        chooser = chooser.reshape(1, -1, *([1] * (options.dim() - 2))).expand_as(options[:1])
+        result = options.gather(0, chooser).squeeze(0)
+
+        # Per channel, exactly as each would be normalised on its own.
+        dims = tuple(range(1, result.dim()))
+        result = (result - result.mean(dim=dims, keepdim=True)) \
+            / (result.std(dim=dims, keepdim=True) + 1e-8)
+        return torch.clamp(result * 0.5, -1.0, 1.0)
+
+    @staticmethod
     def compute_tensor_properties(p, scale, warp_strength, time, device, seed, use_temporal_coherence=False):
         """
         Compute tensor field properties (eigenvalues and eigenvectors).
@@ -344,17 +431,28 @@ class TensorFieldGenerator(BaseNoiseGenerator):
         Returns:
             Tuple of (lambda1, lambda2, v1, v2)
         """
-        batch, height, width, _ = p.shape
-        
-        # Offset based on time
-        offset = torch.tensor([[[[time * 0.05, 0.0]]]], device=device, dtype=p.dtype)
+        # `scale`, `warp_strength`, `time` and `seed` may each be a tensor holding
+        # one value per channel, shaped to broadcast against `p`'s leading axes.
+        if torch.is_tensor(time):
+            # Held in float64 and cast here, not before. The scalar path computes
+            # `time * 0.05` as a Python float and only then rounds it into the
+            # field's dtype; rounding `time` first instead shifts the coordinate by
+            # an ulp, and simplex noise turns that into an O(1) change wherever a
+            # point crosses a cell boundary -- 5.6e-04 in the draw, not 1e-07.
+            shifted = (time * 0.05).to(p.dtype)
+            offset = torch.cat([shifted, torch.zeros_like(shifted)], dim=-1)
+        else:
+            offset = torch.tensor([[[[time * 0.05, 0.0]]]], device=device, dtype=p.dtype)
         p1 = p * scale + offset
         
-        # Apply warp
-        if warp_strength > 0.0:
+        # Every channel's warp is the same sign as the generator's, so whether the
+        # warp runs is still a scalar decision even when its strength is per channel.
+        warp_active = bool((warp_strength > 0.0).all()) if torch.is_tensor(warp_strength) \
+            else warp_strength > 0.0
+        if warp_active:
             if use_temporal_coherence:
-                warp_noise1 = TensorFieldGenerator.simplex_noise_3d(p1 * 0.3, seed, time * 0.2)
-                warp_noise2 = TensorFieldGenerator.simplex_noise_3d(p1 * 0.3, seed + 1, time * 0.2 + 3.33)
+                warp_noise1 = TensorFieldGenerator.simplex_noise_3d(p1 * 0.3, seed, _as_field(time * 0.2, p))
+                warp_noise2 = TensorFieldGenerator.simplex_noise_3d(p1 * 0.3, seed + 1, _as_field(time * 0.2 + 3.33, p))
             else:
                 warp_noise1 = TensorFieldGenerator.simplex_noise(p1 * 0.3, seed)
                 warp_noise2 = TensorFieldGenerator.simplex_noise(p1 * 0.3, seed + 1)
@@ -365,9 +463,9 @@ class TensorFieldGenerator(BaseNoiseGenerator):
         eps = 0.01
         
         if use_temporal_coherence:
-            n00 = TensorFieldGenerator.simplex_noise_3d(p1, seed + 2, time * 0.1)
-            n10 = TensorFieldGenerator.simplex_noise_3d(p1 + torch.tensor([[[[eps, 0]]]], device=device), seed + 2, time * 0.1)
-            n01 = TensorFieldGenerator.simplex_noise_3d(p1 + torch.tensor([[[[0, eps]]]], device=device), seed + 2, time * 0.1)
+            n00 = TensorFieldGenerator.simplex_noise_3d(p1, seed + 2, _as_field(time * 0.1, p))
+            n10 = TensorFieldGenerator.simplex_noise_3d(p1 + torch.tensor([[[[eps, 0]]]], device=device), seed + 2, _as_field(time * 0.1, p))
+            n01 = TensorFieldGenerator.simplex_noise_3d(p1 + torch.tensor([[[[0, eps]]]], device=device), seed + 2, _as_field(time * 0.1, p))
         else:
             n00 = TensorFieldGenerator.simplex_noise(p1, seed + 2)
             n10 = TensorFieldGenerator.simplex_noise(p1 + torch.tensor([[[[eps, 0]]]], device=device), seed + 2)

@@ -41,8 +41,9 @@ so the first step away from strength 0 is only as large as the shader makes it.
   separate renders of 4032 pixels each, where the time went to per-op dispatch
   rather than arithmetic. Generators now offer `fill_channels` a batched path and
   it takes it whenever more than one extra channel is wanted. Measured at
-  1344x768/124 frames: `domain_warp` **5.31s to 1.97s**, `temporal_coherent`
-  **6.52s to 1.86s**, `curl_noise` to 2.11s.
+  1344x768/124 frames, before and after in one sitting: `domain_warp` **6.76s to
+  1.90s**, `curl_noise` **6.54s to 1.94s**, `temporal_coherent` **5.76s to 1.66s**,
+  `tensor_field` **5.37s to 2.08s**. Effective channel rank is unchanged in all four.
 
   `curl_noise` and `temporal_coherent` are byte-identical -- verify by running the
   suite, whose fixtures did not move. `domain_warp` is not: it turns its
@@ -69,6 +70,17 @@ so the first step away from strength 0 is only as large as the shader makes it.
 - **`tensor_field` draws its shape mask once** instead of once per channel, which
   at LTXV's 128 channels was 127 identical masks, and no longer clones the
   coordinate grid per channel. Byte-identical.
+
+  Its batching works differently from the others': each of its channels takes one
+  of four *visualisations*, its own scale, warp and time, and its own perturbation
+  of the coordinate grid. The expensive part -- five simplex evaluations per
+  channel -- does not depend on the visualisation, so it runs once for the whole
+  channel axis and each channel then takes the cheap visualisation its index asks
+  for. Its two fixtures moved: exact at vector-aligned shapes, up to 1.3e-05 at
+  others, because tensor_field perturbs coordinates per channel and an ulp of
+  coordinate can push a point across a simplex cell boundary. Holding the
+  per-channel `time` in float64 until the point of use, where the scalar path's
+  Python float was rounded, brought that down from 5.6e-04.
 
 None of the rest of this changes what a seed produces. The golden fixtures are byte-identical
 and the full suite passes untouched; that is the acceptance criterion for all of it.
