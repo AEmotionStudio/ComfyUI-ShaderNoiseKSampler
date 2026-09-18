@@ -234,3 +234,62 @@ def test_decorrelation_is_off_by_default_and_reproducible():
                        generate(shape, PARAMS, "domain_warp", 1, CPU, decorrelate=False))
     assert torch.equal(generate(shape, PARAMS, "domain_warp", 1, CPU, decorrelate=True),
                        generate(shape, PARAMS, "domain_warp", 1, CPU, decorrelate=True))
+
+
+@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shape", [(1, 24, 5, 16, 16), (1, 4, 32, 32), (1, 128, 3, 8, 8)])
+def test_a_collapse_does_not_render_the_draw_it_discards(shape, shader_type, monkeypatch):
+    """
+    jump rebuilds every channel from one-channel draws and never reads the wide
+    draw, so rendering one first was pure waste -- 5.99s of jump's 6.21s at H3's
+    default latent, for a tensor that is dropped on the next line.
+
+    Both halves matter. The values must not move, because jump and stamp are
+    byte-identical to the pre-collapse-fix tag and the presets are calibrated on
+    that; and the wide draw must genuinely not be rendered, or the fix is only a
+    comment.
+    """
+    from snk.core import shader_noise
+
+    collapsed = generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True, basis=1)
+    assert torch.equal(collapsed, shader_noise._decorrelate(
+        shape, PARAMS, shader_type, 8888, CPU, torch.float32, False, None, basis_size=1))
+
+    calls = []
+    real = shader_noise._render
+    monkeypatch.setattr(shader_noise, "_render",
+                        lambda *a, **k: (calls.append(a[3]["channels"]), real(*a, **k))[1])
+    generate(shape, PARAMS, shader_type, 8888, CPU, decorrelate=True, basis=1)
+    assert calls, "nothing was rendered at all"
+    assert set(calls) == {1}, f"a collapse rendered a {max(calls)}-channel draw it cannot use"
+
+
+@pytest.mark.parametrize("shader_type", ["domain_warp", "curl_noise", "temporal_coherent"])
+def test_the_hash_generators_do_not_reseed_the_global_rng(shader_type, monkeypatch):
+    """
+    These three are pure coordinate hashes of their seed argument, so the
+    torch.manual_seed calls they used to make changed nothing -- domain_warp's ran
+    once per channel render, 888 times per draw at H3's default latent, and
+    manual_seed reseeds every CUDA device as well as the CPU.
+
+    tensor_field is deliberately not in this list: shaders/tensor_field.py draws
+    torch.randn_like inside its channel loop and that value reaches the output, so
+    its reseed is load-bearing. If that ever changes, add it here.
+    """
+    monkeypatch.setattr(torch, "manual_seed",
+                        lambda *a, **k: pytest.fail(f"{shader_type} reseeded the global RNG"))
+    generate((1, 24, 5, 16, 16), PARAMS, shader_type, 8888, CPU)
+
+
+@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+def test_the_draw_hands_back_an_ordinary_tensor(shader_type):
+    """
+    The draw runs under inference mode, which is worth about a tenth of it. An
+    inference tensor raises "Inference tensors cannot be saved for backward" the
+    moment it reaches a grad-recording region, and this noise is handed on to
+    whatever the workflow does next, so generate() must clone it back to a normal
+    tensor on the way out.
+    """
+    noise = generate((1, 4, 32, 32), PARAMS, shader_type, 8888, CPU, decorrelate=True)
+    assert not torch.is_inference(noise)
+    noise.requires_grad_(True)  # raises if it is still an inference tensor

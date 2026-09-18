@@ -13,6 +13,32 @@ latent instead of blending into it. That is fixed at the source, the fixes that
 were optional are now defaults, and blending keeps the base noise's own statistics
 so the first step away from strength 0 is only as large as the shader makes it.
 
+### Performance
+
+None of this changes what a seed produces. The golden fixtures are byte-identical
+and the full suite passes untouched; that is the acceptance criterion for all of it.
+
+- **A collapse no longer renders the draw it throws away.** `travel_mode: jump` (and
+  the `jump` and `stamp` presets) rebuilds every channel from one-channel draws and
+  never reads the wide draw, but the wide draw was rendered first anyway. Measured on
+  `domain_warp` at MiniMax H3's latent: **5.99 s to 0.22 s** at 1344x768/124 frames,
+  and 1.44 s to 0.05 s at 608x352/56 frames. `drift` is unaffected -- it needs the
+  wide draw to measure, so it still pays for it.
+- **The draw runs under `torch.inference_mode()`**, and clones on the way out so the
+  noise leaves as an ordinary tensor rather than an inference tensor.
+- **The pure-hash generators stopped reseeding the global RNG.** `domain_warp` did it
+  once per channel render -- 888 times per draw at H3's default latent -- and
+  `torch.manual_seed` reseeds every CUDA device as well as the CPU. `curl_noise` and
+  `temporal_coherent` did it once per frame. All three are coordinate hashes of their
+  seed argument, so the calls changed nothing. `tensor_field` still reseeds, because
+  it draws `torch.randn_like` inside its channel loop and that value reaches its output.
+- Together the last two are worth about **1.2x** on `walk` and `drift`.
+- **New `verification/benchmark_draw.py`**, because none of the above was reproducible
+  before: the only per-draw timing in the repo predated the per-channel fill and
+  understated the cost roughly tenfold.
+- **`SNK_TEST_CPU=1`** pins the test suite to the CPU, so it runs while a ComfyUI
+  server on the same box is holding the GPU.
+
 ### Changed
 - **Every latent channel gets a shader field of its own.** `domain_warp` copied one
   field across its four channels and built the rest from the first two;

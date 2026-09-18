@@ -8,6 +8,11 @@ ComfyUI's venv, e.g.
     ~/ComfyUI/venv/bin/python -m pytest ~/ComfyUI/custom_nodes/comfyui-shadernoiseksampler/tests
 
 Set COMFYUI_ROOT when the pack is not installed under ComfyUI/custom_nodes.
+
+Set SNK_TEST_CPU=1 to pin the run to the CPU. Importing comfy builds a CUDA
+context to read total VRAM, which fails with "CUDA-capable device(s) is/are
+busy or unavailable" when a ComfyUI server on the same box is holding the card.
+Nothing in the suite needs the GPU, so this makes it runnable while you work.
 """
 import contextlib
 import importlib.util
@@ -24,6 +29,14 @@ COMFY_ROOT = os.environ.get("COMFYUI_ROOT", os.path.dirname(os.path.dirname(REPO
 
 if COMFY_ROOT not in sys.path:
     sys.path.insert(0, COMFY_ROOT)
+
+if os.environ.get("SNK_TEST_CPU"):
+    # comfy.cli_args parses an empty argv under pytest (comfy.options.args_parsing
+    # is False), so --cpu on the command line is ignored. Set the flag directly,
+    # before comfy.model_management is first imported and reads it.
+    import comfy.cli_args
+
+    comfy.cli_args.args.cpu = True
 
 
 def load_pack():

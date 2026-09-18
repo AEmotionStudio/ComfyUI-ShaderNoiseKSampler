@@ -85,8 +85,7 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         # Create coordinate grid in [-1, 1] range
         coords = create_coordinate_grid(batch_size, height, width, device, range_type="symmetric")
 
-        # Set consistent seed
-        torch.manual_seed(current_seed)
+        # No reseed: temporal_spectral_noise hashes current_seed directly.
 
         # Generate temporal coherent noise
         result = TemporalCoherentNoiseGenerator.temporal_spectral_noise(

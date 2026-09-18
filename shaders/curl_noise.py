@@ -86,9 +86,8 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         # Create coordinate grid
         coords = create_coordinate_grid(batch_size, height, width, device)
         
-        # Set random seed
+        # No reseed: the fields below are coordinate hashes of current_seed.
         current_seed = base_seed if use_temporal_coherence else seed
-        torch.manual_seed(current_seed)
         
         # Get velocity field
         velocity = CurlNoiseGenerator.get_velocity_field(

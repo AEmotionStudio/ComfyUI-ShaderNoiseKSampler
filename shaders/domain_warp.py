@@ -17,6 +17,7 @@ from ..utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colo
 from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
 from ..utils.noise_utils import create_coordinate_grid
 from ..core.params import ShaderParams, get_param_value
+from .simplex import simplex_2d
 from ..core.constants import DEFAULT_CHANNELS
 
 logger = logging.getLogger(__name__)
@@ -325,9 +326,9 @@ class DomainWarpGenerator(BaseNoiseGenerator):
             seed = seed.item()
         seed = int(seed)
         
-        # Set random seed for reproducibility
-        torch.manual_seed(seed)
-        
+        # No reseed here: everything below is a coordinate hash, so this ran once
+        # per channel render -- 888 times per draw at H3's default latent -- and
+        # reseeded every CUDA device for nothing. Verified byte-identical without it.
         # Scale coordinates
         scaled_p = p * scale
         
@@ -371,109 +372,14 @@ class DomainWarpGenerator(BaseNoiseGenerator):
     @staticmethod
     def simplex_noise(p, seed):
         """
-        Generate 2D simplex noise.
-        
-        Args:
-            p: Coordinate tensor [batch, height, width, 2+]
-            seed: Random seed
-            
-        Returns:
-            Noise tensor [batch, height, width, 1]
+        2D simplex noise, rotated by the seed.
+
+        Delegates to shaders/simplex.py, which holds the one copy of this and takes
+        a tensor of seeds as well as an int. Verified bit-identical to the copy that
+        used to live here, across shapes and seeds.
         """
-        # Handle input shape
-        original_shape = p.shape
-        if len(original_shape) == 4:
-            batch, height, width, dim = original_shape
-        else:
-            p = p.unsqueeze(0)
-            batch, height, width, dim = p.shape
-        
-        # Ensure we have at least 2 dimensions
-        if dim < 2:
-            p = torch.cat([p, p], dim=-1)
-        
-        # Convert seed
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed) % 10000
-        
-        # Simplex constants
-        F2 = 0.5 * (math.sqrt(3.0) - 1.0)
-        G2 = (3.0 - math.sqrt(3.0)) / 6.0
-        
-        # Apply seed-based variation
-        rotation = (seed % 628) / 100.0
-        cos_r = math.cos(rotation)
-        sin_r = math.sin(rotation)
-        
-        x = p[..., 0:1]
-        y = p[..., 1:2]
-        
-        # Rotate coordinates
-        x_rot = x * cos_r - y * sin_r
-        y_rot = x * sin_r + y * cos_r
-        
-        # Skew to simplex space
-        s = (x_rot + y_rot) * F2
-        i = torch.floor(x_rot + s)
-        j = torch.floor(y_rot + s)
-        
-        # Unskew
-        t = (i + j) * G2
-        X0 = i - t
-        Y0 = j - t
-        x0 = x_rot - X0
-        y0 = y_rot - Y0
-        
-        # Determine simplex
-        i1 = (x0 > y0).float()
-        j1 = 1.0 - i1
-        
-        x1 = x0 - i1 + G2
-        y1 = y0 - j1 + G2
-        x2 = x0 - 1.0 + 2.0 * G2
-        y2 = y0 - 1.0 + 2.0 * G2
-        
-        # Hash function
-        def hash_coord(ix, iy):
-            h = ix * 1619 + iy * 31337 + seed * 2459
-            h = torch.fmod(h * h * h, 1013)
-            return h
-        
-        # Gradient function
-        def grad(h, gx, gy):
-            h_int = (h.long() % 8)
-            u = torch.where(h_int < 4, gx, gy)
-            v = torch.where(h_int < 4, gy, gx)
-            return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
-        
-        # Compute contributions
-        i0 = i.long()
-        j0 = j.long()
-        
-        h0 = hash_coord(i0, j0)
-        h1 = hash_coord(i0 + i1.long(), j0 + j1.long())
-        h2 = hash_coord(i0 + 1, j0 + 1)
-        
-        t0 = 0.5 - x0*x0 - y0*y0
-        t1 = 0.5 - x1*x1 - y1*y1
-        t2 = 0.5 - x2*x2 - y2*y2
-        
-        t0 = torch.maximum(t0, torch.zeros_like(t0))
-        t1 = torch.maximum(t1, torch.zeros_like(t1))
-        t2 = torch.maximum(t2, torch.zeros_like(t2))
-        
-        n0 = t0**4 * grad(h0, x0, y0)
-        n1 = t1**4 * grad(h1, x1, y1)
-        n2 = t2**4 * grad(h2, x2, y2)
-        
-        result = 70.0 * (n0 + n1 + n2)
-        
-        if len(original_shape) == 3:
-            result = result.squeeze(0)
-        
-        return result if result.shape[-1] == 1 else result.unsqueeze(-1)
-    
+        return simplex_2d(p, seed, rotate=True)
+
     @staticmethod
     def simplex_noise_3d(coords, seed=0):
         """

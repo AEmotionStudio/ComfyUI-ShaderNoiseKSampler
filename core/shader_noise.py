@@ -187,7 +187,7 @@ def _decorrelate(latent_shape, params, shader_type, seed, device, dtype,
     single = (latent_shape[0], 1) + tuple(latent_shape[2:])
 
     draws = torch.stack([
-        generate(single, params, shader_type, seed + _MIX_SEED_STRIDE * i, device,
+        _generate(single, params, shader_type, seed + _MIX_SEED_STRIDE * i, device,
                  dtype=dtype, temporal_coherence=temporal_coherence, generator=generator)
         for i in range(basis)
     ])                                              # [basis, B, 1, ...]
@@ -224,13 +224,42 @@ def generate(
 
     The result is returned unnormalised; core.noise_math.mix_noise standardises
     both sides when blending.
+
+    The draw runs under inference mode, which is worth about a tenth of it and
+    costs nothing here: nothing in a render needs autograd. The clone on the way
+    out is not optional. An inference tensor raises `Inference tensors cannot be
+    saved for backward` the moment it reaches a grad-recording region, and this
+    noise is handed to whatever the workflow does next, so it must leave as an
+    ordinary tensor. Cloning outside the block is what makes it one -- about 5 ms
+    and 14 MB at H3's default latent.
     """
+    with torch.inference_mode():
+        noise = _generate(latent_shape, params, shader_type, seed, device, dtype,
+                          temporal_coherence, generator, decorrelate, allow_sequence, basis)
+    return noise.clone() if torch.is_inference(noise) else noise
+
+
+def _generate(
+    latent_shape: Tuple[int, ...],
+    params: Any,
+    shader_type: str,
+    seed: int,
+    device: torch.device,
+    dtype: torch.dtype = torch.float32,
+    temporal_coherence: bool = False,
+    generator=None,
+    decorrelate: bool = False,
+    allow_sequence: bool = False,
+    basis: int = None,
+) -> torch.Tensor:
+    """The draw itself. Recursive callers use this directly, so the clone in
+    `generate` happens once rather than at every level."""
     latent_shape = tuple(latent_shape)
     if allow_sequence and len(latent_shape) == 3:
         # Paint it as a one-row strip, then fold the row away again. Audio latents
         # and Hunyuan3D's occupancy grid arrive this way.
         batch, channels, length = latent_shape
-        strip = generate((batch, channels, 1, length), params, shader_type, seed, device,
+        strip = _generate((batch, channels, 1, length), params, shader_type, seed, device,
                          dtype=dtype, temporal_coherence=temporal_coherence,
                          generator=generator, decorrelate=decorrelate, basis=basis)
         return strip.reshape(latent_shape)
@@ -244,6 +273,17 @@ def generate(
         if torch.device(device).type == "cuda" else []
 
     with torch.random.fork_rng(devices=devices):
+        # A collapse rebuilds every channel from one-channel draws and never looks at
+        # the wide draw, so rendering one first is pure waste -- 7.68 s of jump's
+        # 7.98 s at H3's default latent, for a tensor that is dropped. The collapse
+        # branch in _maybe_decorrelate turns on values all known before rendering, so
+        # take it here instead. Verified torch.equal against the old path for all four
+        # generators at 4, 16, 24 and 128 channels.
+        if decorrelate and latent_shape[1] >= 2 \
+                and (DECORRELATION_BASIS if basis is None else max(1, basis)) <= 1:
+            return _decorrelate(latent_shape, params, shader_type, seed, device,
+                                dtype, temporal_coherence, None, basis_size=1)
+
         if layout["frames"] == 1 and len(latent_shape) == 4:
             noise = _render_octaves(generator, base_params, layout, seed, device)
             return _maybe_decorrelate(
