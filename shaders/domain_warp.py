@@ -17,7 +17,7 @@ from ..utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colo
 from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
 from ..utils.noise_utils import create_coordinate_grid
 from ..core.params import ShaderParams, get_param_value
-from .simplex import simplex_2d
+from .simplex import simplex_2d, simplex_3d
 from ..core.constants import DEFAULT_CHANNELS
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,18 @@ class DomainWarpGenerator(BaseNoiseGenerator):
                 field = torch.lerp(field, field * applied_mask, shape_strength)
             return torch.clamp(field, -1.0, 1.0).permute(0, 3, 1, 2)
 
-        return BaseNoiseGenerator.fill_channels(draw, result, target_channels, current_seed)
+        def draw_many(channel_seeds):
+            fields = DomainWarpGenerator._domain_warp_with_phase(
+                coords, device, octaves, channel_seeds.reshape(-1, 1, 1, 1, 1),
+                0, warp_type, scale, warp_strength, phase_shift, time
+            ) * contrast
+            if applied_mask is not None:
+                fields = torch.lerp(fields, fields * applied_mask, shape_strength)
+            # [N, B, H, W, 1] -> [B, N, H, W]
+            return torch.clamp(fields, -1.0, 1.0).squeeze(-1).permute(1, 0, 2, 3)
+
+        return BaseNoiseGenerator.fill_channels(
+            draw, result, target_channels, current_seed, render_many=draw_many)
     
     @staticmethod
     def get_domain_warp(batch_size, height, width, shader_params, device="cuda", seed=0):
@@ -319,32 +330,30 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         
         This is the core domain warping algorithm that generates swirling patterns.
         """
-        batch, height, width, _ = p.shape
-        
-        # Ensure seed is an integer
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed)
-        
         # No reseed here: everything below is a coordinate hash, so this ran once
         # per channel render -- 888 times per draw at H3's default latent -- and
         # reseeded every CUDA device for nothing. Verified byte-identical without it.
-        # Scale coordinates
+        #
+        # `seed` may also be a tensor holding one seed per channel. The coordinates
+        # stay shared until the first simplex call, which grows the leading axis,
+        # and everything after it broadcasts.
         scaled_p = p * scale
         
         # Generate base noise for warping
         warp_noise_x = DomainWarpGenerator.simplex_noise(scaled_p, seed + 100)
         warp_noise_y = DomainWarpGenerator.simplex_noise(scaled_p, seed + 200)
         
-        # Apply warp strength
-        warped_p = scaled_p.clone()
-        warped_p[..., 0:1] += warp_noise_x * warp_strength
-        warped_p[..., 1:2] += warp_noise_y * warp_strength
+        # Built by concatenation rather than in-place writes into a clone, so that
+        # the same code serves a shared [B,H,W,2] and a per-channel [N,B,H,W,2].
+        # The order matters and is the order the in-place version ran in: the y
+        # update reads the x that the line above it has already shifted.
+        warped_x = scaled_p[..., 0:1] + warp_noise_x * warp_strength
+        warped_y = scaled_p[..., 1:2] + warp_noise_y * warp_strength
         
-        # Apply phase shift effect
         phase_effect = phase_shift * math.pi
-        warped_p[..., 0:1] += torch.sin(warped_p[..., 1:2] * 2.0 + phase_effect) * 0.1 * warp_strength
-        warped_p[..., 1:2] += torch.cos(warped_p[..., 0:1] * 2.0 + phase_effect) * 0.1 * warp_strength
+        warped_x = warped_x + torch.sin(warped_y * 2.0 + phase_effect) * 0.1 * warp_strength
+        warped_y = warped_y + torch.cos(warped_x * 2.0 + phase_effect) * 0.1 * warp_strength
+        warped_p = torch.cat([warped_x, warped_y], dim=-1)
         
         # Generate final noise based on warp type
         octaves_int = max(1, int(octaves))
@@ -363,8 +372,15 @@ class DomainWarpGenerator(BaseNoiseGenerator):
             # Domain warp FBM
             result = DomainWarpGenerator.fbm_noise_domain_warp(warped_p, octaves_int, time, device, seed)
         
-        # Normalize result
-        result = (result - result.mean()) / (result.std() + 1e-8)
+        # Normalize result. Per draw when the seed is a tensor: each channel has to
+        # be standardised against itself, exactly as it would be on its own, or a
+        # batched draw stops matching the loop it replaces.
+        if torch.is_tensor(seed):
+            dims = tuple(range(1, result.dim()))
+            result = (result - result.mean(dim=dims, keepdim=True)) \
+                / (result.std(dim=dims, keepdim=True) + 1e-8)
+        else:
+            result = (result - result.mean()) / (result.std() + 1e-8)
         result = torch.clamp(result * 0.5, -1.0, 1.0)
         
         return result
@@ -383,76 +399,13 @@ class DomainWarpGenerator(BaseNoiseGenerator):
     @staticmethod
     def simplex_noise_3d(coords, seed=0):
         """
-        Generate 3D simplex noise for temporal coherence.
-        
-        Args:
-            coords: Coordinate tensor [batch, height, width, 3]
-            seed: Random seed
-            
-        Returns:
-            Noise tensor [batch, height, width, 1]
-        """
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed)
-        
-        original_shape = coords.shape
-        if len(original_shape) == 4 and original_shape[-1] >= 3:
-            batch, height, width, _ = original_shape
-        else:
-            coords = coords.unsqueeze(0)
-            batch, height, width, _ = coords.shape
-        
-        # 3D simplex constants
-        F3 = 1.0 / 3.0
-        G3 = 1.0 / 6.0
-        
-        x = coords[..., 0:1]
-        y = coords[..., 1:2]
-        z = coords[..., 2:3] if coords.shape[-1] > 2 else torch.zeros_like(x)
-        
-        # Skew
-        s = (x + y + z) * F3
-        i = torch.floor(x + s)
-        j = torch.floor(y + s)
-        k = torch.floor(z + s)
-        
-        # Unskew
-        t = (i + j + k) * G3
-        x0 = x - (i - t)
-        y0 = y - (j - t)
-        z0 = z - (k - t)
-        
-        # Simplified 3D gradient
-        def hash3(ix, iy, iz):
-            h = ix * 1619 + iy * 31337 + iz * 6971 + seed * 2459
-            return torch.fmod(h * h * h, 1013)
-        
-        def grad3(h, gx, gy, gz):
-            h_int = h.long() % 12
-            u = torch.where(h_int < 8, gx, gy)
-            v = torch.where(h_int < 4, gy, torch.where((h_int == 12) | (h_int == 14), gx, gz))
-            return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
-        
-        # Corner contributions
-        i0, j0, k0 = i.long(), j.long(), k.long()
-        
-        h0 = hash3(i0, j0, k0)
-        h1 = hash3(i0 + 1, j0, k0)
-        h2 = hash3(i0, j0 + 1, k0)
-        h3 = hash3(i0 + 1, j0 + 1, k0 + 1)
-        
-        t0 = 0.6 - x0*x0 - y0*y0 - z0*z0
-        t0 = torch.maximum(t0, torch.zeros_like(t0))
-        
-        n = t0**4 * grad3(h0, x0, y0, z0)
-        
-        result = 32.0 * n
-        
-        if len(original_shape) == 3:
-            result = result.squeeze(0)
+        3D simplex noise, first corner only.
 
-        return result if result.shape[-1] == 1 else result.unsqueeze(-1)
+        Delegates to shaders/simplex.py. Verified bit-identical to the copy that
+        used to live here, which also computed three more corner hashes and threw
+        them away.
+        """
+        return simplex_3d(coords, seed, corners=1)
 
     @staticmethod
     def fbm_noise(p, octaves, time, device, seed, use_temporal_coherence=True):
@@ -470,12 +423,9 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         Returns:
             Noise tensor [batch, height, width, 1]
         """
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed)
-        
-        batch, height, width, _ = p.shape
-        result = torch.zeros(batch, height, width, 1, device=p.device)
+        # `seed` may be a tensor, one per channel, in which case `p` carries a
+        # leading axis of that many draws and everything below broadcasts over it.
+        result = torch.zeros_like(p[..., 0:1])
         
         amp = 1.0
         freq = 1.0
@@ -507,12 +457,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         """
         Generate FBM noise with domain warping applied at each octave.
         """
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed)
-        
-        batch, height, width, _ = p.shape
-        result = torch.zeros(batch, height, width, 1, device=p.device)
+        result = torch.zeros_like(p[..., 0:1])
         
         amp = 1.0
         freq = 1.0

@@ -116,7 +116,18 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
                 field = torch.lerp(field, field * mask, shape_strength)
             return torch.clamp(field, -1.0, 1.0).permute(0, 3, 1, 2)
 
-        return BaseNoiseGenerator.fill_channels(draw, result, target_channels, current_seed)
+        def draw_many(channel_seeds):
+            fields = TemporalCoherentNoiseGenerator.temporal_spectral_noise(
+                coords, scale, warp_strength, phase_shift, octaves,
+                frequency_range, time, device, channel_seeds.reshape(-1, 1, 1, 1, 1)
+            )
+            if mask is not None:
+                fields = torch.lerp(fields, fields * mask, shape_strength)
+            # [N, B, H, W, 1] -> [B, N, H, W]
+            return torch.clamp(fields, -1.0, 1.0).squeeze(-1).permute(1, 0, 2, 3)
+
+        return BaseNoiseGenerator.fill_channels(draw, result, target_channels, current_seed,
+                                                render_many=draw_many)
     
     @staticmethod
     def get_temporal_noise(batch_size, height, width, shader_params, device="cuda", base_seed=0):
@@ -169,10 +180,13 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
             warp_noise1 = TemporalCoherentNoiseGenerator._simplex_3d(warp_p, base_seed)
             warp_noise2 = TemporalCoherentNoiseGenerator._simplex_3d(warp_p + 5.0, base_seed + 1)
             
+            warped_x = p_temporal[..., 0:1] + warp_noise1 * warp_strength
+            warped_y = p_temporal[..., 1:2] + warp_noise2 * warp_strength
+            # Time is unchanged, but it has to match the rank the warp just grew:
+            # with a tensor of seeds the two lines above carry one slice per channel
+            # and this one still carries the shared coordinates.
             p_temporal = torch.cat([
-                p_temporal[..., 0:1] + warp_noise1 * warp_strength,
-                p_temporal[..., 1:2] + warp_noise2 * warp_strength,
-                p_temporal[..., 2:3]  # Time unchanged
+                warped_x, warped_y, p_temporal[..., 2:3].expand_as(warped_x)
             ], dim=-1)
         
         # Frequency domain processing
@@ -206,7 +220,7 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
             filter_tensor = torch.lerp(torch.ones_like(dir_filter), dir_filter, 0.8)
         
         # Generate noise with octaves
-        noise = torch.zeros(batch, height, width, 1, device=device)
+        noise = torch.zeros_like(p_temporal[..., 0:1])
         max_octaves = min(octaves, 8)
         
         for i in range(max_octaves):
@@ -250,12 +264,15 @@ class TemporalCoherentNoiseGenerator(BaseNoiseGenerator):
         Returns:
             Noise tensor [B, H, W, 1]
         """
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed)
-        
-        batch, height, width, dim = coords.shape
+        dim = coords.shape[-1]
         device = coords.device
+        if torch.is_tensor(seed):
+            # One seed per channel, always shaped [N,1,1,1]. Everything below works
+            # on coords[..., k], which is [B,H,W] while the coordinates are still
+            # shared and [N,B,H,W] once an earlier step has grown the axis; a rank-4
+            # seed broadcasts correctly against both. Deriving the rank from the
+            # coordinates instead collapses the batch axis in the shared case.
+            seed = seed.reshape(-1, 1, 1, 1)
         
         # Ensure gradients are on the correct device
         gradients = SIMPLEX_GRADIENTS.to(device)

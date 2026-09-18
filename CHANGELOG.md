@@ -36,7 +36,41 @@ so the first step away from strength 0 is only as large as the shader makes it.
 
 ### Performance
 
-None of this changes what a seed produces. The golden fixtures are byte-identical
+- **The channel axis is drawn in one call instead of one per channel.** At MiniMax
+  H3's default latent the draw used to perform 37 frames x 24 channels = 888
+  separate renders of 4032 pixels each, where the time went to per-op dispatch
+  rather than arithmetic. Generators now offer `fill_channels` a batched path and
+  it takes it whenever more than one extra channel is wanted. Measured at
+  1344x768/124 frames: `domain_warp` **5.31s to 1.97s**, `temporal_coherent`
+  **6.52s to 1.86s**, `curl_noise` to 2.11s.
+
+  `curl_noise` and `temporal_coherent` are byte-identical -- verify by running the
+  suite, whose fixtures did not move. `domain_warp` is not: it turns its
+  coordinates by an angle drawn from the seed, so the coordinates genuinely differ
+  per channel and the batched draw has to materialise them, which changes how the
+  tail of each elementwise op is vectorised. Five fixtures moved by 1.2e-07 to
+  2.4e-07 -- float32 rounding, with effective channel rank identical to three
+  decimal places. The previous behaviour is tagged `pre-batched-noise`.
+
+  **`jump` and `stamp` are unaffected.** They build from one-channel draws, which
+  never take the batched path; 32 draws across four generators and four latent
+  shapes were checked byte-identical against the tag.
+
+- **One simplex primitive instead of seven.** The 2D hash was duplicated across
+  three generators and the 3D across four, with real differences hidden between
+  them: three of the 3D copies sum a single simplex corner rather than four, and
+  one of those computed three more corner hashes and discarded them. They are now
+  `shaders/simplex.py`, named for what they do, with the differences kept
+  deliberately rather than unified -- collapsing them would silently change three
+  generators. `temporal_coherent`'s four-corner version stays with that generator:
+  it picks corners by the real simplex ordering and reads gradients from a table,
+  so it is a different function, not a parameterisation.
+
+- **`tensor_field` draws its shape mask once** instead of once per channel, which
+  at LTXV's 128 channels was 127 identical masks, and no longer clones the
+  coordinate grid per channel. Byte-identical.
+
+None of the rest of this changes what a seed produces. The golden fixtures are byte-identical
 and the full suite passes untouched; that is the acceptance criterion for all of it.
 
 - **A collapse no longer renders the draw it throws away.** `travel_mode: jump` (and

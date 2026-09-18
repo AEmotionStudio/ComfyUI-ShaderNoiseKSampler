@@ -67,12 +67,18 @@ def _rotate(x, y, seed):
         cos_r, sin_r = math.cos(angle), math.sin(angle)
         return x * cos_r - y * sin_r, x * sin_r + y * cos_r
 
+    # `x` either still carries the shared coordinates, in which case the rotation is
+    # what grows the leading axis, or it already has one slice per seed because an
+    # earlier step in the chain materialised it.
+    per_slice = x.dim() == seed.dim()
     xs, ys = [], []
-    for value in seed.flatten().tolist():
+    for index, value in enumerate(seed.flatten().tolist()):
         angle = (int(value) % 628) / 100.0
         cos_r, sin_r = math.cos(angle), math.sin(angle)
-        xs.append((x * cos_r - y * sin_r).unsqueeze(0))
-        ys.append((x * sin_r + y * cos_r).unsqueeze(0))
+        xi = x[index:index + 1] if per_slice else x.unsqueeze(0)
+        yi = y[index:index + 1] if per_slice else y.unsqueeze(0)
+        xs.append(xi * cos_r - yi * sin_r)
+        ys.append(xi * sin_r + yi * cos_r)
     return torch.cat(xs, dim=0), torch.cat(ys, dim=0)
 
 
@@ -148,6 +154,62 @@ def simplex_2d(p, seed, rotate=False):
     n2 = t2 ** 4 * _grad2(h2, x2, y2)
 
     result = 70.0 * (n0 + n1 + n2)
+    if squeeze:
+        result = result.squeeze(0)
+    return result if result.shape[-1] == 1 else result.unsqueeze(-1)
+
+
+def _grad3(h, gx, gy, gz):
+    h_int = h.long() % 12
+    u = torch.where(h_int < 8, gx, gy)
+    # The copies this replaces wrote `torch.where(h_int < 4, gy,
+    # torch.where((h_int == 12) | (h_int == 14), gx, gz))`. After `% 12` the index
+    # is in [0, 11], so that inner test can never fire and the branch is always gz.
+    v = torch.where(h_int < 4, gy, gz)
+    return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
+
+
+def simplex_3d(p, seed, corners=1):
+    """
+    3D simplex noise over `p[..., 0:3]`, with time as the third axis.
+
+    `corners=1` is what domain_warp, curl_noise and tensor_field carry: only the
+    first simplex corner contributes, which is not really simplex noise -- it is
+    blockier and less isotropic than a proper corner sum -- but it is what the
+    golden fixtures and the calibrated presets pin, and it is the only variant
+    this function implements. temporal_coherent's four-corner version is a
+    different function, not a parameterisation of this one: it picks corners by
+    the real simplex ordering and reads gradients from a table, so it lives with
+    that generator rather than here.
+
+    `seed` is an int, or an int64 tensor broadcastable against `p`'s leading axes.
+    """
+    squeeze = p.dim() == 3
+    if squeeze:
+        p = p.unsqueeze(0)
+
+    x, y = p[..., 0:1], p[..., 1:2]
+    z = p[..., 2:3] if p.shape[-1] > 2 else torch.zeros_like(x)
+
+    s = (x + y + z) * F3
+    i = torch.floor(x + s)
+    j = torch.floor(y + s)
+    k = torch.floor(z + s)
+
+    t = (i + j + k) * G3
+    x0, y0, z0 = x - (i - t), y - (j - t), z - (k - t)
+
+    seed_term = seed * 2459
+
+    def hash3(ix, iy, iz):
+        h = ix * 1619 + iy * 31337 + iz * 6971 + seed_term
+        return torch.fmod(h * h * h, 1013)
+
+    i0, j0, k0 = i.long(), j.long(), k.long()
+    falloff = torch.maximum(0.6 - x0 * x0 - y0 * y0 - z0 * z0, torch.zeros_like(x0))
+    result = falloff ** 4 * _grad3(hash3(i0, j0, k0), x0, y0, z0)
+
+    result = 32.0 * result
     if squeeze:
         result = result.squeeze(0)
     return result if result.shape[-1] == 1 else result.unsqueeze(-1)

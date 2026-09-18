@@ -200,6 +200,7 @@ class BaseNoiseGenerator(ABC):
         base: torch.Tensor,
         target_channels: int,
         seed: int,
+        render_many=None,
     ) -> torch.Tensor:
         """
         Fill the channel axis with independent draws of the generator's field.
@@ -237,9 +238,21 @@ class BaseNoiseGenerator(ABC):
         # caller's RNG exactly where channel 0 left it.
         devices = [base.device.index if base.device.index is not None else torch.cuda.current_device()] \
             if base.device.type == "cuda" else []
+        channel_seeds = [seed + _CHANNEL_SEED_STRIDE * c
+                         for c in range(base.shape[1], rendered)]
         with torch.random.fork_rng(devices=devices):
-            extra = [render(seed + _CHANNEL_SEED_STRIDE * c).to(base)
-                     for c in range(base.shape[1], rendered)]
+            if render_many is not None and len(channel_seeds) > 1:
+                # One call for the whole remaining channel axis. Generators that
+                # offer this draw every field in one pass instead of one per
+                # channel, which is most of what a wide latent costs.
+                extra = [render_many(torch.tensor(channel_seeds, dtype=torch.int64,
+                                                  device=base.device)).to(base)]
+            else:
+                # A single extra channel is not worth batching, and channel 0 never
+                # comes through here at all -- it is `base`, drawn on the scalar
+                # path, which is what keeps a one-channel draw and the travel-mode
+                # bases they are built from unchanged.
+                extra = [render(channel_seed).to(base) for channel_seed in channel_seeds]
         channels = torch.cat([base, *extra], dim=1)
 
         remaining = target_channels - rendered

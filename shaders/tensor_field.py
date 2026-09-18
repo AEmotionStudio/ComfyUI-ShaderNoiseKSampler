@@ -16,6 +16,7 @@ from ..utils.color_utils import apply_color_scheme, interpolate_colors, COLOR_SC
 from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
 from ..utils.noise_utils import create_coordinate_grid
 from ..core.params import ShaderParams, get_param_value
+from .simplex import simplex_2d, simplex_3d
 from ..core.constants import DEFAULT_CHANNELS
 
 logger = logging.getLogger(__name__)
@@ -99,11 +100,24 @@ class TensorFieldGenerator(BaseNoiseGenerator):
             color_scheme, color_intensity, octaves, scale, warp_strength, time
         )
 
+        # Drawn once rather than per channel: every argument is loop-invariant, so
+        # the other three generators hoist it too. At LTXV's 128 channels this was
+        # 127 identical masks. Safe despite apply_shape_mask reseeding the global
+        # RNG, because the reseed at the top of each iteration overwrites it before
+        # the randn_like below ever reads it.
+        hoisted_mask = None
+        if shape_type not in ["none", "0"] and shape_strength > 0:
+            hoisted_mask = apply_shape_mask(coords, shape_type, time, base_seed, shape_strength)
+            if len(hoisted_mask.shape) == 3:
+                hoisted_mask = hoisted_mask.unsqueeze(-1)
+
         for i in range(target_channels):
             current_seed = loop_seed + 700 + (i * 130)
             torch.manual_seed(current_seed)
             
-            current_coords = coords.clone()
+            # No clone: the RGB path never writes to this, and the other path
+            # rebinds it to a fresh tensor on the next line.
+            current_coords = coords
             current_time = time
             current_viz_type = viz_type
             current_scale = scale
@@ -154,11 +168,8 @@ class TensorFieldGenerator(BaseNoiseGenerator):
                 channel = torch.full_like(channel, -1.0)
             
             # Apply shape mask
-            if shape_type not in ["none", "0"] and shape_strength > 0:
-                mask = apply_shape_mask(coords, shape_type, time, base_seed, shape_strength)
-                if len(mask.shape) == 3:
-                    mask = mask.unsqueeze(-1)
-                channel = torch.lerp(channel, channel * mask, shape_strength)
+            if hoisted_mask is not None:
+                channel = torch.lerp(channel, channel * hoisted_mask, shape_strength)
                 channel = torch.clamp(channel, -1.0, 1.0)
             
             # Convert to BCHW
@@ -388,109 +399,16 @@ class TensorFieldGenerator(BaseNoiseGenerator):
     
     @staticmethod
     def simplex_noise(p, seed):
-        """Generate 2D simplex noise."""
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed) % 10000
-        
-        F2 = 0.5 * (math.sqrt(3.0) - 1.0)
-        G2 = (3.0 - math.sqrt(3.0)) / 6.0
-        
-        x = p[..., 0:1]
-        y = p[..., 1:2]
-        
-        s = (x + y) * F2
-        i = torch.floor(x + s)
-        j = torch.floor(y + s)
-        
-        t = (i + j) * G2
-        x0 = x - (i - t)
-        y0 = y - (j - t)
-        
-        i1 = (x0 > y0).float()
-        j1 = 1.0 - i1
-        
-        x1 = x0 - i1 + G2
-        y1 = y0 - j1 + G2
-        x2 = x0 - 1.0 + 2.0 * G2
-        y2 = y0 - 1.0 + 2.0 * G2
-        
-        def hash_coord(ix, iy):
-            h = ix * 1619 + iy * 31337 + seed * 2459
-            return torch.fmod(h * h * h, 1013)
-        
-        def grad(h, gx, gy):
-            h_int = h.long() % 8
-            u = torch.where(h_int < 4, gx, gy)
-            v = torch.where(h_int < 4, gy, gx)
-            return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
-        
-        i0 = i.long()
-        j0 = j.long()
-        
-        h0 = hash_coord(i0, j0)
-        h1 = hash_coord(i0 + i1.long(), j0 + j1.long())
-        h2 = hash_coord(i0 + 1, j0 + 1)
-        
-        t0 = torch.maximum(0.5 - x0*x0 - y0*y0, torch.zeros_like(x0))
-        t1 = torch.maximum(0.5 - x1*x1 - y1*y1, torch.zeros_like(x1))
-        t2 = torch.maximum(0.5 - x2*x2 - y2*y2, torch.zeros_like(x2))
-        
-        n0 = t0**4 * grad(h0, x0, y0)
-        n1 = t1**4 * grad(h1, x1, y1)
-        n2 = t2**4 * grad(h2, x2, y2)
-        
-        return 70.0 * (n0 + n1 + n2)
-    
+        """2D simplex noise, unrotated. See shaders/simplex.py."""
+        return simplex_2d(p, seed, rotate=False)
+
     @staticmethod
     def simplex_noise_3d(coords, seed=0, time_offset=0.0):
-        """Generate 3D simplex noise with time."""
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed)
-        
-        # Add time dimension
-        if coords.shape[-1] == 2:
-            time_dim = torch.ones_like(coords[..., 0:1]) * time_offset
-            coords = torch.cat([coords, time_dim], dim=-1)
-        
-        x = coords[..., 0:1]
-        y = coords[..., 1:2]
-        z = coords[..., 2:3] if coords.shape[-1] > 2 else torch.zeros_like(x)
-        
-        F3 = 1.0 / 3.0
-        G3 = 1.0 / 6.0
-        
-        s = (x + y + z) * F3
-        i = torch.floor(x + s)
-        j = torch.floor(y + s)
-        k = torch.floor(z + s)
-        
-        t = (i + j + k) * G3
-        x0 = x - (i - t)
-        y0 = y - (j - t)
-        z0 = z - (k - t)
-        
-        def hash3(ix, iy, iz):
-            h = ix * 1619 + iy * 31337 + iz * 6971 + seed * 2459
-            return torch.fmod(h * h * h, 1013)
-        
-        def grad3(h, gx, gy, gz):
-            h_int = h.long() % 12
-            u = torch.where(h_int < 8, gx, gy)
-            v = torch.where(h_int < 4, gy, torch.where((h_int == 12) | (h_int == 14), gx, gz))
-            return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
-        
-        i0, j0, k0 = i.long(), j.long(), k.long()
-        h0 = hash3(i0, j0, k0)
-        
-        t0 = torch.maximum(0.6 - x0*x0 - y0*y0 - z0*z0, torch.zeros_like(x0))
-        n = t0**4 * grad3(h0, x0, y0, z0)
-        
-        return 32.0 * n
+        """3D simplex noise with time as the third axis, first corner only."""
+        z = torch.ones_like(coords[..., 0:1]) * time_offset
+        return simplex_3d(torch.cat([coords[..., 0:1], coords[..., 1:2], z], dim=-1),
+                          seed, corners=1)
 
-
-# Backward compatibility functions
 def add_tensor_field_to_tensor(tensor_class):
     """Legacy function for backward compatibility."""
     pass

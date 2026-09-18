@@ -17,6 +17,7 @@ from ..utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colo
 from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor, smoothstep
 from ..utils.noise_utils import create_coordinate_grid
 from ..core.params import ShaderParams, get_param_value
+from .simplex import simplex_2d, simplex_3d
 from ..core.constants import DEFAULT_CHANNELS, HIGH_CHANNEL_THRESHOLD
 
 logger = logging.getLogger(__name__)
@@ -150,8 +151,17 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
                     device, channel_seed, use_temporal_coherence
                 ).permute(0, 3, 1, 2)
 
+            def advected_many(channel_seeds):
+                seeds = channel_seeds.reshape(-1, 1, 1, 1, 1)
+                fields = CurlNoiseGenerator.advect(
+                    coords * scale, velocity_at(seeds), time, dt, octaves, scale,
+                    device, seeds, use_temporal_coherence)
+                # [N, B, H, W, 1] -> [B, N, H, W]
+                return fields.squeeze(-1).permute(1, 0, 2, 3)
+
             result = CurlNoiseGenerator._generate_channels(
-                advected_bchw, vx, vy, advected_at, target_channels, params, current_seed
+                advected_bchw, vx, vy, advected_at, target_channels, params, current_seed,
+                advected_many
             )
         
         # Scale to [-1, 1]
@@ -251,6 +261,7 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         target_channels: int,
         params: ShaderParams,
         seed: int,
+        render_many=None,
     ) -> torch.Tensor:
         """Generate channels without color scheme."""
         vmag = torch.sqrt(vx**2 + vy**2)
@@ -269,7 +280,8 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         # component of a reseeded field put through sin or abs on a repeating cycle,
         # which held this generator to 25 of 128 channels.
         native = torch.cat([advected, vx, vy, vmag], dim=1)
-        return BaseNoiseGenerator.fill_channels(render, native, target_channels, seed)
+        return BaseNoiseGenerator.fill_channels(render, native, target_channels, seed,
+                                                render_many=render_many)
     
     @staticmethod
     def get_velocity_field(p, time, octaves, device, seed, use_temporal_coherence=False):
@@ -287,10 +299,12 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
         Returns:
             Velocity field [B, H, W, 2]
         """
-        batch, height, width, _ = p.shape
-        
-        # Generate curl noise using FBM
-        result = torch.zeros(batch, height, width, 2, device=device)
+        # Accumulated as two tensors and joined at the end rather than written in
+        # place into a preallocated [B,H,W,2]. `seed` may be a tensor holding one
+        # seed per channel, in which case the simplex calls below return a leading
+        # axis of that many fields and there is no fixed shape to preallocate.
+        # The adds happen in the same order, so the values are unchanged.
+        acc_x = acc_y = None
         amp = 1.0
         freq = 1.0
         max_amp = 0.0
@@ -306,14 +320,14 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
                 noise_x = CurlNoiseGenerator._simplex_2d(current_p, seed + i * 100)
                 noise_y = CurlNoiseGenerator._simplex_2d(current_p, seed + i * 100 + 50)
             
-            result[..., 0:1] += amp * noise_x
-            result[..., 1:2] += amp * noise_y
+            acc_x = amp * noise_x if acc_x is None else acc_x + amp * noise_x
+            acc_y = amp * noise_y if acc_y is None else acc_y + amp * noise_y
             max_amp += amp
             
             freq *= 2.0
             amp *= 0.5
         
-        return result / max_amp
+        return torch.cat([acc_x, acc_y], dim=-1) / max_amp
     
     @staticmethod
     def apply_warp_intensity(velocity, warp_strength):
@@ -351,104 +365,16 @@ class CurlNoiseGenerator(BaseNoiseGenerator):
     
     @staticmethod
     def _simplex_2d(p, seed):
-        """Generate 2D simplex noise."""
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed) % 10000
-        
-        F2 = 0.5 * (math.sqrt(3.0) - 1.0)
-        G2 = (3.0 - math.sqrt(3.0)) / 6.0
-        
-        x = p[..., 0:1]
-        y = p[..., 1:2]
-        
-        s = (x + y) * F2
-        i = torch.floor(x + s)
-        j = torch.floor(y + s)
-        
-        t = (i + j) * G2
-        x0 = x - (i - t)
-        y0 = y - (j - t)
-        
-        i1 = (x0 > y0).float()
-        j1 = 1.0 - i1
-        
-        x1 = x0 - i1 + G2
-        y1 = y0 - j1 + G2
-        x2 = x0 - 1.0 + 2.0 * G2
-        y2 = y0 - 1.0 + 2.0 * G2
-        
-        def hash_coord(ix, iy):
-            h = ix * 1619 + iy * 31337 + seed * 2459
-            return torch.fmod(h * h * h, 1013)
-        
-        def grad(h, gx, gy):
-            h_int = h.long() % 8
-            u = torch.where(h_int < 4, gx, gy)
-            v = torch.where(h_int < 4, gy, gx)
-            return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
-        
-        i0 = i.long()
-        j0 = j.long()
-        
-        h0 = hash_coord(i0, j0)
-        h1 = hash_coord(i0 + i1.long(), j0 + j1.long())
-        h2 = hash_coord(i0 + 1, j0 + 1)
-        
-        t0 = torch.maximum(0.5 - x0*x0 - y0*y0, torch.zeros_like(x0))
-        t1 = torch.maximum(0.5 - x1*x1 - y1*y1, torch.zeros_like(x1))
-        t2 = torch.maximum(0.5 - x2*x2 - y2*y2, torch.zeros_like(x2))
-        
-        n0 = t0**4 * grad(h0, x0, y0)
-        n1 = t1**4 * grad(h1, x1, y1)
-        n2 = t2**4 * grad(h2, x2, y2)
-        
-        return 70.0 * (n0 + n1 + n2)
-    
+        """2D simplex noise, unrotated. See shaders/simplex.py."""
+        return simplex_2d(p, seed, rotate=False)
+
     @staticmethod
     def _simplex_3d(coords, seed=0, time_offset=0.0):
-        """Generate 3D simplex noise with time."""
-        if isinstance(seed, torch.Tensor):
-            seed = seed.item()
-        seed = int(seed)
-        
-        x = coords[..., 0:1]
-        y = coords[..., 1:2]
-        z = torch.ones_like(x) * time_offset
-        
-        F3 = 1.0 / 3.0
-        G3 = 1.0 / 6.0
-        
-        s = (x + y + z) * F3
-        i = torch.floor(x + s)
-        j = torch.floor(y + s)
-        k = torch.floor(z + s)
-        
-        t = (i + j + k) * G3
-        x0 = x - (i - t)
-        y0 = y - (j - t)
-        z0 = z - (k - t)
-        
-        def hash3(ix, iy, iz):
-            h = ix * 1619 + iy * 31337 + iz * 6971 + seed * 2459
-            return torch.fmod(h * h * h, 1013)
-        
-        def grad3(h, gx, gy, gz):
-            h_int = h.long() % 12
-            u = torch.where(h_int < 8, gx, gy)
-            v = torch.where(h_int < 4, gy, torch.where((h_int == 12) | (h_int == 14), gx, gz))
-            return torch.where(h_int % 2 == 0, u, -u) + torch.where((h_int // 2) % 2 == 0, v, -v)
-        
-        i0, j0, k0 = i.long(), j.long(), k.long()
-        h0 = hash3(i0, j0, k0)
-        
-        t0 = torch.maximum(0.6 - x0*x0 - y0*y0 - z0*z0, torch.zeros_like(x0))
-        n = t0**4 * grad3(h0, x0, y0, z0)
-        
-        return 32.0 * n
+        """3D simplex noise with time as the third axis, first corner only."""
+        z = torch.ones_like(coords[..., 0:1]) * time_offset
+        return simplex_3d(torch.cat([coords[..., 0:1], coords[..., 1:2], z], dim=-1),
+                          seed, corners=1)
 
-
-# Backward compatibility functions
 def add_curl_noise_to_tensor(tensor_class):
     """Legacy function for backward compatibility."""
     pass
