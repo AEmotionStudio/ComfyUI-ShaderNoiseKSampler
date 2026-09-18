@@ -23,6 +23,17 @@ from ..core.constants import DEFAULT_CHANNELS
 logger = logging.getLogger(__name__)
 
 
+def _time_is_an_axis(time_axis, time):
+    """
+    Whether this draw should evaluate its field in 3D with time as the third axis.
+
+    `time_axis` is set by core.shader_noise from the latent's frame count. When it
+    is absent -- a direct caller, or an older saved path -- fall back to the old
+    test, which is what the golden fixtures for single images pin.
+    """
+    return (time != 0) if time_axis is None else time_axis
+
+
 @shader_generator("domain_warp", metadata={"description": "Domain warping noise for swirling patterns"})
 class DomainWarpGenerator(BaseNoiseGenerator):
     """
@@ -88,12 +99,13 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         coords = create_coordinate_grid(batch_size, height, width, device)
         
         # Generate domain warp noise
+        time_axis = params.get("time_axis", None)
         warp_type = int(octaves % 4)
         
         try:
             result = DomainWarpGenerator._domain_warp_with_phase(
                 coords, device, octaves, current_seed, 0, warp_type, 
-                scale, warp_strength, phase_shift, time
+                scale, warp_strength, phase_shift, time, time_axis
             )
         except Exception as e:
             logger.warning(f"Error generating domain warp: {e}, using fallback noise")
@@ -138,7 +150,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         def draw(channel_seed):
             field = DomainWarpGenerator._domain_warp_with_phase(
                 coords, device, octaves, channel_seed, 0, warp_type,
-                scale, warp_strength, phase_shift, time
+                scale, warp_strength, phase_shift, time, time_axis
             ) * contrast
             if applied_mask is not None:
                 field = torch.lerp(field, field * applied_mask, shape_strength)
@@ -147,7 +159,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         def draw_many(channel_seeds):
             fields = DomainWarpGenerator._domain_warp_with_phase(
                 coords, device, octaves, channel_seeds.reshape(-1, 1, 1, 1, 1),
-                0, warp_type, scale, warp_strength, phase_shift, time
+                0, warp_type, scale, warp_strength, phase_shift, time, time_axis
             ) * contrast
             if applied_mask is not None:
                 fields = torch.lerp(fields, fields * applied_mask, shape_strength)
@@ -324,7 +336,8 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         return result, g, b
     
     @staticmethod
-    def _domain_warp_with_phase(p, device, octaves, seed, warp_layer, warp_type, scale, warp_strength, phase_shift, time):
+    def _domain_warp_with_phase(p, device, octaves, seed, warp_layer, warp_type, scale,
+                                warp_strength, phase_shift, time, time_axis=None):
         """
         Generate domain warp noise with phase shift parameter.
         
@@ -360,17 +373,21 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         
         if warp_type == 0:
             # Standard FBM
-            result = DomainWarpGenerator.fbm_noise(warped_p, octaves_int, time, device, seed)
+            result = DomainWarpGenerator.fbm_noise(warped_p, octaves_int, time, device, seed,
+                                                  time_axis=time_axis)
         elif warp_type == 1:
             # Ridged FBM
-            result = DomainWarpGenerator.fbm_noise(warped_p, octaves_int, time, device, seed)
+            result = DomainWarpGenerator.fbm_noise(warped_p, octaves_int, time, device, seed,
+                                                  time_axis=time_axis)
             result = 1.0 - torch.abs(result)
         elif warp_type == 2:
             # Turbulent FBM
-            result = torch.abs(DomainWarpGenerator.fbm_noise(warped_p, octaves_int, time, device, seed))
+            result = torch.abs(DomainWarpGenerator.fbm_noise(
+                warped_p, octaves_int, time, device, seed, time_axis=time_axis))
         else:
             # Domain warp FBM
-            result = DomainWarpGenerator.fbm_noise_domain_warp(warped_p, octaves_int, time, device, seed)
+            result = DomainWarpGenerator.fbm_noise_domain_warp(
+                warped_p, octaves_int, time, device, seed, time_axis=time_axis)
         
         # Normalize result. Per draw when the seed is a tensor: each channel has to
         # be standardised against itself, exactly as it would be on its own, or a
@@ -408,7 +425,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         return simplex_3d(coords, seed, corners=1)
 
     @staticmethod
-    def fbm_noise(p, octaves, time, device, seed, use_temporal_coherence=True):
+    def fbm_noise(p, octaves, time, device, seed, use_temporal_coherence=True, time_axis=None):
         """
         Generate FBM (Fractal Brownian Motion) noise.
     
@@ -434,7 +451,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         for i in range(min(octaves, 8)):
             current_p = p * freq
             
-            if use_temporal_coherence and time != 0:
+            if use_temporal_coherence and _time_is_an_axis(time_axis, time):
                 time_offset = time * (0.2 + i * 0.05)
                 current_p_3d = torch.cat([
                     current_p,
@@ -453,7 +470,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
         return result / max_amp
     
     @staticmethod
-    def fbm_noise_domain_warp(p, octaves, time, device, seed):
+    def fbm_noise_domain_warp(p, octaves, time, device, seed, time_axis=None):
         """
         Generate FBM noise with domain warping applied at each octave.
         """
@@ -477,7 +494,7 @@ class DomainWarpGenerator(BaseNoiseGenerator):
             
             current_p = p_warped * freq
             
-            if time != 0:
+            if _time_is_an_axis(time_axis, time):
                 time_offset = time * (0.2 + i * 0.05)
                 current_p_3d = torch.cat([
                     current_p,

@@ -268,6 +268,12 @@ def _generate(
     generator = generator or resolve_generator(shader_type)
     base_params = _as_dict(params)
     base_time = float(base_params.get("time", 0.0) or 0.0)
+    # Whether `time` is a real axis for this draw, rather than whether a particular
+    # frame's value happens to be zero. A generator that switches between a 2D and a
+    # 3D field must make that choice once for the whole clip: deciding it per frame
+    # drew frame 0 -- the only frame whose time is exactly 0.0 -- from a different
+    # function than every frame after it.
+    base_params["time_axis"] = layout["frames"] > 1
 
     devices = [device.index if device.index is not None else torch.cuda.current_device()] \
         if torch.device(device).type == "cuda" else []

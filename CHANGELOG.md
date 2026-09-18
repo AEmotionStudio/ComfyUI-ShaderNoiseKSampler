@@ -27,12 +27,24 @@ so the first step away from strength 0 is only as large as the shader makes it.
   it has instead is direct control over the large-scale structure the model actually
   reads -- `noise_scale` sets the band, `octaves` the roll-off, `warp_strength` the
   anisotropy -- and temporal coherence for free: holding the seed and advancing time
-  turns each mode at its own rate rather than redrawing the field, which measures as
-  0.27 frame-to-frame correlation against `temporal_coherent`'s 0.26 and
-  `domain_warp`'s 0.00.
+  turns each mode at its own rate rather than redrawing the field. Adjacent frames
+  of a 24-channel, 8-frame draw correlate at 0.68, against `temporal_coherent`'s
+  0.55 and `tensor_field`'s 0.80. The figure depends on clip length: `time` always
+  spans 0 to 1 across the whole clip, so a longer clip takes smaller steps and
+  comes out smoother frame to frame.
 
   Its strengths are **not** calibrated against real prompts the way the other four
   are. Treat the presets' numbers as not applying to it yet.
+
+### Fixed
+- **The first frame of a video was drawn from a different noise function than the
+  rest.** `domain_warp` chose between a 2D and a 3D field by testing `time != 0`,
+  and frame 0 is the only frame whose time is exactly 0, so it alone took the 2D
+  path. With temporal coherence on, adjacent frames correlate at about 0.95 --
+  except frame 0 against frame 1, which measured -0.01. The choice is now made once
+  per draw from the latent's frame count, so a clip is one field throughout. Single
+  images are unaffected, and only frame 0 of a video draw changes; the
+  `video_nested` fixture was re-captured.
 
 ### Performance
 
