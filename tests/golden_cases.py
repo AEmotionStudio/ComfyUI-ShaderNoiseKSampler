@@ -49,6 +49,14 @@ CASES = {
                            shader_type="tensor_field"),
     "video_curl": dict(kind="flow", video=True, shader_type="curl_noise", blend_mode="screen"),
     "video_nested": dict(kind="flow", video=True, nested=True),
+    # The spectral generator builds its field from a frequency band rather than
+    # per pixel, so it shares none of the others' code below core.shader_noise.
+    # One image case and one video case, the video one with temporal coherence
+    # because that is where it differs most -- holding the seed and advancing
+    # time turns each mode at its own rate instead of redrawing the field.
+    "image_spectral": dict(shader_type="spectral", noise_scale=1.5, octaves=2.0),
+    "video_spectral": dict(kind="flow", video=True, shader_type="spectral",
+                           use_temporal_coherence=True, sequential_stages=2),
 }
 
 CUSTOM_SIGMAS = torch.tensor([14.6, 9.0, 6.0, 4.0, 2.7, 1.8, 1.1, 0.6, 0.3, 0.1, 0.0])

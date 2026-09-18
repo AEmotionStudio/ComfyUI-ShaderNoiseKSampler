@@ -42,6 +42,10 @@ from .shaders.temporal_coherent_noise import (
     TemporalCoherentNoiseGenerator,
     generate_temporal_coherent_noise_tensor,
 )
+from .shaders.spectral import (
+    SpectralNoiseGenerator,
+    generate_spectral_tensor,
+)
 
 register_shader("curl", CurlNoiseGenerator, {
     "description": "Curl/fluid noise patterns (alias)",

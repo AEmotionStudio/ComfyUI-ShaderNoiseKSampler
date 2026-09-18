@@ -123,7 +123,7 @@ def test_unknown_shader_type_raises_a_clear_error():
 
 # --- channel width --------------------------------------------------------------------
 
-ALL_SHADERS = ["domain_warp", "temporal_coherent", "curl_noise", "tensor_field"]
+ALL_SHADERS = ["domain_warp", "temporal_coherent", "curl_noise", "tensor_field", "spectral"]
 
 
 @pytest.mark.parametrize("shape", [(1, 4, 48, 48), (1, 16, 32, 32), (1, 24, 5, 16, 16)])

@@ -13,6 +13,27 @@ latent instead of blending into it. That is fixed at the source, the fixes that
 were optional are now defaults, and blending keeps the base noise's own statistics
 so the first step away from strength 0 is only as large as the shader makes it.
 
+### Added
+- **A fifth shader type, `spectral`.** It builds its field from a frequency band --
+  the whole channel stack's Fourier coefficients drawn at once, shaped by a radial
+  envelope, brought back with one inverse FFT -- instead of evaluating a procedural
+  field per pixel per channel. Measured against `domain_warp` on the same latents:
+  **0.02s against 1.16s** at MiniMax H3's 608x352/56 frames, **0.13s against 5.31s**
+  at 1344x768/124 frames, **0.01s against 0.61s** at LTXV's 128 channels, where it
+  also spans more of them (115 of 128 against 84).
+
+  It is a different instrument, not a faster `domain_warp`: a shaped-Gaussian field
+  is a cloud, with no filaments or swirls, and colour schemes do nothing to it. What
+  it has instead is direct control over the large-scale structure the model actually
+  reads -- `noise_scale` sets the band, `octaves` the roll-off, `warp_strength` the
+  anisotropy -- and temporal coherence for free: holding the seed and advancing time
+  turns each mode at its own rate rather than redrawing the field, which measures as
+  0.27 frame-to-frame correlation against `temporal_coherent`'s 0.26 and
+  `domain_warp`'s 0.00.
+
+  Its strengths are **not** calibrated against real prompts the way the other four
+  are. Treat the presets' numbers as not applying to it yet.
+
 ### Performance
 
 None of this changes what a seed produces. The golden fixtures are byte-identical
