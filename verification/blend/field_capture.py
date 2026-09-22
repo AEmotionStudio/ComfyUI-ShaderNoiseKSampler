@@ -17,20 +17,23 @@ from helpers import FakeModel  # noqa: E402
 from snk.core import shader_noise  # noqa: E402
 from snk.direct_shader_ksampler import DirectShaderNoiseKSampler  # noqa: E402
 
-KIND = {"sd15": "eps", "h3": "av"}
+KIND = {"sd15": "eps", "h3": "av", "krea2": "flow"}
 
 
 def empty_latent(model, width, height, length):
     """The latent the model's workflow starts from, at the size a run used."""
     if model == "sd15":
         return torch.zeros(1, 4, height // 8, width // 8)
+    if model == "krea2":
+        # Krea 2 samples in Wan 2.1's 16-channel latent space.
+        return torch.zeros(1, 16, height // 8, width // 8)
     from comfy_extras.nodes_minimax_h3 import _empty_av_latent
     latent = _empty_av_latent(width=width, height=height, length=length)
     latent = latent[0] if isinstance(latent, tuple) else latent
     return latent["samples"] if isinstance(latent, dict) else latent
 
 
-def capture(model, latent, seed, strength, travel, phase, scale):
+def capture(model, latent, seed, strength, travel, phase, scale, shader=common.DEFAULT_SHADER):
     """The shader fields generated for one run, in the order the pipeline made them."""
     fields = []
     depth = 0
@@ -58,7 +61,7 @@ def capture(model, latent, seed, strength, travel, phase, scale):
         DirectShaderNoiseKSampler().sample(
             model=FakeModel(KIND[model]), positive=[], negative=[], latent_image={"samples": latent},
             steps=20, cfg=1.0, sampler_name="euler", scheduler="simple",
-            **common.shader_inputs(seed, strength, travel, phase, scale))
+            **common.shader_inputs(seed, strength, travel, phase, scale, shader))
     finally:
         shader_noise.generate, comfy.sample.sample = original_generate, original_sample
     return fields
