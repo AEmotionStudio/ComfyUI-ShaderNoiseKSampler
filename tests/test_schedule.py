@@ -138,3 +138,46 @@ def test_the_midpoint_is_the_widget_value():
     middle = schedule.stage_shaping("coarse_to_fine", 0.5)
     assert middle["octave_offset"] == pytest.approx(0.0)
     assert 1.0 < middle["scale_multiplier"] < 1.5   # geometric span, so not exactly 1.0
+
+
+def window_for(first, last, sequential, injection):
+    """Boundaries for a run that samples only steps [first, last] of its schedule."""
+    span = last - first
+    return merge_boundaries(
+        last,
+        [first + start for start in sequential_starts(span, sequential)],
+        [first + point for point in injection_points(span, injection)],
+        first=first,
+    )
+
+
+def test_a_window_keeps_its_boundaries_inside_itself():
+    assert window_for(10, 20, 3, 2) == [10, 13, 16]
+    assert window_for(4, 7, 3, 3) == [4], "three stages cannot fit in three steps"
+    assert window_for(0, 20, 2, 0) == [0, 10], "the whole schedule is just the widest window"
+
+
+def test_the_tail_rule_measures_against_the_window_not_the_schedule():
+    """
+    merge_boundaries' first argument is where the window ends. Handing it the
+    schedule length instead would keep a boundary one step short of the window's
+    end and leave a 1-step tail inside an otherwise long run.
+    """
+    starts = [10, 13, 16, 19]
+    assert merge_boundaries(20, starts, [], first=10) == [10, 13, 16]
+    assert merge_boundaries(30, starts, [], first=10) == [10, 13, 16, 19]
+
+
+@pytest.mark.parametrize("first,last,sequential,injection", [
+    (10, 20, 3, 2), (4, 7, 3, 3), (5, 7, 2, 2), (18, 20, 3, 3), (2, 4, 3, 3),
+    (6, 7, 5, 5), (0, 1, 1, 0), (0, 20, 2, 3),
+])
+def test_windowed_segments_cover_the_window_exactly(first, last, sequential, injection):
+    segs = segments(window_for(first, last, sequential, injection), last)
+
+    assert segs, "a window must always produce something to sample"
+    assert segs[0][0] == first and segs[-1][1] == last
+    assert all(end == segs[i + 1][0] for i, (_, end) in enumerate(segs[:-1])), "no gaps"
+    assert all(end - start >= 1 for start, end in segs), "no 0-step segment"
+    if last - first >= MIN_SEGMENT_STEPS:
+        assert all(end - start >= MIN_SEGMENT_STEPS for start, end in segs)

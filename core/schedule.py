@@ -77,29 +77,35 @@ def injection_points(total_steps: int, num_stages: int) -> List[int]:
 
 
 def merge_boundaries(
-    total_steps: int,
+    end_step: int,
     starts: Sequence[int],
     points: Sequence[int],
     min_segment: int = MIN_SEGMENT_STEPS,
+    first: int = 0,
 ) -> List[int]:
     """
     Combine stage starts and injection points into ascending segment boundaries.
 
-    Always begins at 0, drops duplicates, and discards any boundary that would
-    leave a segment shorter than `min_segment` steps.
+    Always begins at `first`, drops duplicates, and discards any boundary that
+    would leave a segment shorter than `min_segment` steps.
+
+    `first` and `end_step` bound the node's step window, which is the whole
+    schedule unless `start_at_step` or `end_at_step` narrowed it. Both must be
+    the window's own edges: measuring the tail against the schedule length
+    instead would let a boundary survive one step short of the window's end.
     """
     boundaries: List[int] = []
-    for boundary in sorted({0, *starts, *points}):
-        if boundary < 0 or boundary >= total_steps:
+    for boundary in sorted({first, *starts, *points}):
+        if boundary < first or boundary >= end_step:
             continue
         if boundaries and boundary - boundaries[-1] < min_segment:
             continue
         boundaries.append(boundary)
 
     if not boundaries:
-        return [0]
+        return [first]
     # The tail is a segment too: drop trailing boundaries that would truncate it.
-    while len(boundaries) > 1 and total_steps - boundaries[-1] < min_segment:
+    while len(boundaries) > 1 and end_step - boundaries[-1] < min_segment:
         boundaries.pop()
     return boundaries
 

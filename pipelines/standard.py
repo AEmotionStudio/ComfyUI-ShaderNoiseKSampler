@@ -109,6 +109,8 @@ def _paintable(streams, shade_non_spatial: bool):
 
 def _shader_events(
     total_steps: int,
+    first: int,
+    last: int,
     sequential_stages: int,
     injection_stages: int,
     shader_strength: float,
@@ -121,14 +123,19 @@ def _shader_events(
     """
     Work out where shader noise enters and how strong it is there.
 
+    Stages are spread across the step window `[first, last]` -- the steps this
+    node actually samples -- so a run of the last three steps of a schedule gets
+    its stages in those three steps rather than in a range it never reaches.
+
     Returns the segment boundaries and, per boundary step, the list of
     (strength, seed, shaping) shader contributions to apply in order. `shaping`
     carries the zoom and detail adjustments for that point in the trajectory and
     is empty under the default uniform progression.
     """
-    starts = schedule.sequential_starts(total_steps, sequential_stages)
-    points = schedule.injection_points(total_steps, injection_stages)
-    boundaries = schedule.merge_boundaries(total_steps, starts, points)
+    span = last - first
+    starts = [first + start for start in schedule.sequential_starts(span, sequential_stages)]
+    points = [first + point for point in schedule.injection_points(span, injection_stages)]
+    boundaries = schedule.merge_boundaries(last, starts, points, first=first)
 
     sequential = schedule.stage_strengths(shader_strength, max(sequential_stages, 1), sequential_distribution)
     injection = schedule.stage_strengths(shader_strength, injection_stages, injection_distribution)
@@ -136,9 +143,10 @@ def _shader_events(
     events: Dict[int, List[Tuple[float, int, Dict[str, float]]]] = {step: [] for step in boundaries}
 
     def shaping(step: int) -> Dict[str, float]:
-        # Position in the schedule, not stage index: sequential and injection
-        # stages interleave, and what matters is how far along the trajectory the
-        # noise lands.
+        # Position in the whole schedule, not stage index and not position in the
+        # window: sequential and injection stages interleave, and what matters is
+        # how far along the trajectory the noise lands. A node running the last
+        # three steps of seven is at the fine end, not starting a fresh sweep.
         return schedule.stage_shaping(stage_progression, step / max(total_steps, 1))
 
     def nearest(step: int) -> int:
@@ -272,6 +280,10 @@ def run(
     shade_non_spatial: bool = False,
     stage_progression: str = "uniform",
     custom_sigmas: Optional[torch.Tensor] = None,
+    add_noise: bool = True,
+    start_at_step: int = 0,
+    end_at_step: int = 10000,
+    return_with_leftover_noise: bool = False,
     disable_pbar: bool = False,
 ) -> Dict[str, Any]:
     """Run the corrected pipeline and return a latent dict."""
@@ -284,28 +296,46 @@ def run(
 
     sigmas = schedule.build_sigmas(model, steps, sampler_name, scheduler, denoise, custom_sigmas)
     total_steps = max(len(sigmas) - 1, 1)
+
+    # The step window, which is what lets this node be one half of a split run.
+    last = min(max(end_at_step, 0), total_steps)
+    first = min(max(start_at_step, 0), last)
+    if first >= last or len(sigmas) < 2:  # nothing to denoise, or no schedule to do it on
+        return {**latent, "samples": samples}
+    if last < total_steps and not return_with_leftover_noise:
+        # End on a clean latent, the same zeroed last sigma KSampler.sample uses.
+        sigmas = torch.cat([sigmas[:last], sigmas.new_zeros(1)])
+
     boundaries, events = _shader_events(
-        total_steps, sequential_stages, injection_stages, shader_strength,
+        total_steps, first, last, sequential_stages, injection_stages, shader_strength,
         sequential_distribution, injection_distribution, seed, use_temporal_coherence,
         stage_progression,
     )
-    segment_list = schedule.segments(boundaries, total_steps)
+    segment_list = schedule.segments(boundaries, last)
 
     primary = _streams(samples)[0]
     device, dtype = primary.device, primary.dtype
 
+    # Without add_noise the latent arrives carrying its own noise from whatever ran
+    # before, so there is none to make and none to paint at the opening boundary: the
+    # shader on a zero tensor would add back exactly what was turned off. Later
+    # boundaries still paint, since their noise is recovered from the latent.
+    opening = events.get(boundaries[0], []) if add_noise else []
+    painted = [opening] + [stage for step, stage in events.items() if step != boundaries[0]]
+
     # Refuse a latent the shaders cannot paint on before any sampling happens, rather
     # than at the first boundary that needs one. At shader_strength 0 there is nothing
     # to paint, so those models still sample through here as a plain KSampler.
-    if any(strength > 0.0 for stage in events.values() for strength, _, _ in stage):
+    if any(strength > 0.0 for stage in painted for strength, _, _ in stage):
         for stream in (_streams(samples) if shade_non_spatial else [primary]):
             shader_noise.require_spatial_latent(tuple(stream.shape), shade_non_spatial)
 
-    noise = comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
+    noise = (comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
+             if add_noise else comfy.sample.prepare_empty_noise(samples))
     noise_streams = _streams(noise)
     for index in _paintable(noise_streams, shade_non_spatial):
         noise_streams[index] = _apply_events(
-            noise_streams[index].to(device), events.get(boundaries[0], []), shader_params,
+            noise_streams[index].to(device), opening, shader_params,
             shader_type, blend_mode, noise_transform, device, dtype, use_temporal_coherence,
             normalize_strength, travel_mode, shade_non_spatial,
             stream_seed_offset=index * _STREAM_SEED_STRIDE,
@@ -314,7 +344,8 @@ def run(
 
     model_sampling = model.get_model_object("model_sampling")
     noise_mask = latent.get("noise_mask", None)
-    preview = None if disable_pbar else latent_preview.prepare_callback(model, total_steps)
+    window_steps = last - first
+    preview = None if disable_pbar else latent_preview.prepare_callback(model, window_steps)
 
     current = samples
     for index, (start, end) in enumerate(segment_list):
@@ -325,10 +356,9 @@ def run(
             denoise=1.0,
             sigmas=sigmas[start:end + 1],
             noise_mask=noise_mask,
-            callback=_segment_callback(preview, start, total_steps, captured),
+            callback=_segment_callback(preview, start - first, window_steps, captured),
             disable_pbar=disable_pbar,
             seed=seed + start,
-            force_full_denoise=is_last,
         )
         if is_last:
             return {**latent, "samples": result}

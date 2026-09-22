@@ -14,6 +14,22 @@ were optional are now defaults, and blending keeps the base noise's own statisti
 so the first step away from strength 0 is only as large as the shader makes it.
 
 ### Added
+- **The sampler can run half a schedule**, through four inputs that mirror
+  `KSampler (Advanced)`: `add_noise`, `start_at_step`, `end_at_step` and
+  `return_with_leftover_noise`. A generation can now be split, with something else
+  working on the latent in between -- which is what MiniMax H3 needs to fix faces,
+  since the fix is a latent upscale partway through and the shader previously had to
+  be dropped from the workflow to get one. Both halves keep their shader noise.
+  `example_workflows/MiniMaxH3_Split_Upscale_SNK_Direct.json` wires it up.
+
+  Stages spread across the steps a node actually samples rather than the whole
+  schedule, so they divide the work it does; `stage_progression` still measures
+  position in the whole trajectory, so a node running the tail of a schedule gets the
+  fine end of `coarse_to_fine` instead of starting a fresh sweep. With `add_noise`
+  off there is no starting noise to paint, so the shader only enters at an interior
+  boundary. Every default is a no-op: saved workflows sample exactly what they did
+  before, which the golden suite pins.
+
 - **A fifth shader type, `spectral`.** It builds its field from a frequency band --
   the whole channel stack's Fourier coefficients drawn at once, shaped by a radial
   envelope, brought back with one inverse FFT -- instead of evaluating a procedural

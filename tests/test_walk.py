@@ -122,3 +122,12 @@ def test_the_walk_node_offers_everything_the_direct_node_does():
     walk = ShaderNoiseWalk.INPUT_TYPES()
     for section in ("required", "optional"):
         assert set(direct.get(section, {})) <= set(walk.get(section, {})), section
+
+
+def test_the_walk_node_passes_the_window_through(recorder):
+    """Walk forwards **kwargs into Direct.sample, so a new input has to survive it."""
+    batch = run_walk(walk_steps=2, start_at_step=2, end_at_step=5,
+                     return_with_leftover_noise=True)
+
+    assert batch["samples"].shape[0] == 2
+    assert len(recorder) == 2, "one windowed run per point on the ramp"

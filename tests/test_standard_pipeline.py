@@ -12,6 +12,7 @@ import pytest
 import torch
 
 import comfy.sample
+import latent_preview
 from helpers import FakeModel, snapshot
 from snk.core.shader_noise import UnsupportedLatentError
 from snk.pipelines.standard import _rebuild, _split_noise, _streams, run
@@ -71,7 +72,7 @@ def test_single_stage_runs_one_segment(recorder):
     out = run_pipeline()
     assert len(recorder) == 1
     assert out["samples"].shape == (1, 4, 16, 16)
-    assert recorder[0]["force_full_denoise"] is True
+    assert float(recorder[0]["sigmas"][-1]) == 0.0
 
 
 def test_stages_slice_one_schedule(recorder):
@@ -83,8 +84,6 @@ def test_stages_slice_one_schedule(recorder):
     assert torch.equal(first[-1], second[0])
     assert float(first[0]) > float(second[0]) > float(second[-1])
     assert float(second[-1]) == pytest.approx(0.0)
-    assert recorder[0]["force_full_denoise"] is False
-    assert recorder[1]["force_full_denoise"] is True
 
 
 def test_every_segment_starts_where_the_previous_ended(recorder):
@@ -292,8 +291,8 @@ def test_stage_progression_varies_the_shader_across_the_run(recorder):
     """Every stage used to draw the same shader at the same zoom."""
     from snk.pipelines.standard import _shader_events
 
-    _, uniform = _shader_events(20, 3, 0, 0.5, "uniform", "uniform", 1, False, "uniform")
-    _, shaped = _shader_events(20, 3, 0, 0.5, "uniform", "uniform", 1, False, "coarse_to_fine")
+    _, uniform = _shader_events(20, 0, 20, 3, 0, 0.5, "uniform", "uniform", 1, False, "uniform")
+    _, shaped = _shader_events(20, 0, 20, 3, 0, 0.5, "uniform", "uniform", 1, False, "coarse_to_fine")
 
     assert all(not event[2] for stage in uniform.values() for event in stage)
     multipliers = [event[2]["scale_multiplier"] for stage in shaped.values() for event in stage]
@@ -334,3 +333,223 @@ def test_metadata_streams_are_never_painted(recorder):
     # a real audio stream is far above the threshold and must still be painted
     audio = torch.ones(1, 32, 2, 207)
     assert _paintable([geometry, audio], True) == [0, 1]
+
+
+# --- the step window -------------------------------------------------------
+#
+# start_at_step and end_at_step sample part of the schedule, which is what lets
+# the node be one half of a split run: early steps here, a latent upscaler in
+# between, the rest in a second node.
+
+
+def full_schedule(recorder, **overrides):
+    """The whole schedule as the pipeline builds it, with no window applied."""
+    run_pipeline(**overrides)
+    sigmas = recorder[0]["sigmas"].clone()
+    recorder.clear()
+    return sigmas
+
+
+def test_start_at_step_enters_the_schedule_late(recorder):
+    full = full_schedule(recorder)
+    run_pipeline(start_at_step=8)
+
+    assert len(recorder) == 1
+    assert recorder[0]["steps"] == 12
+    assert torch.equal(recorder[0]["sigmas"], full[8:])
+
+
+def test_end_at_step_stops_early_and_still_finishes_clean(recorder):
+    full = full_schedule(recorder)
+    run_pipeline(end_at_step=12)
+
+    assert recorder[0]["steps"] == 12
+    assert torch.equal(recorder[0]["sigmas"][:-1], full[:12])
+    assert float(recorder[0]["sigmas"][-1]) == 0.0, "the window's end must be a clean latent"
+
+
+def test_leftover_noise_keeps_the_schedules_own_last_sigma(recorder):
+    full = full_schedule(recorder)
+    run_pipeline(end_at_step=12, return_with_leftover_noise=True)
+
+    assert torch.equal(recorder[0]["sigmas"], full[:13])
+    assert float(recorder[0]["sigmas"][-1]) > 0.0, "the latent must still carry its noise"
+
+
+def test_leftover_noise_does_nothing_at_the_end_of_the_schedule(recorder):
+    """KSampler only zeroes a sigma it truncated, so a full run ignores the flag."""
+    kept = full_schedule(recorder, return_with_leftover_noise=True)
+    assert torch.equal(kept, full_schedule(recorder))
+
+
+def test_a_stopped_window_keeps_its_interior_boundaries(recorder):
+    """
+    Only the window's own end is brought to zero. A boundary inside it still hands
+    the next segment the sigma the schedule gave it, which is what _split_noise
+    divides by.
+    """
+    run_pipeline(end_at_step=12, sequential_stages=2)
+    first, second = recorder[0]["sigmas"], recorder[1]["sigmas"]
+
+    assert torch.equal(first[-1], second[0])
+    assert float(first[-1]) > 0.0, "an interior boundary must keep its own sigma"
+    assert float(second[-1]) == 0.0
+
+
+def test_the_two_halves_are_one_trajectory(recorder):
+    """
+    A split run has to reproduce the unsplit one: the same sigmas in the same
+    order, and the same per-segment seed, which drives ancestral and SDE draws.
+    """
+    run_pipeline(sequential_stages=2)
+    whole = [call["sigmas"].clone() for call in recorder]
+    seeds = [call["seed"] for call in recorder]
+    recorder.clear()
+
+    run_pipeline(end_at_step=10, return_with_leftover_noise=True)
+    run_pipeline(start_at_step=10, add_noise=False)
+
+    assert [call["seed"] for call in recorder] == seeds
+    for got, want in zip(recorder, whole):
+        assert torch.equal(got["sigmas"], want)
+    assert torch.equal(recorder[0]["sigmas"][-1], recorder[1]["sigmas"][0])
+
+
+def test_stages_divide_the_window_not_the_whole_schedule(recorder):
+    """
+    Two stages over the last ten steps means two stages in those ten steps. Spread
+    over the whole schedule instead, the first would sit outside the window and
+    never fire.
+    """
+    run_pipeline(start_at_step=10, sequential_stages=2)
+    assert [call["steps"] for call in recorder] == [5, 5]
+
+
+def test_shaping_stays_measured_against_the_whole_trajectory(recorder):
+    """
+    A node running the tail of a schedule is at the fine end of coarse_to_fine,
+    not starting a fresh coarse-to-fine sweep of its own.
+    """
+    from snk.pipelines.standard import _shader_events
+
+    args = (2, 0, 0.5, "uniform", "uniform", 1, False, "coarse_to_fine")
+    _, early = _shader_events(20, 0, 10, *args)
+    _, late = _shader_events(20, 10, 20, *args)
+
+    assert all(e[2]["scale_multiplier"] < 1.0 for stage in early.values() for e in stage)
+    assert all(e[2]["scale_multiplier"] > 1.0 for stage in late.values() for e in stage)
+
+
+def test_an_empty_window_returns_the_latent_untouched(recorder):
+    samples = torch.randn(1, 4, 16, 16)
+    out = run_pipeline(latent={"samples": samples, "batch_index": [0]},
+                       start_at_step=12, end_at_step=8)
+
+    assert recorder == [], "nothing to denoise, so nothing to sample"
+    assert torch.equal(out["samples"], samples)
+    assert out["batch_index"] == [0]
+
+
+def test_a_schedule_with_no_steps_returns_the_latent(recorder):
+    """denoise 0.0 builds an empty schedule; the sampler would index off the end of it."""
+    samples = torch.randn(1, 4, 16, 16)
+    out = run_pipeline(latent={"samples": samples}, denoise=0.0)
+
+    assert recorder == []
+    assert torch.equal(out["samples"], samples)
+
+
+# --- add_noise -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["eps", "av"])
+def test_add_noise_off_hands_the_sampler_zeros(recorder, kind):
+    model = FakeModel(kind)
+    latent = {"samples": model.empty_latent() if kind == "av" else torch.randn(1, 4, 16, 16)}
+    run_pipeline(model=model, latent=latent, start_at_step=10, add_noise=False)
+
+    noise = recorder[0]["noise"]
+    for stream in (noise if isinstance(noise, list) else [noise]):
+        assert not stream.any(), "every stream must arrive unnoised"
+
+
+def test_add_noise_off_skips_the_opening_shader(recorder):
+    """Painting the shader onto zeros would add back exactly what was turned off."""
+    run_pipeline(latent={"samples": torch.randn(1, 4, 16, 16)}, start_at_step=10,
+                 add_noise=False, shader_strength=0.8)
+
+    assert not recorder[0]["noise"].any()
+
+
+def test_add_noise_off_still_paints_later_boundaries(recorder):
+    """Their noise comes out of the latent, so there is something real to paint."""
+    run_pipeline(latent={"samples": torch.randn(1, 4, 16, 16)}, add_noise=False,
+                 injection_stages=1, shader_strength=0.6)
+
+    assert len(recorder) == 2
+    assert not recorder[0]["noise"].any()
+    assert recorder[1]["noise"].any(), "the injection boundary must still reach the run"
+
+
+def test_add_noise_off_does_not_refuse_a_latent_it_will_never_paint(recorder):
+    """
+    A sequence latent is refused because the shader cannot paint it -- but with
+    add_noise off and no interior boundary, nothing was going to be painted.
+    """
+    run_pipeline(model=FakeModel("flow"), latent={"samples": torch.ones(1, 64, 1024)},
+                 add_noise=False, start_at_step=10, shader_strength=0.5)
+
+    assert len(recorder) == 1
+
+
+# --- progress --------------------------------------------------------------
+
+
+def test_the_progress_bar_counts_the_windows_own_steps(recorder):
+    """
+    ProgressBar takes its total from the callback, so reporting absolute positions
+    would leave a windowed run starting part-filled and stopping short of the end.
+    """
+    reported = []
+
+    def fake_prepare_callback(model, steps, x0_output_dict=None):
+        return lambda step, x0, x, total: reported.append((step, total))
+
+    with mock.patch.object(latent_preview, "prepare_callback", fake_prepare_callback):
+        run_pipeline(end_at_step=12, disable_pbar=False)
+
+    assert reported[-1] == (11, 12), "the last step of the window must fill the bar"
+
+
+@pytest.mark.parametrize("start,end,leftover", [
+    (0, 20, False), (0, 12, False), (0, 12, True),
+    (8, 20, False), (8, 12, False), (8, 12, True), (8, 20, True),
+])
+def test_the_window_slices_exactly_what_ksampler_advanced_slices(recorder, start, end, leftover):
+    """
+    Against ComfyUI's own KSampler, not a restatement of ours. A split that puts
+    this node on one side and a stock KSampler (Advanced) on the other only joins
+    up if both index the schedule the same way -- including the zeroed last sigma,
+    and including the cases where the flag is supposed to do nothing.
+    """
+    import comfy.samplers
+
+    model = FakeModel("eps")
+    core = []
+
+    def capture(model_, noise, positive, negative, cfg, device, sampler, sigmas, *args, **kwargs):
+        core.append(sigmas.clone())
+        return kwargs["latent_image"]
+
+    with mock.patch.object(comfy.samplers, "sample", capture):
+        sampler = comfy.samplers.KSampler(model, steps=20, device="cpu", sampler="euler",
+                                          scheduler="normal", denoise=1.0, model_options={})
+        sampler.sample(torch.zeros(1, 4, 16, 16), [], [], cfg=7.0,
+                       latent_image=torch.zeros(1, 4, 16, 16),
+                       start_step=start, last_step=end, force_full_denoise=not leftover)
+
+    run_pipeline(model=model, start_at_step=start, end_at_step=end,
+                 return_with_leftover_noise=leftover)
+
+    assert len(recorder) == 1, "one stage, so one segment to compare"
+    assert torch.equal(recorder[0]["sigmas"], core[0])

@@ -239,8 +239,26 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
 5.  **Explore**: Use the "📊 Show Shader Matrix" button (or Alt+M) to better understand the noise patterns you're creating.
 6.  **Generate**: Queue your prompt and witness the shader-guided generation!
 
-> [!TIP]
-> Fix your `seed` first, then start from the `explore` preset or a `shader_strength` around 0.1-0.3 with a single `sequential_stage`, and walk outward from there. Each small step can still land on a noticeably different neighbour, by an amount that depends on the model and the seed, so compare neighbouring strengths rather than expecting a smooth fade. Try `noise_scale` early: larger features let the shader show more, smaller ones let the model absorb it into the picture.
+### Splitting a run
+
+`start_at_step` and `end_at_step` sample part of the schedule instead of all of it,
+the way `KSampler (Advanced)` does, so one node can take the early steps, something
+else can work on the latent, and a second node can finish it.
+
+That is how MiniMax H3 gets its faces fixed: the video stream goes through a latent
+upscaler between the halves. An upscaler needs a finished latent to work on, so the
+first half ends clean -- `return_with_leftover_noise` off -- and the second adds its
+own noise again with `add_noise` on. Both halves still get their shader noise.
+`example_workflows/MiniMaxH3_Split_Upscale_SNK_Direct.json` is the whole thing wired up.
+
+With nothing in between, do the opposite: `return_with_leftover_noise` on in the
+first half and `add_noise` off in the second. The pair then continues one trajectory
+exactly, with nothing re-noised at the join. That leaves the shader nothing to paint
+at the second half's opening, so raise `injection_stages` or `sequential_stages` to
+give it an interior boundary to enter at.
+
+Stages divide the steps a node actually samples, not the whole schedule, so two
+sequential stages over a three-step window are two stages in those three steps.
 
 ## 🧠 Latent Space Navigation
 
@@ -266,6 +284,10 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 | **`sampler_name`**           | E.g., `euler_ancestral`, `dpm_2_ancestral`.                                                                          | `euler_ancestral` |
 | **`scheduler`**              | E.g., `normal`, `beta`, `simple`.                                                                   | `beta`            |
 | **`denoise`**                | Denoising strength.                                                                                        | `1.0`             |
+| **`add_noise`**              | Make the noise the run starts from. Off, the latent is taken to already carry its own from an earlier sampler. | `true`            |
+| **`start_at_step`**          | Enter the schedule here instead of at the first step.                                                      | `0`               |
+| **`end_at_step`**            | Stop after this step. Anything at or past `steps` runs to the end.                                         | `10000`           |
+| **`return_with_leftover_noise`** | Hand the latent over still noisy when `end_at_step` stopped the run early, instead of finishing it cleanly. | `false`           |
 | **`sequential_stages`**      | Number of shader stages applied sequentially.                                                              | `1`               |
 | **`injection_stages`**       | Number of shader stages injected at specific steps.                                                        | `0`               |
 | **`shader_strength`**        | Global strength of shader noise influence (0.0 to disable).                                                | `0.3`             |

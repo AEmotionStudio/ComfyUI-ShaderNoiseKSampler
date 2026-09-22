@@ -132,3 +132,59 @@ def test_the_node_offers_every_registered_generator():
                  if not any(get_shader(name) is get_shader(other) and other in advertised
                             for other in advertised)}
     assert not canonical - advertised, f"registered but unreachable from the node: {sorted(canonical - advertised)}"
+
+
+# --- the step window reaches the pipeline ----------------------------------
+
+WINDOW_INPUTS = ["add_noise", "start_at_step", "end_at_step", "return_with_leftover_noise"]
+
+
+def test_the_window_inputs_come_last():
+    """
+    ComfyUI maps saved widget values by position, so a new input anywhere but the
+    tail re-reads every stored value in every saved workflow. Walk appends its own
+    widgets to `required`, which the frontend orders ahead of all of `optional`, so
+    the tail of Direct's optional block is the last slot on both nodes.
+    """
+    from snk.shader_noise_walk import ShaderNoiseWalk
+
+    optional = list(DirectShaderNoiseKSampler.INPUT_TYPES()["optional"])
+    assert optional[-4:] == WINDOW_INPUTS
+    assert list(ShaderNoiseWalk.INPUT_TYPES()["optional"]) == optional
+
+
+def test_the_window_defaults_sample_the_whole_schedule(sampler_calls):
+    """Every default has to be a no-op, or it changes what saved workflows produce."""
+    spec = DirectShaderNoiseKSampler.INPUT_TYPES()["optional"]
+    defaults = {name: spec[name][1]["default"] for name in WINDOW_INPUTS}
+    assert defaults == {"add_noise": True, "start_at_step": 0, "end_at_step": 10000,
+                        "return_with_leftover_noise": False}
+
+    run_node()
+    whole = sampler_calls[0]["sigmas"].clone()
+    sampler_calls.clear()
+
+    run_node(**defaults)
+    assert torch.equal(sampler_calls[0]["sigmas"], whole)
+
+
+def test_the_node_forwards_the_window_to_the_pipeline():
+    from snk import direct_shader_ksampler
+
+    with mock.patch.object(direct_shader_ksampler.standard_pipeline, "run") as run:
+        run.return_value = {"samples": torch.zeros(1, 4, 16, 16)}
+        run_node(add_noise=False, start_at_step=4, end_at_step=7,
+                 return_with_leftover_noise=True)
+
+    assert {key: run.call_args.kwargs[key] for key in WINDOW_INPUTS} == {
+        "add_noise": False, "start_at_step": 4, "end_at_step": 7,
+        "return_with_leftover_noise": True,
+    }
+
+
+def test_legacy_mode_ignores_the_window(sampler_calls):
+    """The frozen path predates it; asking for a window there must not fail the run."""
+    run_node(sampling_mode="legacy", start_at_step=5, end_at_step=10,
+             return_with_leftover_noise=True)
+
+    assert sampler_calls and all(call["sigmas"] is None for call in sampler_calls)

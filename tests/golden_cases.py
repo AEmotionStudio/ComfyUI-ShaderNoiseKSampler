@@ -30,6 +30,7 @@ NODE_DEFAULTS = dict(
     sampling_mode="standard", preset="custom", travel_mode="walk", normalize_strength=True,
     stage_progression="uniform", shade_non_spatial=False, sequential_distribution="linear_decrease",
     injection_distribution="linear_decrease", fast_high_channel_noise=False,
+    add_noise=True, start_at_step=0, end_at_step=10000, return_with_leftover_noise=False,
 )
 
 # Keys that describe the test setup rather than node inputs.
@@ -57,6 +58,12 @@ CASES = {
     "image_spectral": dict(shader_type="spectral", noise_scale=1.5, octaves=2.0),
     "video_spectral": dict(kind="flow", video=True, shader_type="spectral",
                            use_temporal_coherence=True, sequential_stages=2),
+    # The two halves of a split run, the shape a latent upscaler needs. The first
+    # stops early and keeps its noise; the second picks the trajectory up without
+    # making any, so its shader can only enter at the injection boundary.
+    "image_split_first_half": dict(end_at_step=5, return_with_leftover_noise=True),
+    "image_split_second_half": dict(start_at_step=5, add_noise=False, injection_stages=1,
+                                    latent="random"),
 }
 
 CUSTOM_SIGMAS = torch.tensor([14.6, 9.0, 6.0, 4.0, 2.7, 1.8, 1.1, 0.6, 0.3, 0.1, 0.0])
