@@ -57,6 +57,33 @@ so the first step away from strength 0 is only as large as the shader makes it.
   batched call, and leave the global RNG alone. Like `spectral`, their strengths are
   **not** calibrated against real prompts the way the first four are.
 
+  Draw cost and effective channel rank on `walk`, from `verification/benchmark_draw.py`
+  (CPU, 4 threads, octaves 3), with `domain_warp` for reference:
+
+  | type | H3 608x352/56f | H3 1344x768/124f | LTXV 128ch |
+  |---|---|---|---|
+  | `domain_warp` | 0.36s, 23.2/24 | 1.49s, 23.4/24 | 0.12s, 81/128 |
+  | `gaussian` | 0.01s, 24.0/24 | 0.07s, 24.0/24 | 0.01s, 125/128 |
+  | `fractal` | 0.15s, 23.4/24 | 0.54s, 23.7/24 | 0.04s, 64/128 |
+  | `perlin` | 0.62s, 23.4/24 | 2.50s, 23.7/24 | 0.18s, 66/128 |
+  | `heterogeneous_fbm` | 0.20s, 23.4/24 | 0.73s, 23.7/24 | 0.06s, 64/128 |
+  | `interference` | 0.25s, 23.7/24 | 0.89s, 23.8/24 | 0.07s, 84/128 |
+  | `projection_3d` | 0.31s, 23.6/24 | 1.31s, 23.8/24 | 0.09s, 76/128 |
+  | `cellular` | 0.74s, 23.9/24 | 3.01s, 23.9/24 | 0.21s, 94/128 |
+  | `waves` | 0.15s, 23.9/24 | 0.55s, 24.0/24 | 0.04s, 97/128 |
+
+  `cellular` is the dearest, at twice `domain_warp`: 27 neighbouring cells per pixel on
+  a clip. The five existing types draw exactly what they did before.
+
+  Measured on Krea 2 (one prompt, three seeds, images only; the table and the sheets
+  are in HANDOFF under "Measured on Krea 2"): `gaussian` moves the picture less than
+  half as far as any structured type and never leaves its seed, which is what a control
+  should do. `fractal`, `heterogeneous_fbm`, `cellular` and `projection_3d` behave like
+  `domain_warp`, re-composing the scene from 0.25 without drawing their pattern into
+  it, the two FBMs with more colour. `waves`, `interference` and `perlin` get drawn:
+  from about 0.5 their bands appear as striped fabric and backdrop, `waves` soonest and
+  hardest, so their useful range on that model sits below 0.5.
+
   Shared underneath: `shaders/fbm.py` (the draw-and-fill skeleton every scalar-field
   type uses, an FBM over the shared simplex, `simplex_warp`), `lattice_hash` and the
   four-corner `simplex_3d_full` in `shaders/simplex.py` (the latter moved verbatim

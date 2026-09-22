@@ -916,6 +916,48 @@ format, a real dual-shift `ModelSamplingAV` and `MiniMaxH3`'s own
 
 ---
 
+## Measured on Krea 2: the eight new types
+
+One prompt (the user's own Krea 2 workflow, a woman on a red elephant, 1024x1024,
+8 steps at cfg 1.0, `er_sde`/`beta57`, the Krea2 rebalance node on the positive),
+three seeds, `walk`, one stage, `multiply` with normalisation on, octaves 2, warp
+0.7, and strengths 0.25 / 0.5 / 0.75, with `domain_warp` alongside as the calibrated
+reference. Images only. Recorded by `verification/blend/drive.py krea2 --label types
+--shader-types ...` and read by `analyze.py`; the sheets are at
+`~/ComfyUI/output/snk_measure/sheets/krea2_types_*.png`. Every type's CPU field
+matched the server's CUDA field to within 8e-06.
+
+Distances in towns (the mean image distance between two seeds' strength-0 results,
+0.120 here). `home` below 1 means the run is still nearer its own seed's picture than
+the other seeds'; `overlap` is the correlation between the latent change and the
+field that caused it, against a chance level of 0.02 to 0.09.
+
+| type | far 0.25 | far 0.5 | far 0.75 | home 0.5 | overlap 0.75 | what the sheets show |
+|---|---|---|---|---|---|---|
+| `gaussian` | 0.24 | 0.35 | 0.54 | 0.34 | 0.00 | the control: the same picture with small changes at every strength; it moves less than half as far as any structured type, and never leaves its seed |
+| `domain_warp` | 1.03 | 1.34 | 1.51 | 0.96 | +0.03 | re-composes from 0.25, stays a coherent painting to 0.75 |
+| `cellular` | 1.34 | 1.70 | 1.77 | 0.96 | +0.03 | re-composes hardest at 0.25 of all of them; the cells are never drawn, the picture stays photographic |
+| `projection_3d` | 1.41 | 1.81 | 1.77 | 0.99 | +0.07 | like cellular: strong re-composition, no visible pattern |
+| `fractal` | 1.52 | 1.74 | 1.88 | 0.98 | +0.11 | re-composes, and from 0.5 the background turns to paint texture and cloth goes to saturated colour fields; the field imprints most |
+| `heterogeneous_fbm` | 1.37 | 1.68 | 1.77 | 0.96 | +0.11 | as fractal, with the colour fields arriving on one seed at 0.5 and two at 0.75 |
+| `perlin` | 1.12 | 1.35 | 1.56 | 0.99 | +0.10 | gentler at 0.25; at 0.5 one seed's cloth becomes rainbow bands, the pattern drawn in the prompt's material |
+| `interference` | 0.88 | 1.42 | 1.72 | 0.96 | +0.04 | the gentlest structured type at 0.25; at 0.5 striped fabrics and paint splashes, at 0.75 bold colour blocks on one seed |
+| `waves` | 0.69 | 1.70 | 1.88 | 0.97 | +0.07 | barely moves at 0.25, then the pattern takes over: rainbow wavefronts across background and cloth on two of three seeds at 0.5 and 0.75 |
+
+Three groups, then. `gaussian` is the near end of the road on its own. The FBM
+family, `cellular` and `projection_3d` behave like `domain_warp`, re-composing the
+scene without drawing their pattern into it, `fractal` and `heterogeneous_fbm` with
+more colour. `waves`, `interference` and `perlin` get drawn: their fields carry
+straight bands, and the model paints those bands as fabric and backdrop once they are
+strong enough, `waves` soonest and hardest. The step from 0.25 to 0.5 is where that
+happens (road 1.37 towns for `waves`, 1.26 for `interference`, against 1.03 for
+`fractal`), so for those three the useful range on this model sits below 0.5.
+
+Same caveats as every table in this file: one prompt, three seeds, one model. The
+presets' strengths were calibrated with `domain_warp` and do not transfer; the
+`explore` preset at 0.3 is plausibly right for the re-composing group and too much
+for `waves`.
+
 ## Not on this list, deliberately
 
 **`core/sampler.py`, `core/blending.py` and `core/transforms.py` are uncalled by
