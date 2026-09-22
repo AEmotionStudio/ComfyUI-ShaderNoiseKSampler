@@ -51,6 +51,10 @@ from .shaders.gaussian import (
     GaussianNoiseGenerator,
     generate_gaussian_tensor,
 )
+from .shaders.interference import (
+    InterferenceNoiseGenerator,
+    generate_interference_tensor,
+)
 from .shaders.heterogeneous_fbm import (
     HeterogeneousFBMGenerator,
     generate_heterogeneous_fbm_tensor,
