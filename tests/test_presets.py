@@ -33,7 +33,7 @@ def test_the_modes_are_ordered_by_how_wide_they_leave_the_noise(shape):
 
 
 @pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise",
-                                         "temporal_coherent", "gaussian", "fractal", "perlin"])
+                                         "temporal_coherent", "gaussian", "fractal", "perlin", "heterogeneous_fbm"])
 def test_jump_collapses_every_generator_not_just_the_narrow_ones(shader_type):
     """
     jump has to mean the same thing whatever shader is chosen, otherwise

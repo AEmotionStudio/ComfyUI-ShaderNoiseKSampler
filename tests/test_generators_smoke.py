@@ -13,7 +13,7 @@ import pytest
 import torch
 
 SHADER_TYPES = ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent", "spectral",
-                "gaussian", "fractal", "perlin"]
+                "gaussian", "fractal", "perlin", "heterogeneous_fbm"]
 
 
 def make_params(octaves=1, channels=4, color_scheme="none", shape_type="none", temporal=False):
