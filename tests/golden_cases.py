@@ -54,6 +54,11 @@ CASES = {
     # the generators added later can share it; this pins its output across the move.
     "video_temporal_coherent": dict(kind="flow", video=True, shader_type="temporal_coherent",
                                     use_temporal_coherence=True, sequential_stages=2),
+    # One image and one video case per generator added after spectral, the video
+    # one with temporal coherence, which is where each differs most from a redraw.
+    "image_gaussian": dict(shader_type="gaussian"),
+    "video_gaussian": dict(kind="flow", video=True, shader_type="gaussian",
+                           use_temporal_coherence=True, sequential_stages=2),
     # The spectral generator builds its field from a frequency band rather than
     # per pixel, so it shares none of the others' code below core.shader_noise.
     # One image case and one video case, the video one with temporal coherence

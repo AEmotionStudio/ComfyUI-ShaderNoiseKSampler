@@ -25,8 +25,8 @@ from .shaders.registry import (
 )
 
 # Importing the generator modules runs their @shader_generator decorators,
-# which register "domain_warp", "tensor_field", "curl_noise" and
-# "temporal_coherent". Only the aliases below are registered here.
+# which is what registers every shader type. Only the aliases below are
+# registered here.
 from .shaders.domain_warp import (
     DomainWarpGenerator,
     generate_domain_warp_tensor,
@@ -46,6 +46,10 @@ from .shaders.temporal_coherent_noise import (
 from .shaders.spectral import (
     SpectralNoiseGenerator,
     generate_spectral_tensor,
+)
+from .shaders.gaussian import (
+    GaussianNoiseGenerator,
+    generate_gaussian_tensor,
 )
 
 register_shader("curl", CurlNoiseGenerator, {

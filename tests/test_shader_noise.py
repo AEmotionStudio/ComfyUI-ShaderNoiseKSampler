@@ -103,7 +103,8 @@ def test_temporal_coherence_holds_the_seed():
     assert not torch.allclose(without, with_tc)
 
 
-@pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent"])
+@pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent",
+                                         "gaussian"])
 def test_every_registered_generator_is_usable(shader_type):
     noise = generate((1, 4, 16, 16), {**PARAMS, "shader_type": shader_type}, shader_type, 8888, CPU)
     assert tuple(noise.shape) == (1, 4, 16, 16)
@@ -123,7 +124,8 @@ def test_unknown_shader_type_raises_a_clear_error():
 
 # --- channel width --------------------------------------------------------------------
 
-ALL_SHADERS = ["domain_warp", "temporal_coherent", "curl_noise", "tensor_field", "spectral"]
+ALL_SHADERS = ["domain_warp", "temporal_coherent", "curl_noise", "tensor_field", "spectral",
+               "gaussian"]
 
 
 @pytest.mark.parametrize("shape", [(1, 4, 48, 48), (1, 16, 32, 32), (1, 24, 5, 16, 16)])
@@ -139,7 +141,7 @@ def test_generators_span_their_channel_axis(shape, shader_type):
     assert rank > shape[1] * 0.6, f"{shader_type}: rank {rank:.2f} of {shape[1]}"
 
 
-@pytest.mark.parametrize("shader_type", ["domain_warp", "temporal_coherent", "curl_noise"])
+@pytest.mark.parametrize("shader_type", ["domain_warp", "temporal_coherent", "curl_noise", "gaussian"])
 def test_a_latent_wider_than_the_basis_still_spans_the_basis(shader_type):
     """Past CHANNEL_BASIS the channels are mixtures, which must not re-collapse the draw."""
     rank = effective_channel_rank(generate((1, 128, 3, 8, 8), PARAMS, shader_type, 8888, CPU))
@@ -264,7 +266,7 @@ def test_a_collapse_does_not_render_the_draw_it_discards(shape, shader_type, mon
     assert set(calls) == {1}, f"a collapse rendered a {max(calls)}-channel draw it cannot use"
 
 
-@pytest.mark.parametrize("shader_type", ["domain_warp", "curl_noise", "temporal_coherent"])
+@pytest.mark.parametrize("shader_type", ["domain_warp", "curl_noise", "temporal_coherent", "gaussian"])
 def test_the_hash_generators_do_not_reseed_the_global_rng(shader_type, monkeypatch):
     """
     These three are pure coordinate hashes of their seed argument, so the

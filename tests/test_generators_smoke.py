@@ -12,7 +12,8 @@ import itertools
 import pytest
 import torch
 
-SHADER_TYPES = ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent"]
+SHADER_TYPES = ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent", "spectral",
+                "gaussian"]
 
 
 def make_params(octaves=1, channels=4, color_scheme="none", shape_type="none", temporal=False):
