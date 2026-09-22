@@ -14,6 +14,20 @@ were optional are now defaults, and blending keeps the base noise's own statisti
 so the first step away from strength 0 is only as large as the shader makes it.
 
 ### Added
+- **`Shader Noise Source`, a node that outputs a `NOISE` object**, so shader noise can
+  start a run driven by `SamplerCustomAdvanced` -- with the guider, sampler and sigma
+  schedule chosen separately. It answers a standing request for a custom-sampling
+  version of the node, and reaches guidance the KSampler-shaped inputs cannot express:
+  `BasicGuider` with no negative and no CFG, `DualCFGGuider`, guiders from other packs.
+  `AddNoise` consumes one too.
+  `example_workflows/MiniMaxH3_CustomSampling_SNK_Source.json` wires it to a
+  `BasicGuider`, on core nodes and this pack and nothing else.
+
+  It is the same shader inputs and exactly the noise the sampler starts from, pinned
+  bit-for-bit against the Direct node so a seed means the same thing on both. It does
+  not do stages: those re-enter the shader at segment boundaries partway through a run,
+  and a `NOISE` object is asked for noise once, before sampling begins.
+
 - **The sampler can run half a schedule**, through four inputs that mirror
   `KSampler (Advanced)`: `add_noise`, `start_at_step`, `end_at_step` and
   `return_with_leftover_noise`. A generation can now be split, with something else
@@ -53,6 +67,12 @@ so the first step away from strength 0 is only as large as the shader makes it.
   are. Treat the presets' numbers as not applying to it yet.
 
 ### Fixed
+- **`stage_progression` said it needed more than one stage to do anything, and that was
+  not true.** A single stage sits at the start of the trajectory and is shaped from
+  there, so `coarse_to_fine` was quietly drawing it at half the zoom and one octave
+  down -- which is how the `roam` and `video` presets have always behaved. Only the
+  tooltip changed; the sampling is what it was.
+
 - **The first frame of a video was drawn from a different noise function than the
   rest.** `domain_warp` chose between a 2D and a 3D field by testing `time != 0`,
   and frame 0 is the only frame whose time is exactly 0, so it alone took the 2D

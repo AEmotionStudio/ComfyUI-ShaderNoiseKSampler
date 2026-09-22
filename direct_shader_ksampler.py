@@ -1,5 +1,5 @@
 import comfy.sample
-from .shader_params_reader import get_shader_params, ShaderParamsReader
+from .shader_params_reader import build_shader_params, get_shader_params
 from .shader_noise_ksampler import ShaderNoiseKSampler, get_visualizer, set_debug_level
 from .core import presets as preset_table
 from .pipelines import standard as standard_pipeline
@@ -47,7 +47,7 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
                 "injection_distribution": (["uniform", "linear_decrease", "linear_increase", "gaussian", "first_stronger", "last_stronger"], {"default": "linear_decrease", "tooltip": "How shader strength is distributed across injection stages"}),
                 "fast_high_channel_noise": ("BOOLEAN", {"default": False, "tooltip": "Use a faster, simplified noise generation method for models with many channels (>16), like LTXV"}),
                 "preset": (["custom", "nudge", "explore", "roam", "video", "jump", "stamp"], {"default": "custom", "tooltip": "Pick one and go. A preset sets shader_type, shader_strength, blend_mode, travel_mode, stage_progression and shape_type together, and turns normalize_strength on so its strength number means the same thing in any blend mode -- those settings only mean anything in combination. nudge: the smallest visible change. explore: the recommended start. roam: further from the seed, where the shader visibly reshapes the picture and the prompt still reads. video: the 4D time-aware shader, for video latents. jump: destination set by the shader, texture rather than a scene. stamp: jump with a shape mask, so the mask itself is drawn in your prompt's material. custom leaves every widget alone. The Walk node keeps whichever parameter it is ramping."}),
-                "stage_progression": (["uniform", "coarse_to_fine", "fine_to_coarse"], {"default": "uniform", "tooltip": "Vary the shader across the run instead of drawing the same one at every stage. The trajectory is not uniform -- early steps settle composition, late steps settle detail -- but every stage has always used the same zoom. coarse_to_fine starts zoomed in on large features with fewer octaves and ends zoomed out on small ones with more, so the noise matches what each part of the run is deciding; fine_to_coarse reverses it. The adjustment spans 0.5x to 2x your noise_scale and plus or minus one octave, centred on your widget values, so uniform is unchanged. Needs more than one stage to do anything. Standard sampling only."}),
+                "stage_progression": (["uniform", "coarse_to_fine", "fine_to_coarse"], {"default": "uniform", "tooltip": "Vary the shader across the run instead of drawing the same one at every stage. The trajectory is not uniform -- early steps settle composition, late steps settle detail -- but every stage has always used the same zoom. coarse_to_fine starts zoomed in on large features with fewer octaves and ends zoomed out on small ones with more, so the noise matches what each part of the run is deciding; fine_to_coarse reverses it. The adjustment spans 0.5x to 2x your noise_scale and plus or minus one octave, centred on your widget values, so uniform is unchanged. The ramp needs more than one stage, but a single stage is not left alone: it sits at the start of the trajectory, so coarse_to_fine draws it zoomed in and fine_to_coarse zoomed out. Standard sampling only."}),
                 "shade_non_spatial": ("BOOLEAN", {"default": False, "tooltip": "Also paint the streams that have no picture in them. Off, the shader touches only the spatial stream and everything else keeps the Gaussian noise ComfyUI gave it -- on MiniMax H3 and LTXAV that means the audio is left alone, and sequence latents (Stable Audio, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D, TripoSplat) are refused outright. On, an audio stream is painted across stereo x time, and a sequence latent is painted as a single row. Video and audio are denoised together on H3, so this reaches the picture too. Largely unexplored: audio has no busy scene for structure to blend into, so the shader changes the sound at far lower strength than it changes the picture -- on H3 the sound measurably changed by 0.05. Streams too small to be content are skipped, so TripoSplat's camera parameters are left alone. Standard sampling only."}),
                 "travel_mode": (["walk", "drift", "jump"], {"default": "walk", "tooltip": "How the shader moves you. walk: the seed anchors the picture and the shader steers around it -- the wide, coherent range this node is for, and the right answer unless you want otherwise. drift: halfway, a stronger push over a narrower range. jump: the shader's parameters set the destination and the seed stops mattering; the result is a texture or pattern field in your prompt's material rather than a scene, because the model is being handed noise it was never trained to denoise. The difference is how many independent directions the noise spans across the latent's channels: walk keeps the generator's own, one field per channel; drift mixes them down to four; jump folds them into one. On a four-channel latent such as SD 1.5, four is all there is, so drift and walk come out the same. Standard sampling only."}),
                 "normalize_strength": ("BOOLEAN", {"default": True, "tooltip": "Make shader_strength mean the same thing in every blend mode. Untouched, the modes differ by up to twenty-three times at the same setting: at 0.5 normal hands the sampler 0.71 of the shader and difference only 0.03. With this on, strength is read on multiply's scale, so the default mode is unchanged and the others are rescaled to match -- soft_light needs about 1.6x its old number, add and hard_light about half. difference cannot reach the top of the scale at all and saturates. On by default. On multiply it changes nothing, so the only reason to turn it off is to reproduce a workflow saved before it was on, and only if that workflow used another blend mode. Standard sampling only."}),
@@ -97,52 +97,11 @@ class DirectShaderNoiseKSampler(ShaderNoiseKSampler):
         debugger = set_debug_level(int(debug_level.split("-")[0]))
         get_visualizer()
 
-        # Start from the saved params file, then override with this node's inputs.
-        shader_params = get_shader_params()
-
-        # Every generator reads a different spelling of these, so set all variants.
-        shader_params["shader_type"] = shader_type
-        shader_params["shaderType"] = shader_type
-
-        shader_params["shape_type"] = shape_type
-        shader_params["shaderShapeType"] = shape_type
-
-        shader_params["colorScheme"] = color_scheme
-        shader_params["color_scheme"] = color_scheme
-
-        shader_params["scale"] = noise_scale
-        shader_params["shaderScale"] = noise_scale
-
-        shader_params["octaves"] = float(octaves)
-        shader_params["shaderOctaves"] = float(octaves)
-
-        shader_params["warp_strength"] = warp_strength
-        shader_params["shaderWarpStrength"] = warp_strength
-
-        shader_params["shapemaskstrength"] = shape_mask_strength
-        shader_params["shaderShapeStrength"] = shape_mask_strength
-        shader_params["shapeMaskStrength"] = shape_mask_strength
-        shader_params["shape_mask_strength"] = shape_mask_strength
-        shader_params["shape_strength"] = shape_mask_strength
-
-        shader_params["phase_shift"] = phase_shift
-        shader_params["shaderPhaseShift"] = phase_shift
-
-        shader_params["intensity"] = color_intensity
-        shader_params["shaderColorIntensity"] = color_intensity
-
-        shader_params["time"] = shader_params.get("time", 0.0)
-        shader_params["base_seed"] = seed
-        shader_params["useTemporalCoherence"] = use_temporal_coherence
-        shader_params["temporal_coherence"] = use_temporal_coherence
-        shader_params["fast_high_channel_noise"] = fast_high_channel_noise
-        shader_params["visualization_type"] = shader_params.get("visualization_type", 3)
-
-        # Clamp octaves, seeds and enum values before they reach noise generation.
-        shader_params = ShaderParamsReader.validate_and_sanitize_params(shader_params)
-        # Sanitising truncates octaves to an integer; the standard pipeline
-        # interpolates between integer renders, so keep the requested value.
-        shader_params["octaves"] = float(octaves)
+        shader_params = build_shader_params(
+            get_shader_params(), seed, shader_type, shape_type, color_scheme, noise_scale,
+            octaves, warp_strength, shape_mask_strength, phase_shift, color_intensity,
+            use_temporal_coherence, fast_high_channel_noise,
+        )
 
         if debugger.enabled:
             print(f"🔧 Direct shader parameters: type={shader_type} shape={shape_type} colour={color_scheme} "

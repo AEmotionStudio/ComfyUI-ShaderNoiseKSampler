@@ -218,6 +218,67 @@ def _apply_events(
     return noise
 
 
+def _paint(
+    noise: torch.Tensor,
+    events: Sequence[Tuple[float, int, Dict[str, float]]],
+    shader_params: Dict[str, Any],
+    shader_type: str,
+    blend_mode: str,
+    noise_transform: str,
+    device: torch.device,
+    dtype: torch.dtype,
+    temporal_coherence: bool,
+    normalize_strength: bool,
+    travel_mode: str,
+    shade_non_spatial: bool,
+) -> torch.Tensor:
+    """Mix one boundary's shader stages into every paintable stream of `noise`."""
+    streams = _streams(noise)
+    for index in _paintable(streams, shade_non_spatial):
+        streams[index] = _apply_events(
+            streams[index].to(device), events, shader_params, shader_type, blend_mode,
+            noise_transform, device, dtype, temporal_coherence, normalize_strength,
+            travel_mode, shade_non_spatial, stream_seed_offset=index * _STREAM_SEED_STRIDE,
+        )
+    return _rebuild(noise, streams)
+
+
+def starting_noise(
+    latent: Dict[str, Any],
+    seed: int,
+    shader_strength: float,
+    shader_params: Dict[str, Any],
+    shader_type: str,
+    blend_mode: str,
+    noise_transform: str,
+    use_temporal_coherence: bool = False,
+    normalize_strength: bool = True,
+    travel_mode: str = presets.DEFAULT_TRAVEL_MODE,
+    shade_non_spatial: bool = False,
+    stage_progression: str = "uniform",
+) -> torch.Tensor:
+    """
+    The noise a run starts from: ComfyUI's own, with one shader stage painted in.
+
+    Exactly what `run` paints at its opening boundary under the node's default single
+    sequential stage, lifted out so a NOISE source can hand the same tensor to any
+    custom sampler. There is no schedule here, so the one stage sits at the start of
+    the trajectory and `stage_progression` shapes it from there -- which is what `run`
+    does with a single stage too, and what keeps a preset meaning the same thing on
+    both nodes.
+    """
+    samples = latent["samples"]
+    primary = _streams(samples)[0]
+
+    # No pre-flight refusal for an unpaintable latent, unlike `run`: there is no
+    # sampling here to protect, and the generator raises the same error one call down.
+    noise = comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
+    shaping = schedule.stage_shaping(stage_progression, 0.0)
+    return _paint(noise, [(shader_strength, seed, shaping)], shader_params, shader_type,
+                  blend_mode, noise_transform, primary.device, primary.dtype,
+                  use_temporal_coherence, normalize_strength, travel_mode, shade_non_spatial)
+
+
 def _split_noise(out, x0_internal, sigma, model_sampling, model):
     """
     Split a segment's result into (denoised estimate, its noise), in internal space.
@@ -332,15 +393,9 @@ def run(
 
     noise = (comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
              if add_noise else comfy.sample.prepare_empty_noise(samples))
-    noise_streams = _streams(noise)
-    for index in _paintable(noise_streams, shade_non_spatial):
-        noise_streams[index] = _apply_events(
-            noise_streams[index].to(device), opening, shader_params,
-            shader_type, blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-            normalize_strength, travel_mode, shade_non_spatial,
-            stream_seed_offset=index * _STREAM_SEED_STRIDE,
-        )
-    noise = _rebuild(samples, noise_streams)
+    noise = _paint(noise, opening, shader_params, shader_type, blend_mode, noise_transform,
+                   device, dtype, use_temporal_coherence, normalize_strength, travel_mode,
+                   shade_non_spatial)
 
     model_sampling = model.get_model_object("model_sampling")
     noise_mask = latent.get("noise_mask", None)
@@ -370,14 +425,8 @@ def run(
         current, residual = _split_noise(
             result, captured["x0"], sigmas[end], model_sampling, model
         )
-        residual_streams = _streams(residual)
-        for index in _paintable(residual_streams, shade_non_spatial):
-            residual_streams[index] = _apply_events(
-                residual_streams[index], events.get(end, []), shader_params, shader_type,
-                blend_mode, noise_transform, device, dtype, use_temporal_coherence,
-                normalize_strength, travel_mode, shade_non_spatial,
-                stream_seed_offset=index * _STREAM_SEED_STRIDE,
-            )
-        noise = _rebuild(residual, residual_streams)
+        noise = _paint(residual, events.get(end, []), shader_params, shader_type, blend_mode,
+                       noise_transform, device, dtype, use_temporal_coherence,
+                       normalize_strength, travel_mode, shade_non_spatial)
 
     return {**latent, "samples": current}

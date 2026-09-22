@@ -202,7 +202,8 @@ def recorded_sampling():
         return latent_image * 0.5 + noise * 0.1
 
     patches = [mock.patch.object(comfy.sample, "sample", fake_sample)]
-    for module_name in ("snk.direct_shader_ksampler", "snk.shader_noise_ksampler"):
+    for module_name in ("snk.direct_shader_ksampler", "snk.shader_noise_ksampler",
+                        "snk.shader_noise_source"):
         module = sys.modules.get(module_name) or importlib.import_module(module_name)
         if hasattr(module, "get_shader_params"):
             patches.append(mock.patch.object(module, "get_shader_params", lambda: dict(DEFAULT_FILE_PARAMS)))

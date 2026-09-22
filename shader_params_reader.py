@@ -1387,6 +1387,62 @@ def get_shader_params():
     """Legacy function that calls the new class method"""
     return ShaderParamsReader.get_shader_params()
 
+
+def build_shader_params(base, seed, shader_type, shape_type, color_scheme, noise_scale,
+                        octaves, warp_strength, shape_mask_strength, phase_shift,
+                        color_intensity, use_temporal_coherence, fast_high_channel_noise):
+    """
+    Write a node's shader inputs over `base`, in every spelling the generators read.
+
+    `base` is the saved params file; the node's own widgets win over it.
+    """
+    params = dict(base)
+
+    params["shader_type"] = shader_type
+    params["shaderType"] = shader_type
+
+    params["shape_type"] = shape_type
+    params["shaderShapeType"] = shape_type
+
+    params["colorScheme"] = color_scheme
+    params["color_scheme"] = color_scheme
+
+    params["scale"] = noise_scale
+    params["shaderScale"] = noise_scale
+
+    params["octaves"] = float(octaves)
+    params["shaderOctaves"] = float(octaves)
+
+    params["warp_strength"] = warp_strength
+    params["shaderWarpStrength"] = warp_strength
+
+    params["shapemaskstrength"] = shape_mask_strength
+    params["shaderShapeStrength"] = shape_mask_strength
+    params["shapeMaskStrength"] = shape_mask_strength
+    params["shape_mask_strength"] = shape_mask_strength
+    params["shape_strength"] = shape_mask_strength
+
+    params["phase_shift"] = phase_shift
+    params["shaderPhaseShift"] = phase_shift
+
+    params["intensity"] = color_intensity
+    params["shaderColorIntensity"] = color_intensity
+
+    params["time"] = params.get("time", 0.0)
+    params["base_seed"] = seed
+    params["useTemporalCoherence"] = use_temporal_coherence
+    params["temporal_coherence"] = use_temporal_coherence
+    params["fast_high_channel_noise"] = fast_high_channel_noise
+    params["visualization_type"] = params.get("visualization_type", 3)
+
+    # Clamp octaves, seeds and enum values before they reach noise generation.
+    params = ShaderParamsReader.validate_and_sanitize_params(params)
+    # Sanitising truncates octaves to an integer; the standard pipeline
+    # interpolates between integer renders, so keep the requested value.
+    params["octaves"] = float(octaves)
+    return params
+
+
 def test_params():
     """Test function to check if parameters are loading correctly"""
     params = ShaderParamsReader.get_shader_params()

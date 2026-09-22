@@ -280,6 +280,38 @@ def test_each_stream_gets_its_own_pattern(recorder):
     assert torch.isfinite(video).all() and torch.isfinite(audio).all()
 
 
+def test_matching_streams_get_their_own_field():
+    """
+    Two streams of the same shape are the only case where one field could be drawn
+    into both. Feeding identical base noise isolates the per-stream seed offset: the
+    inputs match, so anything left over in the outputs is the shader's own doing.
+    """
+    from comfy.nested_tensor import NestedTensor
+    from snk.pipelines.standard import _paint
+
+    base = torch.randn(1, 4, 16, 16, generator=torch.Generator().manual_seed(3))
+    painted = _paint(NestedTensor([base.clone(), base.clone()]), [(0.5, 8888, {})],
+                     dict(SHADER_PARAMS), "domain_warp", "multiply", "none",
+                     base.device, base.dtype, False, True, "walk", True)
+    first, second = painted.unbind()
+
+    assert not torch.allclose(first, base), "the streams must be painted at all"
+    assert not torch.allclose(first, second), "and not with the same field twice"
+
+
+def test_an_unpaintable_latent_is_refused_before_any_sampling(recorder):
+    """
+    Why the check runs up front rather than at the boundary that needs it: with
+    add_noise off nothing is painted at the opening, so the failure would otherwise
+    land after a whole segment had already been sampled.
+    """
+    with pytest.raises(UnsupportedLatentError):
+        run_pipeline(model=FakeModel("flow"), latent={"samples": torch.ones(1, 64, 1024)},
+                     shader_strength=0.5, add_noise=False, injection_stages=1)
+
+    assert recorder == [], "refused before any sampling started"
+
+
 def test_sequence_latents_are_still_refused_by_default(recorder):
     with pytest.raises(UnsupportedLatentError):
         run_pipeline(model=FakeModel("flow"), latent={"samples": torch.ones(1, 64, 1024)},

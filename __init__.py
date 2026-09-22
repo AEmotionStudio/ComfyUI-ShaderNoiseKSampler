@@ -13,6 +13,7 @@ from .nodes import (
     VideoComparer,
 )
 from .shader_noise_walk import ShaderNoiseWalk
+from .shader_noise_source import ShaderNoiseSource
 from .shader_to_tensor import ShaderToTensor
 
 # Import shader registry
@@ -183,6 +184,7 @@ NODE_CLASS_MAPPINGS = {
     "ShaderNoiseKSampler": ShaderNoiseKSampler,
     "ShaderNoiseKSamplerDirect": DirectShaderNoiseKSampler,
     "ShaderNoiseWalk": ShaderNoiseWalk,
+    "ShaderNoiseSource": ShaderNoiseSource,
     "AdvancedImageComparer": AdvancedImageComparer,
     "Video Comparer": VideoComparer,
 }
@@ -192,6 +194,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ShaderNoiseKSampler": "Shader Noise KSampler",
     "ShaderNoiseKSamplerDirect": "Shader Noise KSampler (Direct)",
     "ShaderNoiseWalk": "Shader Noise Walk",
+    "ShaderNoiseSource": "Shader Noise Source",
     "AdvancedImageComparer": "Advanced Image Comparer",
     "Video Comparer": "Video Comparer",
 }

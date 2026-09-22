@@ -260,6 +260,26 @@ give it an interior boundary to enter at.
 Stages divide the steps a node actually samples, not the whole schedule, so two
 sequential stages over a three-step window are two stages in those three steps.
 
+### Custom sampling
+
+`Shader Noise Source` outputs a `NOISE` object, so shader noise can start a run
+driven by ComfyUI's custom sampling nodes: feed it to `SamplerCustomAdvanced` in
+place of `RandomNoise` and the guider, sampler and sigma schedule are yours. That
+reaches guidance this pack has no node of its own for -- `BasicGuider` with no
+negative and no CFG, `DualCFGGuider`, whatever another pack provides. `AddNoise`
+takes one too, for shader noise at a chosen sigma with no sampling at all.
+`example_workflows/MiniMaxH3_CustomSampling_SNK_Source.json` is a MiniMax H3 run
+built that way, on core nodes and this pack and nothing else.
+
+It carries the same shader inputs as the sampler and hands out exactly the noise
+the sampler would start from, so a seed means the same thing on both. What it
+cannot do is stages: the sampler re-enters the shader at segment boundaries partway
+through a run, and a `NOISE` object is asked for noise once, before any sampling
+happens. For `sequential_stages` or `injection_stages`, use the sampler.
+
+> [!TIP]
+> Fix your `seed` first, then start from the `explore` preset or a `shader_strength` around 0.1-0.3 with a single `sequential_stage`, and walk outward from there. Each small step can still land on a noticeably different neighbour, by an amount that depends on the model and the seed, so compare neighbouring strengths rather than expecting a smooth fade. Try `noise_scale` early: larger features let the shader show more, smaller ones let the model absorb it into the picture.
+
 ## 🧠 Latent Space Navigation
 
 Unlike random seed exploration, the ShaderNoiseKSampler provides a methodical way to navigate the latent space:
