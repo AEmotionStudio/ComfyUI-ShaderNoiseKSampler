@@ -51,6 +51,10 @@ from .shaders.gaussian import (
     GaussianNoiseGenerator,
     generate_gaussian_tensor,
 )
+from .shaders.perlin import (
+    PerlinNoiseGenerator,
+    generate_perlin_tensor,
+)
 from .shaders.fractal import (
     FractalNoiseGenerator,
     generate_fractal_tensor,
