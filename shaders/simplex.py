@@ -36,11 +36,19 @@ match per-slice scalar reductions exactly).
 import math
 
 import torch
+import torch.nn.functional as F
 
 F2 = 0.5 * (math.sqrt(3.0) - 1.0)
 G2 = (3.0 - math.sqrt(3.0)) / 6.0
 F3 = 1.0 / 3.0
 G3 = 1.0 / 6.0
+
+# Gradient table for the four-corner 3D simplex, indexed by hash.
+SIMPLEX_GRADIENTS = torch.tensor([
+    [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
+    [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
+    [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]
+], dtype=torch.float32)
 
 
 def _rotate(x, y, seed):
@@ -213,3 +221,109 @@ def simplex_3d(p, seed, corners=1):
     if squeeze:
         result = result.squeeze(0)
     return result if result.shape[-1] == 1 else result.unsqueeze(-1)
+
+
+def lattice_hash(ix, iy, seed, iz=None):
+    """
+    A uniform value in [0, 1) per integer lattice point, from the hash above.
+
+    `ix`, `iy` and `iz` are int64 tensors; `seed` is an int or an int64 tensor
+    of seeds that broadcasts against them and grows the leading axis the way
+    `simplex_2d` does. The cube alone is linear mod 1013 until it wraps int64,
+    which a small seed and small coordinates never do, and then two cells 29 by
+    10 apart share a value; one xorshift round after it breaks that up.
+    """
+    h = ix * 1619 + iy * 31337 + _fold(seed, 10000) * 2459
+    if iz is not None:
+        h = h + iz * 6971
+    h = h * h * h
+    h = (h ^ (h >> 21)) * 2654435761
+    return torch.remainder(h, 1013).to(torch.float32) / 1013.0
+
+
+def simplex_3d_full(coords, seed=0):
+    """
+    Four-corner 3D simplex noise over `coords[..., :3]`.
+
+    temporal_coherent's own function, moved here unchanged so the generators
+    added after it can share it; its golden fixture pins the generator across
+    the move. `seed` is an int, or an int64 tensor of seeds shaped
+    [N, 1, 1, 1, 1] as fill_channels hands them over.
+    """
+    dim = coords.shape[-1]
+    device = coords.device
+    if torch.is_tensor(seed):
+        # One seed per channel, always shaped [N,1,1,1]. Everything below works
+        # on coords[..., k], which is [B,H,W] while the coordinates are still
+        # shared and [N,B,H,W] once an earlier step has grown the axis; a rank-4
+        # seed broadcasts correctly against both. Deriving the rank from the
+        # coordinates instead collapses the batch axis in the shared case.
+        seed = seed.reshape(-1, 1, 1, 1)
+
+    gradients = SIMPLEX_GRADIENTS.to(device)
+
+    x = coords[..., 0]
+    y = coords[..., 1]
+    z = coords[..., 2] if dim > 2 else torch.zeros_like(x)
+
+    s = (x + y + z) * F3
+    i = torch.floor(x + s)
+    j = torch.floor(y + s)
+    k = torch.floor(z + s)
+
+    t = (i + j + k) * G3
+    x0 = x - (i - t)
+    y0 = y - (j - t)
+    z0 = z - (k - t)
+
+    # Determine simplex
+    x_ge_y = (x0 >= y0).float()
+    y_ge_z = (y0 >= z0).float()
+    x_ge_z = (x0 >= z0).float()
+
+    i1 = x_ge_y * x_ge_z
+    j1 = (1 - x_ge_y) * y_ge_z
+    k1 = (1 - x_ge_z) * (1 - y_ge_z)
+
+    i2 = x_ge_y + (1 - x_ge_y) * x_ge_z
+    j2 = x_ge_y * (1 - x_ge_z) + (1 - x_ge_y)
+    k2 = (1 - x_ge_z) + x_ge_z * (1 - x_ge_y)
+
+    def grad3d(ix, iy, iz, gx, gy, gz):
+        h = (ix * 1619 + iy * 31337 + iz * 6971 + seed * 2459)
+        h = torch.fmod(h * h * h, 1013)
+        grads = F.embedding(h.long() % 12, gradients)
+        return grads[..., 0] * gx + grads[..., 1] * gy + grads[..., 2] * gz
+
+    noise = torch.zeros_like(x0)
+
+    t0 = 0.6 - x0*x0 - y0*y0 - z0*z0
+    mask0 = (t0 >= 0).float()
+    t0 = t0 * t0
+    noise = noise + mask0 * t0 * t0 * grad3d(i, j, k, x0, y0, z0)
+
+    x1 = x0 - i1 + G3
+    y1 = y0 - j1 + G3
+    z1 = z0 - k1 + G3
+    t1 = 0.6 - x1*x1 - y1*y1 - z1*z1
+    mask1 = (t1 >= 0).float()
+    t1 = t1 * t1
+    noise = noise + mask1 * t1 * t1 * grad3d(i + i1, j + j1, k + k1, x1, y1, z1)
+
+    x2 = x0 - i2 + 2.0 * G3
+    y2 = y0 - j2 + 2.0 * G3
+    z2 = z0 - k2 + 2.0 * G3
+    t2 = 0.6 - x2*x2 - y2*y2 - z2*z2
+    mask2 = (t2 >= 0).float()
+    t2 = t2 * t2
+    noise = noise + mask2 * t2 * t2 * grad3d(i + i2, j + j2, k + k2, x2, y2, z2)
+
+    x3 = x0 - 1.0 + 3.0 * G3
+    y3 = y0 - 1.0 + 3.0 * G3
+    z3 = z0 - 1.0 + 3.0 * G3
+    t3 = 0.6 - x3*x3 - y3*y3 - z3*z3
+    mask3 = (t3 >= 0).float()
+    t3 = t3 * t3
+    noise = noise + mask3 * t3 * t3 * grad3d(i + 1, j + 1, k + 1, x3, y3, z3)
+
+    return (noise * 32.0).unsqueeze(-1)

@@ -9,7 +9,7 @@ import torch
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Any, Optional, Tuple
 
-from ..utils.color_utils import apply_color_scheme
+from ..utils.color_utils import apply_color_scheme, hsv_to_rgb, interpolate_colors, COLOR_SCHEMES
 from ..utils.shape_masks import apply_shape_mask, apply_mask_to_tensor
 from ..utils.noise_utils import create_coordinate_grid
 from ..core.params import ShaderParams, get_param_value
@@ -140,6 +140,32 @@ class BaseNoiseGenerator(ABC):
         
         return apply_color_scheme(noise, color_scheme, color_intensity, velocity_field, time)
     
+    @staticmethod
+    def palette_channels(field: torch.Tensor, params: ShaderParams) -> torch.Tensor:
+        """
+        Map one field [B, 1, H, W] onto the chosen colour scheme, as three channels.
+
+        The palette half of domain_warp's _apply_color_variations, for the
+        generators that draw a scalar field, without the alpha it also returned
+        (the field itself again). Channel 0 comes back the same whether one channel
+        or many were asked for, which is the identity every travel-mode basis rests
+        on; the other two are correlated with it, exactly as domain_warp's are.
+        """
+        scheme = params.color_scheme
+        intensity = params.color_intensity
+        if scheme in ["none", "0"] or intensity <= 0:
+            return field
+
+        t = (field + 1.0) * 0.5
+        if scheme in COLOR_SCHEMES:
+            r, g, b = interpolate_colors([(s[0], s[1]) for s in COLOR_SCHEMES[scheme]], t, field.device)
+        elif scheme in ("rainbow", "hsv"):
+            r, g, b = hsv_to_rgb(t, torch.full_like(t, 0.8), torch.clamp(t + 0.2, 0.0, 1.0))
+        else:
+            return field
+        colours = torch.cat([r, g, b], dim=1) * 2.0 - 1.0
+        return torch.lerp(field.expand(-1, 3, -1, -1), colours, intensity)
+
     @staticmethod
     def apply_common_postprocessing(
         noise: torch.Tensor,
