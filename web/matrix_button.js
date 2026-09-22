@@ -1335,7 +1335,6 @@ import { app } from "../../../scripts/app.js";
                                             <div class="noise-canvas" id="noise-canvas-cellular"></div>
                                             <div class="noise-name">Cellular</div>
                                             <div class="noise-description">Creates organic, cell-like structures through Voronoi diagrams, mimicking natural growth patterns.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-domain_warp"></div>
@@ -1346,49 +1345,41 @@ import { app } from "../../../scripts/app.js";
                                             <div class="noise-canvas" id="noise-canvas-fractal"></div>
                                             <div class="noise-name">Fractal</div>
                                             <div class="noise-description">Embodies self-similarity across scales, reflecting the infinite recursive patterns found throughout nature.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-perlin"></div>
                                             <div class="noise-name">Perlin</div>
                                             <div class="noise-description">The classic gradient noise that creates smooth, natural-looking transitions and flowing textures.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-waves"></div>
                                             <div class="noise-name">Waves</div>
                                             <div class="noise-description">Generates harmonic oscillations that combine to form complex interference patterns.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-gaussian"></div>
                                             <div class="noise-name">Gaussian</div>
                                             <div class="noise-description">Pure probabilistic noise based on the normal distribution, the foundation of natural randomness.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-heterogeneous_fbm"></div>
                                             <div class="noise-name">Heterogeneous FBM</div>
                                             <div class="noise-description">Varies the fractal dimension across space, creating regions of different turbulence and detail.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-interference"></div>
                                             <div class="noise-name">Interference</div>
                                             <div class="noise-description">Simulates wave interaction patterns, creating complex nodal structures through phase relationships.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-spectral"></div>
                                             <div class="noise-name">Spectral</div>
                                             <div class="noise-description">Controls the frequency spectrum directly, allowing precise frequency band manipulation.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-projection_3d"></div>
                                             <div class="noise-name">3D Projection</div>
                                             <div class="noise-description">Projects three-dimensional noise onto a 2D plane, creating depth and volumetric effects.</div>
-                                            <div style="margin-top: 5px; text-align: center;"><a href="https://ko-fi.com/aemotionstudio" target="_blank" rel="noopener noreferrer"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" style="height: 22px; border:0px;"/></a></div>
                                         </div>
                                         <div class="noise-item">
                                             <div class="noise-canvas" id="noise-canvas-curl_noise"></div>
@@ -1398,10 +1389,6 @@ import { app } from "../../../scripts/app.js";
                                     </div>
                                 </section>
 
-                                <div class="card" style="text-align: center; margin-top: calc(var(--section-padding) * 1.2); padding: calc(var(--section-padding) * 0.9); background: linear-gradient(145deg, rgba(var(--accent-color-rgb, 138, 43, 226), 0.1), rgba(var(--secondary-color-rgb, 52, 152, 219), 0.05)); border: 1px solid var(--accent-color); border-radius: 12px; box-shadow: 0 4px 20px rgba(var(--accent-color-rgb, 138, 43, 226), 0.2);">
-                                        <h3 style="color: var(--accent-color); text-shadow: 0 0 8px rgba(var(--accent-color-rgb, 138, 43, 226), 0.5); margin-bottom: 0.7rem; font-size: 1.4rem;">🌟 Unlock Exclusive Shader Noise Palettes!</h3>
-                                        <p style="font-size: 0.95rem; margin-bottom: 0rem; opacity: 0.9; line-height: 1.5;">Become a valued member to access an expanded library of unique shader noise archetypes, advanced shader features, and custom ComfyUI tools. Your support helps fuel further development!</p>
-                                    </div>
 
                                 </section>
 
@@ -1528,7 +1515,7 @@ import { app } from "../../../scripts/app.js";
     result = torch.zeros(batch_size, height, width, 1, device=device)
     
     # Generate cellular pattern based on octaves mode
-    pattern_type = int(octaves) % 4  # Use octaves to select pattern type
+    pattern_type = (max(int(octaves), 1) - 1) % 4  # octaves 1 is F1, the node's default
     
     # Calculate F1 and F2 distances (assuming compute_feature_distances exists)
     f1, f2 = compute_feature_distances(p * scale, seed) 

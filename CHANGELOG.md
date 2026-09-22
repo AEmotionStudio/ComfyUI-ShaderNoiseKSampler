@@ -14,6 +14,56 @@ were optional are now defaults, and blending keeps the base noise's own statisti
 so the first step away from strength 0 is only as large as the shader makes it.
 
 ### Added
+- **Every archetype the Shader Matrix documents is now a shader type**, eight of
+  them new: `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`,
+  `projection_3d`, `cellular` and `waves`, beside the five that existed. They were
+  marketed as supporter exclusives and never built; the README, the matrix modal and
+  the Ko-fi cups stamped on nine of its thumbnails said otherwise, and that wording is
+  gone. Each type is one module under `shaders/`, registered by import, selectable on
+  every node, and pinned by a golden fixture for an image and a clip.
+
+  What they are, and what the four shared knobs do to each -- the `shader_type`
+  tooltip carries the same, one sentence per type:
+  - `gaussian`: white noise, the same thing the sampler already starts from, so it is
+    the control. Strength moves toward another seed's neighbourhood without adding
+    structure. No pattern knob reaches it; shape masks still apply; with temporal
+    coherence a clip drifts from one white field to a second.
+  - `fractal`: the reference FBM, plain layered simplex. `warp_strength` is the
+    spacing between the layers (a lacunarity dial, 1.5x to 4x), `phase_shift` slides
+    each layer to a different part of the field; neither does anything at octaves 1.
+  - `perlin`: classic gradient noise, smoother and more lattice-like than simplex,
+    zero on every lattice point. `warp_strength` swirls the detail layers while the
+    base layer keeps its shape; `phase_shift` is contrast, as in `domain_warp`.
+  - `heterogeneous_fbm`: an FBM whose persistence varies across the frame, so it has
+    rough patches and smooth ones. `warp_strength` is how different they are (0 is
+    plain FBM), `phase_shift` how much of the frame is rough. Needs octaves above 1.
+  - `interference`: two FBMs cut into cos and sin fringes that cross, banded and
+    moire-like. `warp_strength` is the fringe density, from soft folds to dense
+    moire; `phase_shift` retunes the second field.
+  - `projection_3d`: a plane through a 3D simplex FBM. `phase_shift` is the depth of
+    the slice, so it is the "different facet of the same field" knob literally, and
+    `time` slides the plane, so a clip is coherent by construction. `warp_strength`
+    bends the plane.
+  - `cellular`: Worley cells. `octaves` picks the pattern -- 1 nearest distance, 2
+    second-nearest, 3 edges, 4 product, a fractional value blends two -- and
+    `phase_shift` the cell shape, 0 diamond, 0.5 round, 2 square. `warp_strength`
+    bends the lattice. On a clip the cells live in 3D and time moves through them.
+  - `waves`: `octaves` seeded plane waves summed, straight at `warp_strength` 0 and
+    bent above it; `phase_shift` rearranges the same waves into a different
+    interference pattern; `time` drifts each wave at its own rate.
+
+  All of them fill every latent channel with a field of their own, keep channel 0 the
+  same whether one channel or many were asked for, draw the channel axis in one
+  batched call, and leave the global RNG alone. Like `spectral`, their strengths are
+  **not** calibrated against real prompts the way the first four are.
+
+  Shared underneath: `shaders/fbm.py` (the draw-and-fill skeleton every scalar-field
+  type uses, an FBM over the shared simplex, `simplex_warp`), `lattice_hash` and the
+  four-corner `simplex_3d_full` in `shaders/simplex.py` (the latter moved verbatim
+  from `temporal_coherent`, which now delegates; a new golden fixture pins it across
+  the move), and `BaseNoiseGenerator.palette_channels`, one copy of the colour-scheme
+  mapping `domain_warp` carries for itself.
+
 - **`Shader Noise Source`, a node that outputs a `NOISE` object**, so shader noise can
   start a run driven by `SamplerCustomAdvanced` -- with the guider, sampler and sigma
   schedule chosen separately. It answers a standing request for a custom-sampling
@@ -65,6 +115,13 @@ so the first step away from strength 0 is only as large as the shader makes it.
 
   Its strengths are **not** calibrated against real prompts the way the other four
   are. Treat the presets' numbers as not applying to it yet.
+
+### Removed
+- **The "supporter exclusive" framing of the missing shader types.** Nine Ko-fi
+  badges under the matrix gallery's cards, the "Unlock Exclusive Shader Noise
+  Palettes" card, the Ko-fi cup the thumbnail renderer stamped onto those nine
+  previews (and the SVG it loaded for it), and the README's "additional advanced noise
+  types are available to supporters" sentence. The general support link stays.
 
 ### Fixed
 - **Legacy mode sampled `tensor_field` when asked for `temporal_coherent`.** The

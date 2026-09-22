@@ -39,14 +39,8 @@ interface BackgroundPattern {
 type PatternType = 'tensor_field' | 'cellular' | 'domain_warp' | 'perlin' | 'curl_noise' | 'waves_interference';
 
 interface NoiseVisualizerInterface {
-    kofiCupImageBitmap: HTMLImageElement | ImageBitmap | null;
-    kofiImageLoaded: boolean;
-    kofiImageLoadAttempted: boolean;
-    _preloadKofiImage: () => Promise<void>;
     renderAllInModal: (modalContentElement: HTMLElement) => Promise<void>;
     _clearCanvas: (canvas: HTMLCanvasElement, backgroundColor?: string) => CanvasRenderingContext2D;
-    _drawKofiIcon: (ctx: CanvasRenderingContext2D) => void;
-    _drawManualKofiCup: (ctx: CanvasRenderingContext2D, x: number, y: number, iconSize: number) => void;
     renderPlaceholder: (canvas: HTMLCanvasElement, noiseName: string) => void;
     // Noise visualizations
     renderTensorField: (canvas: HTMLCanvasElement) => void;
@@ -116,77 +110,7 @@ declare global {
 
 if (!window.NoiseVisualizer) {
     const NoiseVisualizer: NoiseVisualizerInterface = {
-        kofiCupImageBitmap: null,
-        kofiImageLoaded: false,
-        kofiImageLoadAttempted: false,
-
-        _preloadKofiImage: async function (): Promise<void> {
-            if (this.kofiImageLoadAttempted) return;
-            this.kofiImageLoadAttempted = true;
-
-            const absolutePath = '/extensions/comfyui-shadernoiseksampler/images/kofi_symbol.svg';
-
-            // Attempt 1: Direct Image load
-            try {
-                console.log('Attempting Ko-fi SVG load using new Image() with direct path (Primary Attempt)...');
-                const img = new Image();
-                await new Promise<void>((resolve, reject) => {
-                    img.onload = (): void => {
-                        this.kofiCupImageBitmap = img;
-                        this.kofiImageLoaded = true;
-                        console.log('Ko-fi symbol SVG loaded via Image() successfully (Primary).');
-                        resolve();
-                    };
-                    img.onerror = (e): void => {
-                        console.warn('Primary Ko-fi symbol SVG load via Image() failed. Proceeding to secondary attempt.', e);
-                        reject(e);
-                    };
-                    img.src = absolutePath;
-                });
-                return;
-            } catch {
-                this.kofiImageLoaded = false;
-                this.kofiCupImageBitmap = null;
-            }
-
-            // Attempt 2: Fetch -> Blob -> Intermediate Image -> ImageBitmap
-            let objectURL: string | null = null;
-            try {
-                console.log('Attempting Ko-fi SVG load via Blob -> Image -> ImageBitmap (Secondary Attempt)...');
-                const response = await fetch(absolutePath);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status} for ${absolutePath}`);
-                }
-                const svgText = await response.text();
-                const blob = new Blob([svgText], { type: 'image/svg+xml' });
-                objectURL = URL.createObjectURL(blob);
-
-                const intermediateImg = new Image();
-                await new Promise<void>((resolve, reject) => {
-                    intermediateImg.onload = (): void => resolve();
-                    intermediateImg.onerror = (): void => reject(new Error('Intermediate Image() load failed for SVG blob (Secondary).'));
-                    intermediateImg.src = objectURL!;
-                });
-
-                this.kofiCupImageBitmap = await createImageBitmap(intermediateImg);
-                this.kofiImageLoaded = true;
-                console.log('Ko-fi symbol SVG processed to ImageBitmap successfully (Secondary).');
-            } catch (error) {
-                this.kofiImageLoaded = false;
-                this.kofiCupImageBitmap = null;
-                console.error('All Ko-fi SVG load attempts failed: ', error, '. Will use fallback drawing.');
-            } finally {
-                if (objectURL) {
-                    URL.revokeObjectURL(objectURL);
-                }
-            }
-        },
-
         renderAllInModal: async function (modalContentElement: HTMLElement): Promise<void> {
-            if (!this.kofiImageLoadAttempted) {
-                await this._preloadKofiImage();
-            }
-
             const noiseCanvases = modalContentElement.querySelectorAll('.noise-canvas');
             noiseCanvases.forEach(canvasDiv => {
                 const canvasId = canvasDiv.id;
@@ -326,55 +250,6 @@ if (!window.NoiseVisualizer) {
             return ctx;
         },
 
-        _drawKofiIcon: function (ctx: CanvasRenderingContext2D): void {
-            const iconSize = 18;
-            const padding = 3;
-            const x = ctx.canvas.width - iconSize - padding;
-            const y = ctx.canvas.height - iconSize - padding;
-
-            if (this.kofiImageLoaded && this.kofiCupImageBitmap) {
-                try {
-                    ctx.drawImage(this.kofiCupImageBitmap, x, y, iconSize, iconSize);
-                } catch (e) {
-                    console.error('Error drawing local Ko-fi SVG ImageBitmap, falling back to manual draw:', e);
-                    this._drawManualKofiCup(ctx, x, y, iconSize);
-                }
-            } else {
-                this._drawManualKofiCup(ctx, x, y, iconSize);
-            }
-        },
-
-        _drawManualKofiCup: function (ctx: CanvasRenderingContext2D, x: number, y: number, iconSize: number): void {
-            ctx.save();
-            ctx.fillStyle = '#FFDD99';
-            ctx.strokeStyle = '#D2B48C';
-            ctx.lineWidth = 1;
-
-            ctx.beginPath();
-            ctx.moveTo(x, y + iconSize * 0.2);
-            ctx.lineTo(x, y + iconSize * 0.9);
-            ctx.quadraticCurveTo(x + iconSize * 0.5, y + iconSize * 1.1, x + iconSize, y + iconSize * 0.9);
-            ctx.lineTo(x + iconSize, y + iconSize * 0.2);
-            ctx.quadraticCurveTo(x + iconSize * 0.5, y, x, y + iconSize * 0.2);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(x + iconSize * 0.9, y + iconSize * 0.5, iconSize * 0.25, -Math.PI / 2, Math.PI / 2);
-            ctx.stroke();
-
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(x + iconSize * 0.3, y + iconSize * 0.1);
-            ctx.quadraticCurveTo(x + iconSize * 0.2, y - iconSize * 0.2, x + iconSize * 0.4, y - iconSize * 0.3);
-            ctx.moveTo(x + iconSize * 0.6, y + iconSize * 0.05);
-            ctx.quadraticCurveTo(x + iconSize * 0.5, y - iconSize * 0.3, x + iconSize * 0.7, y - iconSize * 0.4);
-            ctx.stroke();
-
-            ctx.restore();
-        },
-
         renderPlaceholder: function (canvas: HTMLCanvasElement, noiseName: string): void {
             const ctx = this._clearCanvas(canvas, '#2c2c34');
             const nameToShow = noiseName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -431,7 +306,6 @@ if (!window.NoiseVisualizer) {
                     ctx.fillRect(x, y, 4, 4);
                 }
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderDomainWarp: function (canvas: HTMLCanvasElement): void {
@@ -483,7 +357,6 @@ if (!window.NoiseVisualizer) {
                     ctx.fillRect(x, y, 2, 2);
                 }
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderPerlin: function (canvas: HTMLCanvasElement): void {
@@ -496,7 +369,6 @@ if (!window.NoiseVisualizer) {
                     ctx.fillRect(x, y, 3, 3);
                 }
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderWaves: function (canvas: HTMLCanvasElement): void {
@@ -513,7 +385,6 @@ if (!window.NoiseVisualizer) {
                 }
                 ctx.stroke();
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderGaussian: function (canvas: HTMLCanvasElement): void {
@@ -525,7 +396,6 @@ if (!window.NoiseVisualizer) {
                 ctx.fillStyle = `rgba(${intensity * 0.8}, ${intensity * 0.9}, ${intensity}, ${Math.random() * 0.5 + 0.1})`;
                 ctx.fillRect(x - 1, y - 1, 2, 2);
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderHeterogeneousFBM: function (canvas: HTMLCanvasElement): void {
@@ -543,7 +413,6 @@ if (!window.NoiseVisualizer) {
                     }
                 }
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderInterference: function (canvas: HTMLCanvasElement): void {
@@ -565,7 +434,6 @@ if (!window.NoiseVisualizer) {
                     ctx.fillRect(x, y, 3, 3);
                 }
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderSpectral: function (canvas: HTMLCanvasElement): void {
@@ -578,7 +446,6 @@ if (!window.NoiseVisualizer) {
                 ctx.strokeStyle = 'rgba(0,0,0,0.2)';
                 ctx.strokeRect(0, i, canvas.width, 4);
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderProjection3D: function (canvas: HTMLCanvasElement): void {
@@ -594,7 +461,6 @@ if (!window.NoiseVisualizer) {
                 ctx.arc(x, y, size, 0, Math.PI * 2);
                 ctx.fill();
             }
-            this._drawKofiIcon(ctx.canvas.getContext('2d')!);
         },
 
         renderCurlNoise: function (canvas: HTMLCanvasElement): void {
@@ -1168,13 +1034,4 @@ if (!window.NoiseVisualizer) {
     };
 
     window.NoiseVisualizer = NoiseVisualizer;
-
-    // Use local reference for type safety
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        (async (): Promise<void> => { await NoiseVisualizer._preloadKofiImage(); })();
-    } else {
-        document.addEventListener('DOMContentLoaded', async () => {
-            await NoiseVisualizer._preloadKofiImage();
-        });
-    }
 }

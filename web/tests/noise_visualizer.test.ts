@@ -31,10 +31,6 @@ describe('NoiseVisualizer', () => {
             expect(typeof window.NoiseVisualizer?.renderAllInModal).toBe('function');
         });
 
-        it('should have kofi image properties', () => {
-            expect(window.NoiseVisualizer).toHaveProperty('kofiImageLoaded');
-            expect(window.NoiseVisualizer).toHaveProperty('kofiImageLoadAttempted');
-        });
     });
 
     describe('Canvas Rendering Methods', () => {
@@ -131,26 +127,6 @@ describe('NoiseVisualizer', () => {
         it('should clear canvas and return context', () => {
             const result = (window.NoiseVisualizer as any)?._clearCanvas(canvas);
             expect(result).toBeDefined();
-        });
-
-        it('should have _drawKofiIcon method', () => {
-            expect(typeof window.NoiseVisualizer?._drawKofiIcon).toBe('function');
-        });
-
-        it('should draw Ko-fi icon without errors', () => {
-            expect(() => {
-                (window.NoiseVisualizer as any)?._drawKofiIcon(ctx);
-            }).not.toThrow();
-        });
-
-        it('should have _drawManualKofiCup method', () => {
-            expect(typeof window.NoiseVisualizer?._drawManualKofiCup).toBe('function');
-        });
-
-        it('should draw manual Ko-fi cup without errors', () => {
-            expect(() => {
-                (window.NoiseVisualizer as any)?._drawManualKofiCup(ctx, 10, 10, 18);
-            }).not.toThrow();
         });
     });
 

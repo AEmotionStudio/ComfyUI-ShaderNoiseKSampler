@@ -99,7 +99,7 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 -   **🔬 Multi-Stage Shader Application**:
     -   **Sequential Stages**: Apply shader noise over segments of the diffusion process.
     -   **Injection Stages**: Apply shader noise at specific, discrete steps.
--   **🎨 Three Shader Noise Archetypes**: `Domain Warp` for flowing distortions, `Tensor Field` for structured directional patterns, and `Curl Noise` for fluid motion. Each is a distinct lens on the latent neighbourhood, and each supports shape masks, colour schemes and transforms.
+-   **🎨 Thirteen Shader Noise Types**: the twelve archetypes the Shader Matrix documents -- `domain_warp`, `tensor_field`, `curl_noise`, `spectral`, `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular` and `waves` -- plus `temporal_coherent`, built for video. Each is a distinct lens on the latent neighbourhood, and each supports shape masks, colour schemes and transforms.
 -   **🎭 Sophisticated Blending & Transformations**:
     -   **Blend Modes**: Combine shader noise with base noise using modes like Multiply, Add, Overlay, Screen, Soft Light, Hard Light, Difference.
     -   **Noise Transformations**: Apply mathematical operations (Absolute, Sin, Square Root, etc.) to shader noise before blending.
@@ -230,7 +230,7 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
     -   **Stages**: Define `sequential_stages` and `injection_stages`.
     -   **Global Controls**: Set `shader_strength` (0.0 to disable shaders), `blend_mode`, and `noise_transform`.
     -   **Per-Stage Controls**: For each stage, configure:
-        -   `shader_noise_type` (e.g., perlin, cellular)
+        -   `shader_type` (e.g., `domain_warp`, `perlin`, `cellular`)
         -   `noise_scale` (zoom control), `noise_octaves` (detail level), `noise_warp_strength` (non-linear navigation), `noise_phase_shift` (perspective shift)
         -   `shape_mask_type` and `shape_mask_strength`
         -   `color_scheme` and `color_intensity`
@@ -318,7 +318,7 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 | **`noise_transform`**        | Math operation on shader noise (e.g., `none`, `absolute`, `sin`).                                          | `none`            |
 | **`use_temporal_coherence`** | For consistent noise in animations or exploration.                                                         | `false`           |
 | **`sampling_mode`**          | `standard` samples one schedule split into stage segments, and honours `denoise` and `custom_sigmas`. `legacy` keeps the pre-2.0.0 pipeline and is selected automatically for older workflows, but no longer reproduces every earlier seed exactly (see Known Issues). | `standard`        |
-| **`shader_noise_type (per stage)`** | The base pattern (e.g., `domain_warp`, `tensor_field`, `curl_noise`).                                          | `domain_warp`          |
+| **`shader_type`**            | The base pattern: one of the thirteen types, `domain_warp` by default. The node's tooltip describes each one's character and what its knobs do. | `domain_warp`     |
 | **`noise_scale (per stage)`**    | The "Zoom Control" - determines how "zoomed in" or "zoomed out" you are in latent space.                  | `1.0`             |
 | **`noise_octaves (per stage)`**  | The "Detail Slider" - controls the level of detail and complexity in your noise pattern.                  | `1`               |
 | **`noise_warp_strength (per stage)`** | The "Non-Linear Navigator" - creates non-linear paths through latent space.                          | `0.5`             |
@@ -369,7 +369,7 @@ nothing to paint, and the node then samples those models as a plain KSampler.
 
 The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matrix" covers these extensively.
 
--   **Shader Noise Types**: Start your exploration with three powerful, freely available noise archetypes: `Domain Warp` for intricate, flowing distortions, `Tensor Field` for structured and directional patterns, and `Curl Noise` for smooth, fluid dynamics. Each offers a **unique visual lens** 🔭 for navigating latent space. ✨ **Additional advanced noise types** are available to supporters on [Ko-fi](https://ko-fi.com/aemotionstudio).
+-   **Shader Noise Types**: Start with `Domain Warp` for intricate, flowing distortions, `Tensor Field` for structured and directional patterns, and `Curl Noise` for smooth, fluid dynamics. Each offers a **unique visual lens** 🔭 for navigating latent space. The other ten -- `spectral`, `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular`, `waves` and `temporal_coherent` -- are all included; the Shader Matrix documents every one of them, and the `shader_type` tooltip says what each knob does to each.
 
 **Domain Warp**
 
@@ -419,7 +419,6 @@ The journey into guided latent space exploration is just beginning. Here's a gli
 | Area                                            | Focus                                                                                                                                                                                                                                                           | Technologies Involved (Examples)          |
 | :---------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------- |
 | **🌌 Advanced Latent Space Cartography**        | Evolve current research into an intuitive "Visual Intent Engine". This system will allow users to express desired visual outcomes semantically (e.g., "enhance fabric texture," "shift lighting ambiance"). The engine will then intelligently translate these intents into optimal shader parameter configurations, fostering a more direct and expressive artistic workflow by deeply mapping the interplay between parameters and visual impact. | Semantic AI, Parameter Response Modeling, Machine Learning |
-| **🎨 Expanded Shader Noise Palettes**          | Introduce a richer vocabulary of shader noise types, each with unique navigational properties and aesthetic fingerprints. Explore new dimensions of textural complexity, flow dynamics, and structural organization.                                       | Advanced Noise Algorithms, GLSL concepts  |
 | **🧭 Precision Navigation Tools**               | Create more granular and predictable tools for manipulating latent pathways. Research direct correlations between mathematical noise constructs and emergent visual features for greater artistic intent.                                                    | Mathematical Modelling, Latent Space Analysis |
 | **🔮 Cross-Modal Exploration**                  | Investigate applying structured noise principles to modalities beyond 2D images, such as 3D and audio, opening new avenues for creative exploration.                                                                                                | Signal Processing, Generative Models for Audio/3D |
 
