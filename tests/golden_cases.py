@@ -50,6 +50,10 @@ CASES = {
                            shader_type="tensor_field"),
     "video_curl": dict(kind="flow", video=True, shader_type="curl_noise", blend_mode="screen"),
     "video_nested": dict(kind="flow", video=True, nested=True),
+    # temporal_coherent's four-corner 3D simplex moves to shaders/simplex.py so
+    # the generators added later can share it; this pins its output across the move.
+    "video_temporal_coherent": dict(kind="flow", video=True, shader_type="temporal_coherent",
+                                    use_temporal_coherence=True, sequential_stages=2),
     # The spectral generator builds its field from a frequency band rather than
     # per pixel, so it shares none of the others' code below core.shader_noise.
     # One image case and one video case, the video one with temporal coherence
