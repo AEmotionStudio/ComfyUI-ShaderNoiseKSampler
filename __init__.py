@@ -51,6 +51,10 @@ from .shaders.gaussian import (
     GaussianNoiseGenerator,
     generate_gaussian_tensor,
 )
+from .shaders.waves import (
+    WavesNoiseGenerator,
+    generate_waves_tensor,
+)
 from .shaders.cellular import (
     CellularNoiseGenerator,
     generate_cellular_tensor,

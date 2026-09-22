@@ -85,6 +85,9 @@ CASES = {
     "image_cellular": dict(shader_type="cellular"),
     "video_cellular": dict(kind="flow", video=True, shader_type="cellular",
                         use_temporal_coherence=True, sequential_stages=2),
+    "image_waves": dict(shader_type="waves"),
+    "video_waves": dict(kind="flow", video=True, shader_type="waves",
+                     use_temporal_coherence=True, sequential_stages=2),
     # The two halves of a split run, the shape a latent upscaler needs. The first
     # stops early and keeps its noise; the second picks the trajectory up without
     # making any, so its shader can only enter at the injection boundary.
