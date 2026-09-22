@@ -22,7 +22,6 @@ from .constants import (
     MAX_OCTAVES,
     SUPPORTED_BLEND_MODES,
     SUPPORTED_TRANSFORMS,
-    SUPPORTED_SHADER_TYPES,
     SUPPORTED_DISTRIBUTIONS,
 )
 
@@ -75,7 +74,6 @@ __all__ = [
     "MAX_OCTAVES",
     "SUPPORTED_BLEND_MODES",
     "SUPPORTED_TRANSFORMS",
-    "SUPPORTED_SHADER_TYPES",
     "SUPPORTED_DISTRIBUTIONS",
     # Blending
     "blend_noises",

@@ -67,6 +67,12 @@ so the first step away from strength 0 is only as large as the shader makes it.
   are. Treat the presets' numbers as not applying to it yet.
 
 ### Fixed
+- **Legacy mode sampled `tensor_field` when asked for `temporal_coherent`.** The
+  parameter whitelist was a hand-written set that never gained the name, and it
+  rewrote anything it did not know to `tensor_field` with a printed warning. Standard
+  mode was unaffected, since the node hands the pipeline `shader_type` directly; the
+  legacy path reads it back out of the sanitised dictionary. The whitelist is now the
+  generator registry, so a registered type cannot be missing from it.
 - **`stage_progression` said it needed more than one stage to do anything, and that was
   not true.** A single stage sits at the start of the trajectory and is shaped from
   there, so `coarse_to_fine` was quietly drawing it at half the zoom and one octave

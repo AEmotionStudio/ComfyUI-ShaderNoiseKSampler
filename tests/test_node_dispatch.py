@@ -134,6 +134,31 @@ def test_the_node_offers_every_registered_generator():
     assert not canonical - advertised, f"registered but unreachable from the node: {sorted(canonical - advertised)}"
 
 
+def test_sanitising_keeps_every_advertised_shader_type():
+    """
+    The parameter whitelist rewrote any name it did not know to tensor_field.
+    Standard mode never noticed, because the node passes shader_type to the
+    pipeline separately; legacy mode reads it back out of the sanitised dict,
+    so temporal_coherent sampled tensor_field there without a word.
+    """
+    from snk.shader_params_reader import ShaderParamsReader
+
+    for shader_type in DirectShaderNoiseKSampler.INPUT_TYPES()["required"]["shader_type"][0]:
+        sanitised = ShaderParamsReader.validate_and_sanitize_params({"shader_type": shader_type})
+        assert sanitised["shader_type"] == shader_type
+
+
+def test_legacy_mode_samples_the_shader_type_it_was_given(sampler_calls):
+    from snk import shader_noise_ksampler
+
+    with mock.patch.object(shader_noise_ksampler, "get_shader_generator",
+                           wraps=shader_noise_ksampler.get_shader_generator) as resolve:
+        run_node(sampling_mode="legacy", shader_type="temporal_coherent")
+
+    assert resolve.call_args_list, "legacy mode never asked for a generator"
+    assert {call.args[0] for call in resolve.call_args_list} == {"temporal_coherent"}
+
+
 # --- the step window reaches the pipeline ----------------------------------
 
 WINDOW_INPUTS = ["add_noise", "start_at_step", "end_at_step", "return_with_leftover_noise"]

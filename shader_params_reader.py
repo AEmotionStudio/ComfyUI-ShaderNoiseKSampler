@@ -10,11 +10,17 @@ class ShaderParamsReader:
     """
     
     # Define valid parameter values for security whitelisting
-    VALID_SHADER_TYPES = {
-        "tensor_field", "cellular", "domain_warp", "fractal", "perlin",
-        "waves", "gaussian", "heterogeneous_fbm", "interference_patterns",
-        "spectral", "projection_3d", "curl_noise"
-    }
+    @staticmethod
+    def valid_shader_types():
+        """
+        The names the generator registry can build, plus the spellings mapped
+        onto them below. A literal set here drifted: it never gained
+        temporal_coherent, so a legacy-mode run asking for it was quietly
+        handed tensor_field instead.
+        """
+        from .shaders.registry import list_shaders
+
+        return set(list_shaders()) | {"curl", "interference_patterns"}
 
     VALID_SHAPE_TYPES = {
         "none", "circle", "square", "radial", "star", "linear",
@@ -155,8 +161,9 @@ class ShaderParamsReader:
                 if st == "heterogeneousfbm": st = "heterogeneous_fbm"
                 if st == "projection3d": st = "projection_3d"
                 if st == "curl": st = "curl_noise"
+                if st == "interference_patterns": st = "interference"
 
-                if st not in ShaderParamsReader.VALID_SHADER_TYPES:
+                if st not in ShaderParamsReader.valid_shader_types():
                     print(f"Warning: Invalid {key} '{st}', defaulting to 'tensor_field'")
                     sanitized[key] = "tensor_field"
                 else:
@@ -344,8 +351,7 @@ class ShaderParamsReader:
                         elif shader_type.lower() == "domain_warp":
                             params["shader_type"] = "domain_warp"
                         elif shader_type.lower() == "interference" or shader_type.lower() == "interference_patterns":
-                            params["shader_type"] = "interference_patterns"
-                            print(f"Mapped shader type '{shader_type}' to 'interference_patterns'")
+                            params["shader_type"] = "interference"
                         elif shader_type.lower() == "spectral" or shader_type.lower() == "spectral_noise":
                             params["shader_type"] = "spectral"
                             print(f"Mapped shader type '{shader_type}' to 'spectral'")
@@ -379,8 +385,7 @@ class ShaderParamsReader:
                             elif shader_type.lower() == "domain_warp":
                                 params["shader_type"] = "domain_warp"
                             elif shader_type.lower() == "interference" or shader_type.lower() == "interference_patterns":
-                                params["shader_type"] = "interference_patterns"
-                                print(f"Mapped shaderType '{shader_type}' to 'interference_patterns'")
+                                params["shader_type"] = "interference"
                             elif shader_type.lower() == "spectral" or shader_type.lower() == "spectral_noise":
                                 params["shader_type"] = "spectral"
                                 print(f"Mapped shaderType '{shader_type}' to 'spectral'")

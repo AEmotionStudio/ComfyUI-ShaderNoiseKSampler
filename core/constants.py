@@ -59,22 +59,6 @@ SUPPORTED_TRANSFORMS = [
     "cos",
 ]
 
-# Supported shader types
-SUPPORTED_SHADER_TYPES = [
-    "domain_warp",
-    "tensor_field",
-    "curl_noise",
-    "temporal_coherent",
-    "fbm_noise",
-    "perlin",
-    "waves",
-    "gaussian",
-    "heterogeneous_fbm",
-    "interference",
-    "spectral",
-    "projection_3d",
-]
-
 # Supported stage distributions for multi-stage sampling
 SUPPORTED_DISTRIBUTIONS = [
     "uniform",
