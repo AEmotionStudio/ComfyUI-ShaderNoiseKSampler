@@ -18,7 +18,7 @@ import pytest
 import torch
 
 import comfy.sample
-from helpers import FakeModel
+from helpers import REPO_DIR, FakeModel
 from snk.direct_shader_ksampler import DirectShaderNoiseKSampler
 
 
@@ -132,6 +132,23 @@ def test_the_node_offers_every_registered_generator():
                  if not any(get_shader(name) is get_shader(other) and other in advertised
                             for other in advertised)}
     assert not canonical - advertised, f"registered but unreachable from the node: {sorted(canonical - advertised)}"
+
+
+def test_the_preview_has_a_source_for_every_advertised_shader_type():
+    """
+    The live preview compiles one GLSL program per shader type out of
+    web/src/shader_renderer.ts. A type without one leaves the preview on its last
+    pattern and logs "Shader source not found", which is where temporal_coherent
+    and spectral sat for a while.
+    """
+    import os
+    import re
+
+    with open(os.path.join(REPO_DIR, "web", "src", "shader_renderer.ts")) as source:
+        block = source.read().split("const SHADER_SOURCES", 1)[1]
+    previews = set(re.findall(r'^    "(\w+)": `', block, re.M))
+    advertised = set(DirectShaderNoiseKSampler.INPUT_TYPES()["required"]["shader_type"][0])
+    assert previews == advertised, sorted(previews ^ advertised)
 
 
 def test_sanitising_keeps_every_advertised_shader_type():

@@ -927,8 +927,10 @@ heuristic. Easy cleanup.
 
 ## One live environment note
 
-The Direct node's shader preview (`web/shader_renderer.js`) has GLSL for only
-`domain_warp`, `tensor_field` and `curl_noise`. Selecting `temporal_coherent`
-leaves the preview on its previous pattern and logs `Shader source not found` —
-sampling is unaffected and the tooltip says so. A fourth GLSL preview would close
-the gap.
+The Direct node's shader preview (`web/src/shader_renderer.ts`, compiled to
+`web/shader_renderer.js`) has a GLSL program for every shader type, each written
+to mirror its Python knob for knob rather than pixel for pixel. The legacy node's
+preview combo is built from the same `SHADER_SOURCES` keys, and
+`tests/test_node_dispatch.py` requires those keys to equal the Direct node's
+advertised list, so a type cannot ship without a preview again. To check a new
+one without a browser: header + source + footer through `glslangValidator -S frag`.

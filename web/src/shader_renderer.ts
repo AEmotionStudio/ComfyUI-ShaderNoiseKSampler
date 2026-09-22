@@ -180,6 +180,50 @@ const FRAGMENT_SHADER_HEADER = `
                         return 130.0 * dot(m, g);
                     }
                     
+                    // 3D simplex noise (Ashima), for the types whose Python evaluates a 3D field
+                    float snoise3(vec3 v) {
+                        const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0);
+                        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                        vec3 i  = floor(v + dot(v, C.yyy));
+                        vec3 x0 = v - i + dot(i, C.xxx);
+                        vec3 g = step(x0.yzx, x0.xyz);
+                        vec3 l = 1.0 - g;
+                        vec3 i1 = min(g.xyz, l.zxy);
+                        vec3 i2 = max(g.xyz, l.zxy);
+                        vec3 x1 = x0 - i1 + C.xxx;
+                        vec3 x2 = x0 - i2 + C.yyy;
+                        vec3 x3 = x0 - D.yyy;
+                        i = mod(i, 289.0);
+                        vec4 p = permute(permute(permute(
+                                  i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                                + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                                + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+                        float n_ = 0.142857142857;
+                        vec3 ns = n_ * D.wyz - D.xzx;
+                        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                        vec4 x_ = floor(j * ns.z);
+                        vec4 y_ = floor(j - 7.0 * x_);
+                        vec4 x = x_ * ns.x + ns.yyyy;
+                        vec4 y = y_ * ns.x + ns.yyyy;
+                        vec4 h = 1.0 - abs(x) - abs(y);
+                        vec4 b0 = vec4(x.xy, y.xy);
+                        vec4 b1 = vec4(x.zw, y.zw);
+                        vec4 s0 = floor(b0) * 2.0 + 1.0;
+                        vec4 s1 = floor(b1) * 2.0 + 1.0;
+                        vec4 sh = -step(h, vec4(0.0));
+                        vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+                        vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+                        vec3 p0 = vec3(a0.xy, h.x);
+                        vec3 p1 = vec3(a0.zw, h.y);
+                        vec3 p2 = vec3(a1.xy, h.z);
+                        vec3 p3 = vec3(a1.zw, h.w);
+                        vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+                        p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                        vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
+                        m = m * m;
+                        return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+                    }
+                    
                     // Random function
                     float random(vec2 st) {
                         return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453);
@@ -1185,6 +1229,250 @@ const SHADER_SOURCES: Record<string, string> = {
                         // Return noise within proper range
                         return clamp(result, -1.0, 1.0);
                     }
+                `,
+    "temporal_coherent": `
+                    // shaders/temporal_coherent_noise.py: a 3D simplex FBM with time as the third
+                    // axis, warped by two more. phase_shift is ignored, as the Python ignores it at
+                    // the node's settings.
+                    float fbm(vec2 p) {
+                        vec2 q = (p * 2.0 - 1.0) * u_scale;
+                        vec3 P = vec3(q, u_time);
+                        if (u_warpStrength > 0.0) {
+                            P.xy += u_warpStrength * vec2(snoise3(P * 0.4), snoise3(P * 0.4 + 5.0));
+                        }
+                        float sum = 0.0;
+                        float amp = 1.0;
+                        float freq = 1.0;
+                        for (int i = 0; i < 8; i++) {
+                            if (float(i) >= u_octaves) break;
+                            sum += amp * snoise3(P * freq + vec3(0.0, 0.0, 1.5 * float(i)));
+                            freq *= 2.0;
+                            amp *= 0.5;
+                        }
+                        sum *= 1.0 + 0.1 * sin(u_time * 0.3);
+                        return clamp(sum * 1.5, -1.0, 1.0);
+                    }
+                `,
+    "spectral": `
+                    // shaders/spectral.py synthesises its field from a shaped spectrum. No FFT per
+                    // pixel here: 32 fixed random-phase plane waves whose amplitudes follow the same
+                    // envelope, (1 + (|k|/corner)^2)^(-slope/2), stretched by warp_strength and
+                    // turned by phase_shift, each drifting at its own rate with time.
+                    float fbm(vec2 p) {
+                        float corner = clamp(0.15 * u_scale, 0.02, 0.5);
+                        float slope = clamp(2.5 - 0.25 * (u_octaves - 1.0), 0.5, 3.0);
+                        float stretch = 1.0 + u_warpStrength;
+                        float sum = 0.0;
+                        float norm = 0.0;
+                        for (int m = 0; m < 32; m++) {
+                            float fm = float(m);
+                            float mag = pow(2.0, mix(-2.0, 3.0, random(vec2(fm, 1.0))));
+                            float th = random(vec2(fm, 2.0)) * 6.28318530718;
+                            vec2 k = mag * corner * 32.0 * vec2(cos(th) / stretch, sin(th) * stretch);
+                            float env = pow(1.0 + mag * mag, -slope * 0.5);
+                            float ph = random(vec2(fm, 3.0)) * 6.28318530718 + u_phaseShift * 3.14159265
+                                     + u_time * (random(vec2(fm, 4.0)) - 0.5) * 2.0;
+                            sum += env * sin(6.28318530718 * dot(p, k) + ph);
+                            norm += env * env;
+                        }
+                        return clamp(sum / sqrt(norm) * 0.7, -1.0, 1.0);
+                    }
+                `,
+    "gaussian": `
+                    // shaders/gaussian.py: white noise, the control. Box-Muller on a fixed 128-cell
+                    // grid, so pixel density does not change the look, stepping a few times a second.
+                    float fbm(vec2 p) {
+                        vec2 cell = floor(p * 128.0) + floor(u_time * 4.0) * 7.0;
+                        float u1 = max(random(cell), 0.0001);
+                        float u2 = random(cell + 0.5);
+                        float g = sqrt(-2.0 * log(u1)) * cos(6.28318530718 * u2);
+                        return clamp(g * 0.5, -1.0, 1.0);
+                    }
+                `,
+    "fractal": `
+                    // shaders/fractal.py: the reference FBM. warp_strength is the layer spacing,
+                    // phase_shift slides each layer, time is the third axis.
+                    float fbm(vec2 p) {
+                        vec2 q = p * u_scale * 2.0;
+                        float lac = min(1.5 + u_warpStrength, 4.0);
+                        vec2 offset = u_phaseShift * vec2(0.37, 0.61);
+                        float sum = 0.0;
+                        float amp = 1.0;
+                        float freq = 1.0;
+                        float norm = 0.0;
+                        for (int i = 0; i < 8; i++) {
+                            if (float(i) >= u_octaves) break;
+                            vec2 r = q * freq + offset * float(i);
+                            sum += amp * snoise3(vec3(r, u_time * (0.2 + 0.05 * float(i))));
+                            norm += amp;
+                            amp *= 0.5;
+                            freq *= lac;
+                        }
+                        return clamp(sum / norm * 1.5, -1.0, 1.0);
+                    }
+                `,
+    "perlin": `
+                    // shaders/perlin.py: gradient noise, warp on the detail layers only, contrast
+                    // from phase_shift.
+                    vec2 grad2(vec2 c) {
+                        float a = random(c) * 6.28318530718;
+                        return vec2(cos(a), sin(a));
+                    }
+
+                    float perlin(vec2 p) {
+                        vec2 c = floor(p);
+                        vec2 f = p - c;
+                        vec2 u = fade(f);
+                        float n00 = dot(grad2(c), f);
+                        float n10 = dot(grad2(c + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));
+                        float n01 = dot(grad2(c + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));
+                        float n11 = dot(grad2(c + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));
+                        return mix(mix(n00, n10, u.x), mix(n01, n11, u.x), u.y) * 1.41421356;
+                    }
+
+                    float fbm(vec2 p) {
+                        vec2 q = p * u_scale * 3.0;
+                        vec2 w = vec2(snoise(q * 0.5 + u_time * 0.1), snoise(q * 0.5 + vec2(31.7, 7.3) + u_time * 0.1))
+                               * u_warpStrength * 0.5;
+                        float sum = 0.0;
+                        float amp = 1.0;
+                        float freq = 1.0;
+                        float norm = 0.0;
+                        for (int i = 0; i < 8; i++) {
+                            if (float(i) >= u_octaves) break;
+                            vec2 r = (i == 0 ? q : q + w) * freq + u_time * 0.05 * float(i + 1);
+                            sum += amp * perlin(r);
+                            norm += amp;
+                            amp *= 0.5;
+                            freq *= 2.0;
+                        }
+                        return clamp(sum / norm * 2.0 * (1.0 + u_phaseShift * 0.5), -1.0, 1.0);
+                    }
+                `,
+    "heterogeneous_fbm": `
+                    // shaders/heterogeneous_fbm.py: a slow control field sets the persistence per
+                    // pixel, so the frame has rough patches and smooth ones.
+                    float fbm(vec2 p) {
+                        vec2 q = p * u_scale * 2.0;
+                        float hetero = min(0.7 * u_warpStrength, 1.0);
+                        float control = snoise3(vec3(q * 0.5, u_time * 0.2 + 50.0));
+                        float pers = clamp(0.5 + hetero * (control + (u_phaseShift - 0.5)), 0.15, 0.9);
+                        float sum = 0.0;
+                        float amp = 1.0;
+                        float freq = 1.0;
+                        float norm = 0.0;
+                        for (int i = 0; i < 8; i++) {
+                            if (float(i) >= u_octaves) break;
+                            sum += amp * snoise3(vec3(q * freq, u_time * (0.2 + 0.05 * float(i))));
+                            norm += amp;
+                            amp *= pers;
+                            freq *= 2.0;
+                        }
+                        return clamp(sum / norm * 1.5, -1.0, 1.0);
+                    }
+                `,
+    "interference": `
+                    // shaders/interference.py: two FBMs cut into cos and sin fringes that cross.
+                    float layers(vec2 q, float octaves, float pers, float lac, float zoff) {
+                        float sum = 0.0;
+                        float amp = 1.0;
+                        float freq = 1.0;
+                        float norm = 0.0;
+                        for (int i = 0; i < 8; i++) {
+                            if (float(i) >= octaves) break;
+                            sum += amp * snoise3(vec3(q * freq, zoff + u_time * (0.2 + 0.05 * float(i))));
+                            norm += amp;
+                            amp *= pers;
+                            freq *= lac;
+                        }
+                        return sum / norm;
+                    }
+
+                    float fbm(vec2 p) {
+                        vec2 q = p * u_scale * 2.0;
+                        float gain = 3.14159265 * (0.5 + 0.5 * u_warpStrength);
+                        float a = layers(q, u_octaves, 0.5, 2.0, 0.0);
+                        float b = layers(q * 1.5 + 17.3, max(u_octaves - 1.0, 1.0), 0.6, 1.8, 11.0);
+                        return clamp((cos(gain * a) + sin(gain * (1.0 + 0.2 * u_phaseShift) * b)) * 0.7, -1.0, 1.0);
+                    }
+                `,
+    "projection_3d": `
+                    // shaders/projection_3d.py: a plane through a 3D FBM. phase_shift is the depth
+                    // of the slice, time slides it, warp_strength bends it.
+                    float fbm(vec2 p) {
+                        vec2 q = p * u_scale * 2.0;
+                        q += u_warpStrength * 0.5 * vec2(snoise(q * 0.3 + 12.3), snoise(q * 0.3 + 45.6));
+                        float depth = u_phaseShift + u_time * 0.5;
+                        float sum = 0.0;
+                        float amp = 1.0;
+                        float freq = 1.0;
+                        float norm = 0.0;
+                        for (int i = 0; i < 8; i++) {
+                            if (float(i) >= u_octaves) break;
+                            sum += amp * snoise3(vec3(q * freq, depth * freq + 1.5 * float(i)));
+                            norm += amp;
+                            amp *= 0.5;
+                            freq *= 2.0;
+                        }
+                        return clamp(sum / norm * 1.5, -1.0, 1.0);
+                    }
+                `,
+    "cellular": `
+                    // shaders/cellular.py: Worley cells. octaves picks F1, F2, edges or product,
+                    // phase_shift the Minkowski exponent (diamond, round, square), warp_strength
+                    // bends the lattice. The points wobble in their cells with time.
+                    vec2 worley(vec2 q, float e) {
+                        vec2 cell = floor(q);
+                        vec2 f = q - cell;
+                        float f1 = 64.0;
+                        float f2 = 64.0;
+                        for (int y = -1; y <= 1; y++) {
+                            for (int x = -1; x <= 1; x++) {
+                                vec2 o = vec2(float(x), float(y));
+                                vec2 c = cell + o;
+                                vec2 jitter = 0.5 + 0.5 * sin(u_time * 0.5 + 6.28318530718 * vec2(random(c), random(c + 41.3)));
+                                vec2 point = o + jitter - f;
+                                float d = pow(pow(abs(point.x), e) + pow(abs(point.y), e), 1.0 / e);
+                                if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
+                            }
+                        }
+                        return vec2(f1, f2);
+                    }
+
+                    float fbm(vec2 p) {
+                        vec2 q = p * u_scale * 4.0;
+                        q += u_warpStrength * 0.5 * vec2(snoise(q * 0.5 + 3.1), snoise(q * 0.5 + 9.7));
+                        float e = 1.0 + 2.0 * u_phaseShift;
+                        vec2 d = worley(q, e);
+                        int pattern = int(mod(max(u_octaves, 1.0) - 1.0, 4.0));
+                        float v;
+                        if (pattern == 0) v = d.x;
+                        else if (pattern == 1) v = d.y * 0.7;
+                        else if (pattern == 2) v = d.y - d.x;
+                        else v = d.x * d.y * 0.7;
+                        return clamp(v * 2.0 - 1.0, -1.0, 1.0);
+                    }
+                `,
+    "waves": `
+                    // shaders/waves.py: octaves seeded plane waves, straight at warp 0, drifting
+                    // at their own rates with time.
+                    float fbm(vec2 p) {
+                        vec2 q = p * u_scale;
+                        q += u_warpStrength * 0.15 * vec2(snoise(q + u_time * 0.1), snoise(q + vec2(9.1, 3.3)));
+                        float count = min(max(u_octaves, 1.0), 8.0);
+                        float sum = 0.0;
+                        for (int i = 0; i < 8; i++) {
+                            if (float(i) >= count) break;
+                            float fi = float(i);
+                            float th = random(vec2(fi, 1.0)) * 3.14159265;
+                            float fr = 3.0 * (1.0 + 0.5 * fi + 0.5 * random(vec2(fi, 2.0)));
+                            float ph = random(vec2(fi, 3.0)) * 6.28318530718 + u_phaseShift * 3.14159265 * (fi + 1.0);
+                            float rate = 0.25 * (0.5 + random(vec2(fi, 4.0)));
+                            float along = q.x * cos(th) + q.y * sin(th);
+                            sum += sin(6.28318530718 * (fr * along + rate * u_time) + ph);
+                        }
+                        return clamp(sum / sqrt(count) * 0.9, -1.0, 1.0);
+                    }
                 `
 };
 
@@ -1350,7 +1638,7 @@ const FRAGMENT_SHADER_FOOTER = `
                 this.properties.shaderType = v;
                 if (this.loadShader && (this.isShaderActive || this.properties.shaderVisible)) this.loadShader(v);
                 this.setDirtyCanvas(true, true);
-            }) as any, { values: ["domain_warp", "tensor_field", "curl_noise"] });
+            }) as any, { values: Object.keys(SHADER_SOURCES) });
             if (!isDirect && this.widgets?.length) (this.widgets[this.widgets.length - 1] as WidgetWithTooltip).tooltip = "Select shader noise pattern type";
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
