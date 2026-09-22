@@ -4,7 +4,7 @@ Shared utilities for ComfyUI-ShaderNoiseKSampler.
 This package provides common functionality used across shader generators:
 - color_utils: Color scheme interpolation and application
 - shape_masks: Shape mask generation and application
-- noise_utils: Noise generation (simplex, FBM, etc.)
+- noise_utils: the coordinate grid every generator starts from
 """
 
 from .color_utils import (
@@ -21,13 +21,7 @@ from .shape_masks import (
     apply_shape_mask,
 )
 
-from .noise_utils import (
-    simplex_noise_2d,
-    simplex_noise_3d,
-    fbm_noise,
-    random_gradient,
-    create_coordinate_grid,
-)
+from .noise_utils import create_coordinate_grid
 
 __all__ = [
     # Color utilities
@@ -41,9 +35,5 @@ __all__ = [
     "smoothstep",
     "apply_shape_mask",
     # Noise utilities
-    "simplex_noise_2d",
-    "simplex_noise_3d",
-    "fbm_noise",
-    "random_gradient",
     "create_coordinate_grid",
 ]
