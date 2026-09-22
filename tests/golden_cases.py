@@ -79,6 +79,9 @@ CASES = {
     "image_interference": dict(shader_type="interference"),
     "video_interference": dict(kind="flow", video=True, shader_type="interference",
                             use_temporal_coherence=True, sequential_stages=2),
+    "image_projection_3d": dict(shader_type="projection_3d"),
+    "video_projection_3d": dict(kind="flow", video=True, shader_type="projection_3d",
+                             use_temporal_coherence=True, sequential_stages=2),
     # The two halves of a split run, the shape a latent upscaler needs. The first
     # stops early and keeps its noise; the second picks the trajectory up without
     # making any, so its shader can only enter at the injection boundary.

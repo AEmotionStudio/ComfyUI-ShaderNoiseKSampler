@@ -103,7 +103,7 @@ def test_the_seed_is_coerced_to_int64():
 
 
 @pytest.mark.parametrize("shader_type", ["domain_warp", "curl_noise",
-                                         "temporal_coherent", "tensor_field", "gaussian", "fractal", "perlin", "heterogeneous_fbm", "interference"])
+                                         "temporal_coherent", "tensor_field", "gaussian", "fractal", "perlin", "heterogeneous_fbm", "interference", "projection_3d"])
 @pytest.mark.parametrize("hw", RAGGED + ALIGNED)
 def test_channel_zero_survives_batching_at_every_shape(shader_type, hw):
     """

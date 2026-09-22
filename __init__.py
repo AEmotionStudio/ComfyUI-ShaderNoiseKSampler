@@ -51,6 +51,10 @@ from .shaders.gaussian import (
     GaussianNoiseGenerator,
     generate_gaussian_tensor,
 )
+from .shaders.projection_3d import (
+    Projection3DNoiseGenerator,
+    generate_projection_3d_tensor,
+)
 from .shaders.interference import (
     InterferenceNoiseGenerator,
     generate_interference_tensor,
