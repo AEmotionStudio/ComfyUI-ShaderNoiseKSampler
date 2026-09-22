@@ -21,12 +21,107 @@ are recorded on purpose, because they are the obvious-sounding ideas.
 | + | Presets | Done (`5434791`, tuned `ce4b1ec`) — seven bundles |
 | + | The agreed upgrade | Done — generators fill their own channels, `normalize_strength` on, goldens on the standard pipeline, presets write the widgets |
 | + | Blend keeps the base noise's statistics | Done (`f44aeb5`) — the road away from strength 0 starts at the seed's own image |
+| → | Next up | Not started — see "Next up: what the measurements suggest" |
 
 Most new capabilities are optional inputs defaulting to off. **Two are not:**
 `travel_mode` defaults to `walk` and `normalize_strength` defaults on. Both are
 part of the upgrade described below, which also changed the generators' own
 output — for legacy too — and re-pointed the golden suite at the standard
 pipeline. The last commit with the old behaviour is tagged `pre-collapse-fix`.
+
+---
+
+## Next up: what the measurements suggest
+
+Written after the blend measurements further down ("Measuring the blend, not the
+ceiling" and the near-end fix). These are interpretations of those results, marked by
+how well they are supported, followed by what to try. None of it is started.
+
+### How it works, in one pass
+
+1. The seed makes the base Gaussian noise (`comfy.sample.prepare_noise`) and seeds the
+   shader field, `seed + stage index` for each stage.
+2. The generator renders a smooth spatial field for every latent channel, each its own
+   draw (`BaseNoiseGenerator.fill_channels`).
+3. `mix_noise` blends it into the base and gives the result the base's own statistics.
+   Even `multiply` at strength 1.0 hands over only about two-thirds shader; the seed
+   never leaves.
+4. The sampler denoises from there, and the leftover noise at each stage boundary is
+   blended again.
+
+Strength moves the starting noise along a line from the seed toward seed-plus-shader;
+the shader settings change the direction of that line.
+
+### What is probably going on
+
+**1. The model reads the noise's large-scale structure, and the shader is mostly
+large-scale structure.** Likely; not measured directly. Gaussian noise has equal energy
+at every spatial scale, while a shader field is smooth. Diffusion settles composition
+and colour layout early, from the large-scale content, and removes fine structure. It
+fits three results. `noise_scale` was the biggest lever: at 0.50, 0.5 turned every
+SD 1.5 seed abstract and 2.0 gave clean portraits that still carried the field (overlap
+0.38). The old rescale only shifted each channel's mean, the largest-scale component
+there is, and that turned grayscale portraits into colour; SD 1.5's brightness and
+colour are known to follow the noise's per-channel mean. And at high strength SD 1.5
+lost the prompt once the shader owned the layout.
+
+This is not the metric that finding (4) near the top rejected. That asked whether
+spectral energy predicts how much shader a picture can hide; this asks which scales of
+the shader reach the result.
+
+**2. The path from noise to image is lumpy.** The behaviour is measured; the mechanism
+is the usual one for diffusion samplers. The sampler makes early, discrete decisions
+(pose, identity, framing), so a small change stays inside one outcome until it tips into
+the next. SD 1.5 seed 1234 held one portrait from 0.05 to 0.25, seed 4242 changed man
+at every step, and H3 moved visibly on a 0.06% change to its noise. Strength moves the
+noise continuously; the images come in plateaus and jumps.
+
+**3. How the channels relate sets the palette.** Likely, from the contact sheets.
+`walk` gives every channel an independent field, so a strong result is full-colour.
+`jump` gives every channel the same field, sign-flipped per channel, so colour collapses
+onto one axis: the flat two- and three-colour shapes.
+
+**4. H3 carries the shader weakly partly because each video frame gets an unrelated
+pattern.** The code fact is certain; the size of its effect is untested.
+`core/shader_noise.py::generate` uses `frame_seed = seed if temporal_coherence else seed
++ index`, so by default every latent frame draws a fresh field. A video model treats
+structure that changes randomly between frames as noise and smooths it away. It fits the
+older finding that holding one pattern across frames swamped H3 at 0.5. It also means
+`temporal_coherent`, built with time as a real axis, is reseeded every frame unless
+`use_temporal_coherence` is on, which defeats its design. H3's heavy conditioning and
+8-step distilled sampling probably contribute; that part is a guess.
+
+### What to try, in order
+
+1. **Test the scale hypothesis on data already saved.** Split the saved latents and the
+   reconstructed fields from `verification/blend/` into spatial-frequency bands and
+   measure the overlap in each band. No renders needed. If the shader's influence sits
+   in the large-scale bands, (1) holds and shapes everything below.
+2. **Hold the shader pattern across video frames by default**, letting `time` evolve
+   instead of reseeding, at least for `temporal_coherent`. Measure it on H3 with
+   `drive.py` and `analyze.py`: overlap, contact sheets, and how much consecutive frames
+   differ (flicker), which the tools do not measure yet.
+3. **A scale control**: send the shader into the large scales only (layout, colour) or
+   the fine scales only (texture). Better as a preset dimension or a clearer meaning for
+   `noise_scale` than as another widget.
+4. **A separate shader seed**: a new street map for the same town. Today, redrawing the
+   pattern without moving the base noise takes `phase_shift` or `noise_scale`, which
+   also change its character. Costs a widget; it could be offered on the Walk node only.
+5. **Let the Walk node map the lumps.** Where neighbouring strengths give very different
+   images, subdivide the step until the flip is found. That turns the hops into a map of
+   each seed's plateaus, the "latent cartography" the README's roadmap promises.
+6. **Finer control at the near end.** On SD 1.5 the whole close neighbourhood lies
+   between 0 and about 0.25; a curved strength scale would give it more of the slider.
+
+Housekeeping, from the upgrade's "Left to do": decide what `legacy` means and fix its
+tooltip, make the golden tests' stub sampler call the progress callback so stage
+boundaries are pinned, and re-tune the presets against the new noise.
+
+### How much weight this carries
+
+One prompt per model, three or four seeds, one stage, `domain_warp` only, and one middle
+frame per H3 clip. Treat the explanations as well-supported hypotheses; items 1 and 2 are
+the cheapest ways to confirm or break them.
 
 ---
 

@@ -196,6 +196,9 @@ errors.md
 # Test coverage reports
 coverage/
 
+# Personal notes and reference sheets
+*.local.md
+
 # Other
 ComfyUI_Errors.md
 Console_errors.md
