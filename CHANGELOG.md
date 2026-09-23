@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.1] - 2026-09-23
+
+### Removed
+- **`CODE_REVIEW.md` from the package.** It was a working review that 2.2.0 shipped
+  by mistake. Nothing else changes.
+
 ## [2.2.0] - 2026-09-23
 
 Changes what a seed produces at any `shader_strength` above 0, in both sampling
