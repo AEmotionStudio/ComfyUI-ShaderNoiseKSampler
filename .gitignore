@@ -198,6 +198,7 @@ coverage/
 
 # Personal notes and reference sheets
 *.local.md
+HANDOFF.md
 
 # Other
 ComfyUI_Errors.md

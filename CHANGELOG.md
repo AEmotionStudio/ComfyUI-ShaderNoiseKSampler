@@ -75,8 +75,7 @@ so the first step away from strength 0 is only as large as the shader makes it.
   `cellular` is the dearest, at twice `domain_warp`: 27 neighbouring cells per pixel on
   a clip. The five existing types draw exactly what they did before.
 
-  Measured on Krea 2 (one prompt, three seeds, images only; the table and the sheets
-  are in HANDOFF under "Measured on Krea 2"): `gaussian` moves the picture less than
+  Measured on Krea 2 (one prompt, three seeds, images only): `gaussian` moves the picture less than
   half as far as any structured type and never leaves its seed, which is what a control
   should do. `fractal`, `heterogeneous_fbm`, `cellular` and `projection_3d` behave like
   `domain_warp`, re-composing the scene from 0.25 without drawing their pattern into
