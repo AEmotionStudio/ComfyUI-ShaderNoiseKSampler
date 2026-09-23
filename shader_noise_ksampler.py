@@ -14,8 +14,8 @@ and rewriting the ~163 call sites would risk the guarantee for no gain.
 
 New work belongs in core/ and pipelines/standard.py. What this pipeline gets
 wrong -- stages restarting from maximum noise, `denoise` and `custom_sigmas`
-being ignored, blend modes shifting the noise distribution -- is documented in
-CODE_REVIEW.md and fixed there.
+being ignored, blend modes shifting the noise distribution -- is listed under
+2.0.0 in CHANGELOG.md, and fixed in the standard pipeline.
 """
 import torch
 import torch.nn.functional as F
