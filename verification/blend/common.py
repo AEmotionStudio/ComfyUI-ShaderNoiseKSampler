@@ -5,6 +5,10 @@ drift apart.
 Every run holds the shader to one configuration and varies six things: the seed,
 the strength, the travel mode, phase_shift and noise_scale for the "streets", and
 the shader type. A strength-0 run has no shader, so it is shared by every type.
+
+The prompt and whether the audio stream is painted are fixed for a whole matrix
+rather than varied within one, but they still change the output, so run_name carries
+them too.
 """
 import json
 import sys
@@ -34,7 +38,8 @@ def load_pack():
     import helpers  # noqa: F401
 
 
-def shader_inputs(seed, strength, travel, phase, scale, shader=DEFAULT_SHADER):
+def shader_inputs(seed, strength, travel, phase, scale, shader=DEFAULT_SHADER,
+                  shade_non_spatial=False):
     """Direct node inputs shared by every run. Sampler settings are per model."""
     return {
         "seed": seed, "denoise": 1.0, "sequential_stages": 1, "injection_stages": 0,
@@ -43,7 +48,8 @@ def shader_inputs(seed, strength, travel, phase, scale, shader=DEFAULT_SHADER):
         "color_scheme": "none", "noise_scale": scale, "octaves": 2.0, "warp_strength": 0.7,
         "shape_mask_strength": 1.0, "phase_shift": phase, "color_intensity": 0.8,
         "sampling_mode": "standard", "preset": "custom", "travel_mode": travel,
-        "normalize_strength": True, "stage_progression": "uniform", "shade_non_spatial": False,
+        "normalize_strength": True, "stage_progression": "uniform",
+        "shade_non_spatial": shade_non_spatial,
     }
 
 
@@ -52,18 +58,36 @@ def shader_of(strength, shader):
     return "none" if strength == 0 else shader
 
 
+def audio_of(strength, shade_non_spatial):
+    """Same reason: with no shader to paint, the control is shared with the picture runs."""
+    return bool(shade_non_spatial) and strength != 0
+
+
 def run_key(row):
     return (row["seed"], row["strength"], row["travel"], row["phase"], row["scale"],
             shader_of(row["strength"], row.get("shader", DEFAULT_SHADER)))
 
 
-def run_name(seed, strength, travel, phase, scale, shader=DEFAULT_SHADER):
+def run_name(seed, strength, travel, phase, scale, shader=DEFAULT_SHADER,
+             shade_non_spatial=False, prompt=None):
+    """
+    What a run is filed under. Anything that changes the output has to reach this
+    name, or a rerun skips the run it already holds and one setting stands in for
+    another. A setting every earlier run shared is left out, so those runs keep the
+    names they were recorded under: the default shader type, the model's own prompt,
+    and painting the picture alone.
+    """
     # Two decimals unless that would merge distinct strengths, so 0.001 is not named 0.00.
     shown = f"{strength:.2f}" if round(strength, 2) == strength else f"{strength:g}"
     name = f"s{seed}_{travel}_{shown}_p{phase:.1f}_n{scale:.1f}"
-    # The default type keeps the names its runs were recorded under.
     shader = shader_of(strength, shader)
-    return name if shader in ("none", DEFAULT_SHADER) else f"{name}_{shader}"
+    if shader not in ("none", DEFAULT_SHADER):
+        name = f"{name}_{shader}"
+    if prompt:
+        name = f"{name}_{prompt}"
+    if audio_of(strength, shade_non_spatial):
+        name = f"{name}_audio"
+    return name
 
 
 def read_manifest(path):
