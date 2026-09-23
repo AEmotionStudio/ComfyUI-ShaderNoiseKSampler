@@ -91,6 +91,14 @@ so the first step away from strength 0 is only as large as the shader makes it.
   the move), and `BaseNoiseGenerator.palette_channels`, one copy of the colour-scheme
   mapping `domain_warp` carries for itself.
 
+- **The live shader display previews every shader type.** It had GLSL for only
+  `domain_warp`, `tensor_field` and `curl_noise`; picking any other type left the
+  preview on its previous pattern and logged `Shader source not found`. Each type now
+  has a program written to mirror its Python generator knob for knob, not pixel for
+  pixel. The deprecated node's preview dropdown is built from the same table, and a
+  test requires that table to match the Direct node's `shader_type` list, so a type
+  cannot ship without a preview again.
+
 - **`Shader Noise Source`, a node that outputs a `NOISE` object**, so shader noise can
   start a run driven by `SamplerCustomAdvanced` -- with the guider, sampler and sigma
   schedule chosen separately. It answers a standing request for a custom-sampling
@@ -149,8 +157,20 @@ so the first step away from strength 0 is only as large as the shader makes it.
   Palettes" card, the Ko-fi cup the thumbnail renderer stamped onto those nine
   previews (and the SVG it loaded for it), and the README's "additional advanced noise
   types are available to supporters" sentence. The general support link stays.
+- **Dead noise code.** `utils/noise_utils.py` kept its own simplex, FBM, Perlin, Worley
+  and value noise that no generator called; only `create_coordinate_grid` remains, and
+  `utils` no longer exports `simplex_noise_2d`, `simplex_noise_3d`, `fbm_noise` or
+  `random_gradient`. `web/glsl_shaders.js`, an unreferenced copy of the old GLSL
+  sources, is gone too.
 
 ### Fixed
+- **MiniMax H3 crashed with more than one shader boundary.** With `injection_stages`
+  above 0 or `sequential_stages` of 2 or more, every H3 run failed in `pack_latents`.
+  The noise at an interior boundary is recovered on the sampler's device, and the
+  painted streams were moved to the device of the latent the run started with, so the
+  video stream ended up on the CPU and the audio stream stayed on CUDA. Each stream is
+  now painted on the device it is already on. Single-stream latents were not affected,
+  beyond a needless round trip.
 - **Legacy mode sampled `tensor_field` when asked for `temporal_coherent`.** The
   parameter whitelist was a hand-written set that never gained the name, and it
   rewrote anything it did not know to `tensor_field` with a printed warning. Standard
@@ -379,6 +399,10 @@ what was wrong was how a multi-stream latent crossed a stage boundary.
   row. Unblocks Stable Audio 1/3, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D and
   TripoSplat, which were refused outright. On H3 it biases the sound toward tonal
   content (spectral flatness 0.104 -> 0.066) while leaving the picture clean.
+  Streams with fewer than 64 cells per batch item are skipped even when it is on,
+  since they carry metadata rather than content: TripoSplat's `[B, 1, 5]` camera would
+  otherwise have its viewpoint moved. The smallest real content stream, H3's audio,
+  has 414.
 - **`stage_progression` (optional, default `uniform`).** Varies the shader across
   the run rather than drawing the same one at every stage: `coarse_to_fine`
   starts zoomed in on large features with fewer octaves and ends zoomed out on

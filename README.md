@@ -22,17 +22,19 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that blends stan
 >
 > The original `Shader Noise KSampler` is deprecated and hidden from node search. It still loads in existing workflows, where it keeps reading its parameters from `data/shader_params.json` and samples in `legacy` mode.
 
-**Shader Noise KSampler**
+**Shader Noise KSampler (deprecated)**
 ![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/shader_noise_ksampler_save.webp)
 **(Only parameters with 🔄 require saving if changed)**
 
 **Shader Noise KSampler (Direct)**
 ![ShaderNoiseKSampler Showcase WEBP](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/shader_noise_ksampler_direct.webp)
-**(No saving required but does not have a shader display for visualizing the shader noise patterns)**
+**(No saving required. This recording predates 2.0.0; the node now carries the live shader display as well)**
 
 ## 🚀 Recent Updates
 
-- **Shader Blending Upgrade - 9/12/26**: The shader now blends into every channel of the latent instead of stamping one pattern across it, and the first step away from `shader_strength` 0 is only as large as the shader makes it. New `preset` and `travel_mode` inputs, `normalize_strength` on by default, and tooltips that describe what each strength does. Saved workflows render differently at any strength above 0; see the [Changelog](CHANGELOG.md).
+- **Every Shader Type, Split Runs and Custom Sampling - 9/22/26**: Thirteen shader types, up from four: `spectral` plus the eight the Shader Matrix documented but never shipped (`gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular`, `waves`). The live display previews all thirteen. `start_at_step`, `end_at_step`, `add_noise` and `return_with_leftover_noise` let one run be [split](#splitting-a-run) around a latent upscale, and the new `Shader Noise Source` node hands shader noise to [custom sampling](#custom-sampling). Every new input defaults to a no-op, so saved workflows sample what they did before.
+
+- **Shader Blending Upgrade - 9/12/26**: The shader now blends into every channel of the latent instead of stamping one pattern across it, and the first step away from `shader_strength` 0 is only as large as the shader makes it. New `preset`, `travel_mode`, `stage_progression` and `shade_non_spatial` inputs, `normalize_strength` on by default, a [`Shader Noise Walk`](#walking-a-parameter) node that ramps one parameter across a batch, and tooltips that describe what each strength does. Saved workflows render differently at any strength above 0; see the [Changelog](CHANGELOG.md).
 
 - **Comparer Auto-Fill - 6/12/25**: Both the `Advanced Image Comparer` and `Video Comparer` nodes now feature an `auto_fill` toggle. This addition streamlines your workflow by allowing you to compare with a single input. When `auto_fill` is enabled (the default setting), any empty image or video slot will be automatically populated with the output from the previous generation. This makes iterative A/B testing—comparing your latest creation to the one right before it—faster and more intuitive. It does not pull from your output folder but from the cached images or videos of your current session.
 ![Video Comparer Updated WEBP](https://github.com/AEmotionStudio/ComfyUI-ShaderNoiseKSampler/releases/download/assets-v1/video_comparer_updated.webp)
@@ -101,22 +103,25 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
     -   **Injection Stages**: Apply shader noise at specific, discrete steps.
 -   **🎨 Thirteen Shader Noise Types**: the twelve archetypes the Shader Matrix documents -- `domain_warp`, `tensor_field`, `curl_noise`, `spectral`, `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular` and `waves` -- plus `temporal_coherent`, built for video. Each is a distinct lens on the latent neighbourhood, and each supports shape masks, colour schemes and transforms.
 -   **🎭 Sophisticated Blending & Transformations**:
-    -   **Blend Modes**: Combine shader noise with base noise using modes like Multiply, Add, Overlay, Screen, Soft Light, Hard Light, Difference.
+    -   **Blend Modes**: Combine shader noise with base noise using Normal, Multiply, Add, Overlay, Screen, Soft Light, Hard Light or Difference.
     -   **Noise Transformations**: Apply mathematical operations (Absolute, Sin, Square Root, etc.) to shader noise before blending.
--   **💠 Shape Masks**: Spatially modulate noise with geometric overlays (Radial, Linear, Grid, Vignette, Spiral, Hexgrid, etc.) with adjustable strength.
+-   **💠 Shape Masks**: Spatially modulate noise with geometric overlays (Radial, Linear, Checkerboard, Vignette, Spiral, Hexgrid, etc.) with adjustable strength.
 -   **🌈 Color Schemes Integration**: Apply color transformations (Inferno, Magma, Viridis, Jet, Turbo, etc.) to the noise *before* it influences the diffusion model, subtly guiding structure and aesthetics. Adjustable intensity.
 -   **⏳ Temporal Coherence**:
     -   Generate frame-consistent evolving noise for animations.
     -   Ensure consistent base noise for predictable exploration when tweaking parameters for still images.
 -   **🎛️ Granular Control**:
-    -   Global `shader_strength` and per-stage strength tuning.
-    -   Adjust `noise_scale`, `octaves`, `warp_strength`, `phase_shift`, and more for each stage.
+    -   Global `shader_strength`, spread across stages by `sequential_distribution` and `injection_distribution`.
+    -   Adjust `noise_scale`, `octaves`, `warp_strength`, `phase_shift`, and more; `stage_progression` varies the zoom and detail from stage to stage.
 -   **🎚️ Presets**: `nudge`, `explore`, `roam`, `video`, `jump` and `stamp` set the shader settings that only mean something together, and write them into the node's widgets so you can see what the run will use.
 -   **🧭 Travel Modes**: `walk` explores around the seed, `drift` narrows how the shader moves you, and `jump` lets the shader's parameters choose the destination.
 -   **⚖️ Consistent Strength**: With `normalize_strength` (on by default), one `shader_strength` value hands the sampler the same share of shader in every blend mode.
--   **💾 Parameter Management**: Save your shader parameter configurations. Not necessary with (direct) node version.
+-   **👁️ Live Shader Display**: The Direct node previews the pattern its inputs will draw, for every shader type.
+-   **🚶 Shader Noise Walk**: Ramp one parameter across a batch in a single run, with the model loaded once, and feed the result to the comparers.
+-   **✂️ Split Runs and Custom Sampling**: Sample part of a schedule like `KSampler (Advanced)`, or take shader noise into `SamplerCustomAdvanced` through `Shader Noise Source`.
+-   **💾 Parameter Management**: The deprecated `Shader Noise KSampler` saves its parameters to a file; the Direct node needs no saving.
 -   **📊 "Show Shader Matrix" Button**: Access comprehensive, interactive documentation and visualizations directly within ComfyUI (Alt+M shortcut).
--   **🤝 Compatibility**: Shape-driven rather than a model list — any image or video latent at any channel count, including multi-stream video+audio latents like MiniMax H3 (see Model Compatibility section).
+-   **🤝 Compatibility**: Shape-driven rather than a model list — any image or video latent at any channel count, including multi-stream video+audio latents like MiniMax H3, and sequence latents with `shade_non_spatial` (see Model Compatibility section).
 -   **🧠 Latent Space Cartography**: Create a map of the territory surrounding your seed, developing an intuitive understanding of how to navigate to specific effects.
 -   **🔄 Persistent Identities in Variation**: Observe how similar elements persist across parameter adjustments, revealing how the model encodes concepts and their relationships.
 -   **💎 Discovery of "Hidden Gems"**: Find interesting variations that exist in the spaces "between" seeds that random sampling might statistically miss.
@@ -216,7 +221,7 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
 
 ## 🚀 Usage
 
-1.  **Add Node**: Add the `ShaderNoiseKSampler` node to your ComfyUI graph.
+1.  **Add Node**: Add the `Shader Noise KSampler (Direct)` node to your ComfyUI graph.
 2.  **Connect Inputs**:
     -   `model`: Your primary AI model.
     -   `positive`, `negative`: Your conditioning prompts.
@@ -227,17 +232,34 @@ Restart ComfyUI after installation. No additional `pip install` steps are requir
 4.  **Configure Shader Noise**: This is where the exploration begins!
     -   **Preset**: Pick `explore` to start, or leave it on `custom` to set everything yourself. A preset writes its values into the widgets it controls.
     -   **Travel Mode**: Leave `travel_mode` on `walk` to explore around your seed; `jump` hands the destination to the shader.
-    -   **Stages**: Define `sequential_stages` and `injection_stages`.
+    -   **Stages**: Define `sequential_stages` and `injection_stages`, and how strength is spread across them with `sequential_distribution` and `injection_distribution`.
     -   **Global Controls**: Set `shader_strength` (0.0 to disable shaders), `blend_mode`, and `noise_transform`.
-    -   **Per-Stage Controls**: For each stage, configure:
+    -   **Shader Controls**: Every stage draws from the same settings:
         -   `shader_type` (e.g., `domain_warp`, `perlin`, `cellular`)
-        -   `noise_scale` (zoom control), `noise_octaves` (detail level), `noise_warp_strength` (non-linear navigation), `noise_phase_shift` (perspective shift)
-        -   `shape_mask_type` and `shape_mask_strength`
+        -   `noise_scale` (zoom control), `octaves` (detail level), `warp_strength` (non-linear navigation), `phase_shift` (perspective shift)
+        -   `shape_type` and `shape_mask_strength`
         -   `color_scheme` and `color_intensity`
-        -   Stage-specific `strength_multiplier`
+    -   **Stage Progression**: `coarse_to_fine` or `fine_to_coarse` varies `noise_scale` and `octaves` across the run instead of drawing the same shader at every stage.
     -   **Temporal Coherence**: Enable `use_temporal_coherence` for animations or consistent exploration.
-5.  **Explore**: Use the "📊 Show Shader Matrix" button (or Alt+M) to better understand the noise patterns you're creating.
+5.  **Explore**: Watch the live shader display as you change the inputs, and use the "📊 Show Shader Matrix" button (or Alt+M) to better understand the noise patterns you're creating.
 6.  **Generate**: Queue your prompt and witness the shader-guided generation!
+
+`example_workflows/` has ready-made graphs for SDXL, Flux Schnell, AnimateDiff, WAN 2.1, HunyuanVideo, LTXV and MiniMax H3, plus one for each comparer.
+
+### Walking a parameter
+
+`Shader Noise Walk` takes every input the Direct node does, plus `walk_parameter`,
+`walk_start`, `walk_end` and `walk_steps`. It samples the same seed `walk_steps`
+times (up to 16) while the chosen parameter ramps from start to end, and returns
+the runs as one batched latent for a single VAE decode or a comparer. The model
+loads once, so a walk costs about `walk_steps` times one run.
+
+It can ramp `shader_strength`, `phase_shift`, `noise_scale`, `warp_strength`,
+`octaves`, `shape_mask_strength`, `color_intensity` or `seed`. Start with
+`shader_strength` from 0.0, which gives a clean reference frame; `phase_shift`
+holds the distance and turns the pattern instead; walking `seed` is ordinary
+seed-hopping, for comparison. A preset still applies, except to the parameter
+being walked.
 
 ### Splitting a run
 
@@ -294,7 +316,7 @@ Unlike random seed exploration, the ShaderNoiseKSampler provides a methodical wa
 
 ## ⚙️ Configuration Options
 
-The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed below with their navigational significance. For an exhaustive list and explanations, please refer to the **"📊 Show Shader Matrix"** documentation within ComfyUI.
+`Shader Noise KSampler (Direct)` offers extensive control. Key parameters are listed below with their navigational significance. For an exhaustive list and explanations, please refer to the **"📊 Show Shader Matrix"** documentation within ComfyUI.
 
 | Option                       | Description & Navigational Significance                                                                     | Default (Example) |
 |------------------------------|-------------------------------------------------------------------------------------------------------------|-------------------|
@@ -308,8 +330,11 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 | **`start_at_step`**          | Enter the schedule here instead of at the first step.                                                      | `0`               |
 | **`end_at_step`**            | Stop after this step. Anything at or past `steps` runs to the end.                                         | `10000`           |
 | **`return_with_leftover_noise`** | Hand the latent over still noisy when `end_at_step` stopped the run early, instead of finishing it cleanly. | `false`           |
+| **`custom_sigmas`**          | Optional sigma schedule that replaces the one `steps` and `scheduler` would build.                          | —                 |
 | **`sequential_stages`**      | Number of shader stages applied sequentially.                                                              | `1`               |
 | **`injection_stages`**       | Number of shader stages injected at specific steps.                                                        | `0`               |
+| **`sequential_distribution`** / **`injection_distribution`** | How `shader_strength` is spread across each kind of stage: `uniform`, `linear_decrease`, `linear_increase`, `gaussian`, `first_stronger` or `last_stronger`. | `linear_decrease` |
+| **`stage_progression`**      | `coarse_to_fine` starts on large features with fewer octaves and ends on small ones with more; `fine_to_coarse` reverses it. Spans 0.5x to 2x `noise_scale` and ±1 octave around your values. | `uniform`         |
 | **`shader_strength`**        | Global strength of shader noise influence (0.0 to disable).                                                | `0.3`             |
 | **`blend_mode`**             | How shader noise combines with base noise (e.g., `multiply`, `add`).                                       | `multiply`        |
 | **`normalize_strength`**     | Reads `shader_strength` on `multiply`'s scale, so the same value hands over the same share of shader in every blend mode. | `true`            |
@@ -317,16 +342,18 @@ The `ShaderNoiseKSampler` offers extensive control. Key parameters are listed be
 | **`travel_mode`**            | How the shader moves you: `walk` explores around the seed, `drift` narrows the move, `jump` lets the shader set the destination. | `walk`            |
 | **`noise_transform`**        | Math operation on shader noise (e.g., `none`, `absolute`, `sin`).                                          | `none`            |
 | **`use_temporal_coherence`** | For consistent noise in animations or exploration.                                                         | `false`           |
+| **`shade_non_spatial`**      | Also paint streams with no picture in them: H3's and LTXAV's audio, and sequence latents, which are otherwise refused. | `false`           |
+| **`fast_high_channel_noise`** | A faster, simplified draw for latents with more than 16 channels, such as LTXV.                           | `false`           |
 | **`sampling_mode`**          | `standard` samples one schedule split into stage segments, and honours `denoise` and `custom_sigmas`. `legacy` keeps the pre-2.0.0 pipeline and is selected automatically for older workflows, but no longer reproduces every earlier seed exactly (see Known Issues). | `standard`        |
 | **`shader_type`**            | The base pattern: one of the thirteen types, `domain_warp` by default. The node's tooltip describes each one's character and what its knobs do. | `domain_warp`     |
-| **`noise_scale (per stage)`**    | The "Zoom Control" - determines how "zoomed in" or "zoomed out" you are in latent space.                  | `1.0`             |
-| **`noise_octaves (per stage)`**  | The "Detail Slider" - controls the level of detail and complexity in your noise pattern.                  | `1`               |
-| **`noise_warp_strength (per stage)`** | The "Non-Linear Navigator" - creates non-linear paths through latent space.                          | `0.5`             |
-| **`noise_phase_shift (per stage)`** | The "Perspective Shifter" - reveals different "facets" of the same core elements.                      | `0.5`             |
-| **`shape_mask_type (per stage)`** | Geometric mask overlay (e.g., `radial`, `grid`).                                                         | `none`            |
-| **`shape_mask_strength (per stage)`**| Intensity of the shape mask.                                                                           | `0.5`             |
-| **`color_scheme (per stage)`**   | Color mapping for noise (e.g., `viridis`, `jet`).                                                        | `none`            |
-| **`color_intensity (per stage)`**| Strength of the color scheme influence.                                                                  | `0.8`            |
+| **`noise_scale`**            | The "Zoom Control" - determines how "zoomed in" or "zoomed out" you are in latent space.                  | `1.0`             |
+| **`octaves`**                | The "Detail Slider" - controls the level of detail and complexity in your noise pattern.                  | `1`               |
+| **`warp_strength`**          | The "Non-Linear Navigator" - creates non-linear paths through latent space.                                | `0.5`             |
+| **`phase_shift`**            | The "Perspective Shifter" - reveals different "facets" of the same core elements.                          | `0.5`             |
+| **`shape_type`**             | Geometric mask overlay (e.g., `radial`, `checkerboard`).                                                   | `none`            |
+| **`shape_mask_strength`**    | Intensity of the shape mask.                                                                               | `1.0`             |
+| **`color_scheme`**           | Color mapping for noise (e.g., `viridis`, `jet`).                                                          | `none`            |
+| **`color_intensity`**        | Strength of the color scheme influence.                                                                    | `0.8`             |
 
 ### Sampler & Scheduler Compatibility
 
@@ -346,18 +373,22 @@ the pixel-space models up to 256, without a list to be added to.
 | --- | --- | --- |
 | `[B, C, H, W]` (image) | Yes, any `C` | SD 1.5, SDXL, SD3, Flux, Flux 2, Chroma, HiDream, Qwen-Image, Z-Image, PixelDiT, Trellis2, HunyuanImage 2.1 |
 | `[B, C, T, H, W]` (video) | Yes, any `C` | WAN 2.1 / 2.2, HunyuanVideo and 1.5, LTXV, Mochi, Cosmos, CogVideoX, SeedVR2, Anima |
-| `NestedTensor` of streams | Yes — the first stream is painted | **MiniMax H3** (video + audio), LTXAV |
-| `[B, C, L]` (sequence) | No — refused with a named error | Stable Audio 1 / 3, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D v2, TripoSplat |
+| `NestedTensor` of streams | Yes — the first stream is painted, every stream with `shade_non_spatial` | **MiniMax H3** (video + audio), LTXAV |
+| `[B, C, L]` (sequence) | Only with `shade_non_spatial` — otherwise refused with a named error | Stable Audio 1 / 3, ACE-Step 1.5, MiniMax Music 3, Hunyuan3D v2, TripoSplat |
 
-**MiniMax H3** arrives as a paired video + audio latent. The shader paints the
-video stream; the audio stream keeps exactly the Gaussian noise a stock KSampler
-would have given it, because it has no spatial grid to paint. Note that H3 itself
-only supports batch size 1.
+**MiniMax H3** arrives as a paired video + audio latent. By default the shader
+paints the video stream and the audio stream keeps exactly the Gaussian noise a
+stock KSampler would have given it. With `shade_non_spatial` on, the audio is
+painted across stereo x time as well; H3 denoises both streams together, so that
+reaches the picture too, and the sound changes at far lower strength than the
+picture does. Note that H3 itself only supports batch size 1.
 
 **Sequence latents** carry no height and width, so there is nothing for a shader
-to draw on. Rather than quietly producing something meaningless, the node refuses
-with a message naming the shape. Setting `shader_strength` to `0.0` leaves
-nothing to paint, and the node then samples those models as a plain KSampler.
+to draw on. By default the node refuses them with a message naming the shape
+rather than quietly producing something meaningless. `shade_non_spatial` paints
+them as a single row instead; that is largely unexplored. Setting
+`shader_strength` to `0.0` leaves nothing to paint, and the node then samples
+those models as a plain KSampler.
 
 > [!NOTE]
 > The above describes `standard` mode. `legacy` mode keeps its original
@@ -385,13 +416,15 @@ The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matr
 
 -   **Blend Modes**: Determine how the crafted shader noise interacts with the underlying base noise. `Multiply` can create depth, `Add` can introduce highlights, and `Overlay` can enhance contrast.
 -   **Noise Transformations**: Apply mathematical functions like `absolute` (creates ridges), `sin` (creates bands), or `sqrt` (compresses highlights) to the raw shader noise before blending, dramatically altering its characteristics.
--   **Shape Masks**: Impose geometric forms onto your noise. A `radial` mask can create focus, a `grid` can introduce blocky structures. Strength is key.
+-   **Shape Masks**: Impose geometric forms onto your noise. A `radial` mask can create focus, a `checkerboard` can introduce blocky structures. Strength is key.
 -   **Color Schemes**: More than just a visual flair for the noise preview, these schemes (`viridis`, `inferno`, `jet`, etc.) transform the noise data itself. This "colored" noise can then guide the diffusion model in unique ways, influencing texture, features, and mood by altering how the model "perceives" the noise structure.
 
 ## ❓ Troubleshooting
 
 -   **Shader Effects Not Visible**:
     -   Ensure `shader_strength` is greater than `0.0`.
+    -   With `add_noise` off there is no starting noise to paint, so a single stage does nothing. Raise `sequential_stages` or `injection_stages` to give the shader a boundary to enter at.
+    -   `gaussian` is plain white noise by design: it moves you toward another seed's neighbourhood without adding any pattern.
 
 -   **Unexpected Results**: Small parameter changes can sometimes lead to large visual shifts. Even a 0.05 change in `shader_strength` can land on a noticeably different neighbour of your seed's image, or on a near-identical one; which you get depends on the model and the seed. Use the shader visualizer to understand the noise before generating. Experimentation is encouraged.
 
