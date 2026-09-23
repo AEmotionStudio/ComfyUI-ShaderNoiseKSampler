@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.2.0] - 2026-09-23
 
 Changes what a seed produces at any `shader_strength` above 0, in both sampling
 modes. Strength 0 is unchanged.
@@ -75,9 +75,9 @@ so the first step away from strength 0 is only as large as the shader makes it.
   `cellular` is the dearest, at twice `domain_warp`: 27 neighbouring cells per pixel on
   a clip. The five existing types draw exactly what they did before.
 
-  Measured on Krea 2 (one prompt, three seeds, images only): `gaussian` moves the picture less than
-  half as far as any structured type and never leaves its seed, which is what a control
-  should do. `fractal`, `heterogeneous_fbm`, `cellular` and `projection_3d` behave like
+  Measured on Krea 2 (one prompt, three seeds, images only): `gaussian` moves the
+  picture less than half as far as any structured type and never leaves its seed,
+  which is what a control should do. `fractal`, `heterogeneous_fbm`, `cellular` and `projection_3d` behave like
   `domain_warp`, re-composing the scene from 0.25 without drawing their pattern into
   it, the two FBMs with more colour. `waves`, `interference` and `perlin` get drawn:
   from about 0.5 their bands appear as striped fabric and backdrop, `waves` soonest and
@@ -408,7 +408,7 @@ what was wrong was how a multi-stream latent crossed a stage boundary.
   small ones with more, `fine_to_coarse` reverses it. Centred on your widget
   values, spanning 0.5x to 2x noise_scale and plus or minus one octave.
 - **`decorrelate_channels` (optional, default off).** *Replaced by `travel_mode`
-  before it shipped; see Unreleased.* The generators built every
+  before it shipped; see 2.2.0.* The generators built every
   channel past the first one or two as a pointwise function of those two, so
   `domain_warp` returned noise spanning a single channel at SD's four and about
   two at any larger count, and `temporal_coherent` returned identical channels.
