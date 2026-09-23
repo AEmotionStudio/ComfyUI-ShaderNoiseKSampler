@@ -225,19 +225,26 @@ def _paint(
     shader_type: str,
     blend_mode: str,
     noise_transform: str,
-    device: torch.device,
-    dtype: torch.dtype,
     temporal_coherence: bool,
     normalize_strength: bool,
     travel_mode: str,
     shade_non_spatial: bool,
 ) -> torch.Tensor:
-    """Mix one boundary's shader stages into every paintable stream of `noise`."""
+    """
+    Mix one boundary's shader stages into every paintable stream of `noise`.
+
+    Each stream is painted where it already lives. An opening boundary's noise comes
+    from `prepare_noise` on the CPU, a later one's is recovered from a segment result
+    on the sampler's device, and painting only the paintable streams onto a device
+    taken from somewhere else would leave the others behind -- a nested AV latent
+    then reaches `pack_latents` with its video on one device and its audio on another.
+    """
     streams = _streams(noise)
     for index in _paintable(streams, shade_non_spatial):
+        stream = streams[index]
         streams[index] = _apply_events(
-            streams[index].to(device), events, shader_params, shader_type, blend_mode,
-            noise_transform, device, dtype, temporal_coherence, normalize_strength,
+            stream, events, shader_params, shader_type, blend_mode,
+            noise_transform, stream.device, stream.dtype, temporal_coherence, normalize_strength,
             travel_mode, shade_non_spatial, stream_seed_offset=index * _STREAM_SEED_STRIDE,
         )
     return _rebuild(noise, streams)
@@ -268,15 +275,14 @@ def starting_noise(
     both nodes.
     """
     samples = latent["samples"]
-    primary = _streams(samples)[0]
 
     # No pre-flight refusal for an unpaintable latent, unlike `run`: there is no
     # sampling here to protect, and the generator raises the same error one call down.
     noise = comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
     shaping = schedule.stage_shaping(stage_progression, 0.0)
     return _paint(noise, [(shader_strength, seed, shaping)], shader_params, shader_type,
-                  blend_mode, noise_transform, primary.device, primary.dtype,
-                  use_temporal_coherence, normalize_strength, travel_mode, shade_non_spatial)
+                  blend_mode, noise_transform, use_temporal_coherence, normalize_strength,
+                  travel_mode, shade_non_spatial)
 
 
 def _split_noise(out, x0_internal, sigma, model_sampling, model):
@@ -375,7 +381,6 @@ def run(
     segment_list = schedule.segments(boundaries, last)
 
     primary = _streams(samples)[0]
-    device, dtype = primary.device, primary.dtype
 
     # Without add_noise the latent arrives carrying its own noise from whatever ran
     # before, so there is none to make and none to paint at the opening boundary: the
@@ -394,8 +399,7 @@ def run(
     noise = (comfy.sample.prepare_noise(samples, seed, latent.get("batch_index", None))
              if add_noise else comfy.sample.prepare_empty_noise(samples))
     noise = _paint(noise, opening, shader_params, shader_type, blend_mode, noise_transform,
-                   device, dtype, use_temporal_coherence, normalize_strength, travel_mode,
-                   shade_non_spatial)
+                   use_temporal_coherence, normalize_strength, travel_mode, shade_non_spatial)
 
     model_sampling = model.get_model_object("model_sampling")
     noise_mask = latent.get("noise_mask", None)
@@ -426,7 +430,7 @@ def run(
             result, captured["x0"], sigmas[end], model_sampling, model
         )
         noise = _paint(residual, events.get(end, []), shader_params, shader_type, blend_mode,
-                       noise_transform, device, dtype, use_temporal_coherence,
-                       normalize_strength, travel_mode, shade_non_spatial)
+                       noise_transform, use_temporal_coherence, normalize_strength, travel_mode,
+                       shade_non_spatial)
 
     return {**latent, "samples": current}

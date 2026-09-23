@@ -292,11 +292,29 @@ def test_matching_streams_get_their_own_field():
     base = torch.randn(1, 4, 16, 16, generator=torch.Generator().manual_seed(3))
     painted = _paint(NestedTensor([base.clone(), base.clone()]), [(0.5, 8888, {})],
                      dict(SHADER_PARAMS), "domain_warp", "multiply", "none",
-                     base.device, base.dtype, False, True, "walk", True)
+                     False, True, "walk", True)
     first, second = painted.unbind()
 
     assert not torch.allclose(first, base), "the streams must be painted at all"
     assert not torch.allclose(first, second), "and not with the same field twice"
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a second device to mix up")
+def test_painting_leaves_every_stream_on_its_own_device():
+    """
+    A boundary residual arrives on the sampler's device while the latent that started
+    the run sits on the CPU. Painting only the paintable stream onto a device from
+    anywhere else strands the others: MiniMax H3 then reached pack_latents with its
+    video on one device and its audio on another, and torch.cat refused.
+    """
+    from comfy.nested_tensor import NestedTensor
+    from snk.pipelines.standard import _paint
+
+    streams = [torch.randn(1, 4, 16, 16, device="cuda"), torch.randn(1, 8, 32, device="cuda")]
+    painted = _paint(NestedTensor(streams), [(0.5, 8888, {})], dict(SHADER_PARAMS),
+                     "domain_warp", "multiply", "none", False, True, "walk", False)
+
+    assert {stream.device for stream in painted.unbind()} == {streams[0].device}
 
 
 def test_an_unpaintable_latent_is_refused_before_any_sampling(recorder):
