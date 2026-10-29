@@ -10,6 +10,7 @@ import math
 import pytest
 import torch
 
+from helpers import SHADER_TYPES
 from snk.shaders.simplex import simplex_2d
 
 # Per-slice element counts that are and are not kind to the vectoriser. The
@@ -102,8 +103,7 @@ def test_the_seed_is_coerced_to_int64():
     assert torch.equal(as_int[0], simplex_2d(p, 8888, rotate=False))
 
 
-@pytest.mark.parametrize("shader_type", ["domain_warp", "curl_noise",
-                                         "temporal_coherent", "tensor_field", "gaussian", "fractal", "perlin", "heterogeneous_fbm", "interference", "projection_3d", "cellular", "waves"])
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 @pytest.mark.parametrize("hw", RAGGED + ALIGNED)
 def test_channel_zero_survives_batching_at_every_shape(shader_type, hw):
     """

@@ -28,7 +28,7 @@ NOISE_INPUTS = (
     "shader_type", "shape_type", "color_scheme", "noise_scale", "octaves", "warp_strength",
     "shape_mask_strength", "phase_shift", "color_intensity",
     "fast_high_channel_noise", "preset", "stage_progression", "shade_non_spatial",
-    "travel_mode", "normalize_strength",
+    "travel_mode", "normalize_strength", "temporal_rate",
 )
 
 # stage_progression means something different with one stage, so it does not inherit
@@ -98,7 +98,7 @@ class ShaderNoiseSource:
                   noise_scale, octaves, warp_strength, shape_mask_strength, phase_shift,
                   color_intensity, fast_high_channel_noise=False, preset="custom",
                   stage_progression="uniform", shade_non_spatial=False, travel_mode="walk",
-                  normalize_strength=True):
+                  normalize_strength=True, temporal_rate=1.0):
         chosen = preset_table.apply_preset(preset, dict(
             shader_type=shader_type, shader_strength=shader_strength, blend_mode=blend_mode,
             travel_mode=travel_mode, shape_type=shape_type,
@@ -110,6 +110,7 @@ class ShaderNoiseSource:
             color_scheme, noise_scale, octaves, warp_strength, shape_mask_strength,
             phase_shift, color_intensity, use_temporal_coherence, fast_high_channel_noise,
         )
+        shader_params["time_rate"] = temporal_rate
 
         return (ShaderNoise(
             seed,

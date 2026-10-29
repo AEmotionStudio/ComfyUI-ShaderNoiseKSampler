@@ -131,3 +131,19 @@ def test_the_walk_node_passes_the_window_through(recorder):
 
     assert batch["samples"].shape[0] == 2
     assert len(recorder) == 2, "one windowed run per point on the ramp"
+
+
+def test_temporal_rate_can_be_walked_on_a_clip(recorder):
+    """
+    The rate is a socket on the node, with no widget, but the walk can still ramp it:
+    0 holds one field for every frame, and the last step lets it evolve.
+    """
+    run_walk(model=FakeModel("flow"), latent={"samples": torch.zeros(1, 16, 5, 8, 8)},
+             use_temporal_coherence=True, shader_strength=0.5,
+             walk_parameter="temporal_rate", walk_start=0.0, walk_end=4.0, walk_steps=2)
+    held, evolving = (call["noise"] for call in recorder)
+
+    def neighbours(noise):
+        return torch.corrcoef(torch.stack([noise[:, :, :-1].flatten(), noise[:, :, 1:].flatten()]))[0, 1].item()
+
+    assert neighbours(held) > neighbours(evolving) + 0.05

@@ -1393,6 +1393,39 @@ const SHADER_SOURCES = {
                         }
                         return clamp(sum / sqrt(count) * 0.9, -1.0, 1.0);
                     }
+                `,
+    "kaleido": `
+                    // shaders/kaleido.py: an FBM over folded coordinates. octaves is the order of
+                    // the fold (1 mirrors, 2 mirrors both ways, 3 and up are wedges), phase_shift
+                    // turns it, warp_strength bends the pattern inside the fold.
+                    float fbm(vec2 p) {
+                        vec2 c = p - 0.5;
+                        float turn = (u_phaseShift - 0.5) * 3.14159265;
+                        c = vec2(c.x * cos(turn) - c.y * sin(turn), c.x * sin(turn) + c.y * cos(turn));
+                        float order = floor(min(max(u_octaves, 1.0), 8.0));
+                        if (order < 1.5) {
+                            c.x = abs(c.x);
+                        } else if (order < 2.5) {
+                            c = abs(c);
+                        } else {
+                            float wedge = 6.28318530718 / order;
+                            float a = abs(mod(atan(c.y, c.x), wedge) - wedge * 0.5);
+                            c = length(c) * vec2(cos(a), sin(a));
+                        }
+                        vec2 q = c * u_scale * 3.0;
+                        q += u_warpStrength * 0.15 * vec2(snoise(q + 100.0), snoise(q + 200.0));
+                        float sum = 0.0;
+                        float amp = 1.0;
+                        float freq = 1.0;
+                        float norm = 0.0;
+                        for (int i = 0; i < 3; i++) {
+                            sum += amp * snoise3(vec3(q * freq, u_time * (0.2 + 0.05 * float(i))));
+                            norm += amp;
+                            amp *= 0.5;
+                            freq *= 2.0;
+                        }
+                        return clamp(sum / norm * 1.5, -1.0, 1.0);
+                    }
                 `
 };
 // Common fragment shader footer - calls fbm(), applies shape mask and color scheme

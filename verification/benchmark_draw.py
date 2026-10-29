@@ -50,6 +50,7 @@ def load_pack():
 # Named for the models they come from, so a regression can be read as "H3 got slower".
 SHAPES = {
     "sd15 512x512": (1, 4, 64, 64),
+    "krea2 1024x1024": (1, 16, 128, 128),
     "wan 16ch/16f": (1, 16, 16, 60, 104),
     "h3 608x352/56f": (1, 24, 17, 22, 38),
     "h3 1344x768/124f": (1, 24, 37, 48, 84),

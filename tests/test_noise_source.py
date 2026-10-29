@@ -171,3 +171,12 @@ def test_stage_progression_shapes_the_single_stage(progression, zoomed_in):
 
     assert not torch.equal(uniform, shaped)
     assert torch.equal(shaped, sampler_noise(latent, stage_progression=progression))
+
+
+def test_temporal_rate_means_the_same_thing_on_both_nodes():
+    latent = {"samples": torch.zeros(1, 16, 5, 8, 8)}
+    held = dict(use_temporal_coherence=True, temporal_rate=4.0)
+
+    fast = source_noise(latent, **held)
+    assert torch.equal(fast, sampler_noise(latent, model=FakeModel("flow"), **held))
+    assert not torch.equal(fast, source_noise(latent, use_temporal_coherence=True))

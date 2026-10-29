@@ -79,6 +79,10 @@ from .shaders.fractal import (
     FractalNoiseGenerator,
     generate_fractal_tensor,
 )
+from .shaders.kaleido import (
+    KaleidoNoiseGenerator,
+    generate_kaleido_tensor,
+)
 
 register_shader("curl", CurlNoiseGenerator, {
     "description": "Curl/fluid noise patterns (alias)",

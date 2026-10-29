@@ -2,6 +2,125 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+Changes what `gaussian` draws at every seed, and what `drift` draws when
+`use_temporal_coherence` is on. Nothing else a saved workflow produces moves.
+
+### Fixed
+- **`drift` with temporal coherence on was `jump`.** Under coherence a generator holds
+  one seed across the clip, and it took that seed from the node rather than from the
+  draw it was asked for. `drift` builds its four directions from four draws at four
+  seeds, so all four came back as the same field and the noise spanned one channel
+  direction instead of four: effective rank 1.00, for every shader type, on images and
+  clips alike. It is 3.4 to 3.8 now. `walk` and `jump` are bit-identical, as is
+  everything with coherence off. The same slip made a second stream repeat the first
+  one's pattern under coherence with `shade_non_spatial` on; it now gets its own.
+- **The `gaussian` control left part of the latent where it was.** Its first channel was
+  drawn from the seed the sampler's own base noise is drawn from, so the two opened
+  with the same numbers (cosine 0.996) and blending them changed nothing there: one
+  channel in four on SD 1.5, one in sixteen on Krea 2. Every channel is now a draw of
+  its own. Earlier `gaussian` renders are not reproduced.
+
+### Added
+- **A fourteenth shader type, `kaleido`: a field folded onto itself, for symmetric
+  compositions.** The coordinates are folded about the centre of the frame before the
+  noise is drawn, so the field is its own mirror image to float rounding. `octaves` is
+  the order of the fold: 1 mirrors left to right, 2 mirrors both ways, 3 and up cut the
+  frame into that many wedges, each a mirror of its neighbour. `phase_shift` turns the
+  fold, `warp_strength` bends the pattern inside it without breaking the symmetry, and
+  `noise_scale` is the size of its features. Underneath is a three-layer FBM, and on a
+  clip it is evaluated in 3D with time as the third axis.
+
+  It was rendered on Krea 2 before it was given a place in the list (1024x1024, two
+  seeds, `multiply`, er_sde). How alike a picture and its mirror image are, as a
+  correlation, with -0.09 for the unshaded renders:
+
+  | order | 0.1 | 0.15 | 0.2 | 0.3 | 0.5 | 0.75 |
+  |---|---|---|---|---|---|---|
+  | 1 | -0.17 / -0.14 | -0.16 / -0.15 | -0.17 / +0.89 | +0.41 / +0.92 | -0.07 / +0.88 | -0.01 / +0.89 |
+  | 2 | -0.13 / -0.11 | -0.08 / -0.10 | -0.05 / +0.77 | +0.48 / +0.84 | +0.76 / +0.83 | +0.63 / +0.78 |
+  | 6 | -0.12 / +0.00 | +0.23 / +0.02 | +0.96 / +0.12 | +0.23 / +0.74 | +0.66 / +0.32 | +0.26 / +0.59 |
+
+  Under 0.2 nothing shows. From about 0.3, orders 2 and 6 bring the picture back
+  symmetric on both seeds: a subject centred on a mirrored scene, an elephant met head
+  on with a tusk either side. A single mirror took on one seed only. It fails the way
+  the FBM family does: the second seed laid rainbow bands across the background at
+  orders 1 and 2 from 0.2 up, symmetric ones, with the subject intact in front of
+  them, and did not at order 6. Where symmetry starts is the seed's to decide, and two
+  seeds on one prompt and one model is all this rests on.
+
+  Like every type it fills each latent channel with a field of its own and keeps channel
+  0 the same whatever the channel count. A fold of order N leaves one part in 2N of the
+  frame free, though, so the channels have less room to differ as the order rises: 12.7
+  of 16 at order 1, 10.6 at 2 and 7.9 at 6 on a 128x128 latent. Draw cost at octaves 3,
+  CPU: 0.45s at H3 608x352/56f and 1.79s at 1344x768/124f, about `domain_warp`'s, with
+  rank 23.4 and 23.7 of 24; 50 of 128 on LTXV. `stage_progression` shifts `octaves` by
+  one between stages, so it changes the order mid-run, as it changes `cellular`'s pattern.
+
+- **`temporal_rate`: how fast a pattern held by `use_temporal_coherence` evolves.** With
+  coherence on, a clip's shader pattern is one field moving through time, and time has
+  always run from 0 to 1 across the clip whatever its length. For most types that is
+  barely moving: neighbouring latent frames of a 17-frame clip correlate 0.84 to 1.00.
+  The rate scales that span. 0 holds one pattern for every frame, 1 is what it was, and
+  above 1 the frames share less, each type at its own pace:
+
+  | rate | 0 | 1 | 4 | 8 |
+  |---|---|---|---|---|
+  | `temporal_coherent` | 1.00 | 0.84 | 0.28 | 0.00 |
+  | `spectral` | 1.00 | 0.93 | 0.31 | 0.02 |
+  | `projection_3d` / `cellular` | 1.00 | 0.95 / 0.97 | 0.72 | 0.39 / 0.38 |
+  | `domain_warp` / `curl_noise` | 1.00 | 0.98 | 0.85 / 0.83 | 0.67 / 0.61 |
+  | `fractal` / `perlin` | 1.00 | 0.99 / 1.00 | 0.93 / 0.99 | 0.83 / 0.96 |
+
+  It is a socket with no widget, on the Direct, Walk and Source nodes, so it takes no
+  slot in a saved workflow and is 1.0 unless something is wired to it. The Walk node can
+  ramp it, which is the quick way to find a type's useful range.
+
+  What it buys, measured on MiniMax H3's split second pass (8 steps, split at 4,
+  896x896, strength 0.5, one seed), where holding the pattern halves flicker and, with
+  `domain_warp`, takes the whole frame over. `motion` is the mean difference between
+  consecutive frames (0.0102 with no shader in pass 2); `held` is how alike the shader's
+  overlay is a second apart:
+
+  | | coherence off | rate 1 | rate 4 | rate 8 |
+  |---|---|---|---|---|
+  | `domain_warp`, motion | 0.0685 | 0.0344 | 0.0473 | 0.0643 |
+  | `domain_warp`, held | 0.22 | 0.80 | 0.57 | 0.28 |
+  | `curl_noise`, motion | 0.0862 | 0.0400 | 0.0378 | 0.0285 |
+  | `curl_noise`, held | -0.21 | 0.61 | 0.40 | 0.22 |
+
+  For `domain_warp` it is a trade: as the rate rises the held pattern lets go of the frame
+  and the flicker it was suppressing comes back, nearly all of it by 8. For `curl_noise`
+  rate 8 was the best clip of the nine: no held pattern, a third of the flicker it has
+  with coherence off, and closest to the clean render. In a single pass under er_sde it
+  dials away the extra push coherence adds, from the frozen field's down to about the
+  coherence-off value by 8. One seed and one prompt for the split, two seeds for the
+  single pass.
+
+- **`verification/describe_field.py` scores a shader type without rendering anything.**
+  For any type, knobs and latent shape it prints how many spatial modes the field
+  occupies, how much of its power sits in the large scales, channel rank, how alike
+  neighbouring frames are with coherence off and on, how much of it is edges and folds
+  the spectrum does not describe, and a dose: how far the mixed noise's spectrum sits
+  from white. Against the per-type movement already recorded on MiniMax H3 the dose
+  ranks the types at a Spearman of +0.92 to +0.94. Two things it pointed at were then
+  rendered on Krea 2, and it was right about one. Only the large scales count: a field
+  with as high a dose but none of its power there moved the picture no further than
+  `gaussian` does. And a strength does not carry across picture sizes: `domain_warp` at
+  0.5 moved the picture 0.55 of the distance between two seeds at 512x512 and 1.34 at
+  1024x1024, same prompt and seeds, while `gaussian` moved the same at both. The dose
+  per latent element does not explain that, though. Doubling `noise_scale` at 1024 makes
+  the noise cell for cell what it was at 512, and the picture still moved 1.15. So when
+  sizing a picture up, lower `shader_strength`; `noise_scale` buys back little. The
+  docstring says what the numbers have and have not been shown to predict.
+- **`verification/blend/analyze.py --bands`** splits the overlap between a latent change
+  and the field that caused it by spatial frequency. On the runs already recorded, the
+  field's trace sits in the large scales and falls away with frequency: on SD 1.5 at
+  strength 0.5, 0.70 below 0.05 cycles per latent cell against 0.11 above 0.3; on H3,
+  0.18 against 0.03; on Krea 2 only the lowest band clears chance, and only for the FBM
+  family from 0.5 up.
+
 ## [2.2.1] - 2026-09-23
 
 ### Removed

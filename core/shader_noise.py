@@ -220,7 +220,9 @@ def generate(
 
     Video is generated frame by frame and stacked on dim 2, the time axis.
     Without temporal coherence each frame advances the seed, which is what makes
-    frames differ; with it, the seed is held and only `time` advances.
+    frames differ; with it, the seed is held and only `time` advances. `time` runs
+    from 0 to 1 across the clip, or to the params' `time_rate` when they carry one:
+    0 holds one field for every frame, above 1 it evolves faster.
 
     The result is returned unnormalised; core.noise_math.mix_noise standardises
     both sides when blending.
@@ -267,6 +269,13 @@ def _generate(
     layout = latent_layout(latent_shape)
     generator = generator or resolve_generator(shader_type)
     base_params = _as_dict(params)
+    if temporal_coherence:
+        # Under coherence a generator holds `base_seed` in place of the seed it is
+        # handed. The node writes its own seed there, so every draw of a clip was the
+        # same field whatever seed asked for it: drift's four basis draws came out
+        # identical and it collapsed to rank 1, the same as jump, and a second stream
+        # repeated the first one's pattern. The held seed is this draw's own.
+        base_params["base_seed"] = seed
     base_time = float(base_params.get("time", 0.0) or 0.0)
     # Whether `time` is a real axis for this draw, rather than whether a particular
     # frame's value happens to be zero. A generator that switches between a 2D and a
@@ -298,9 +307,10 @@ def _generate(
 
         frames = []
         span = max(layout["frames"] - 1, 1)
+        rate = float(base_params.get("time_rate", 1.0))
         for index in range(layout["frames"]):
             frame_params = dict(base_params)
-            frame_params["time"] = base_time + index / span
+            frame_params["time"] = base_time + rate * index / span
             frame_seed = seed if temporal_coherence else seed + index
             frames.append(_render_octaves(generator, frame_params, layout, frame_seed, device))
 

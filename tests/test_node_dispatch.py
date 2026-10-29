@@ -181,18 +181,39 @@ def test_legacy_mode_samples_the_shader_type_it_was_given(sampler_calls):
 WINDOW_INPUTS = ["add_noise", "start_at_step", "end_at_step", "return_with_leftover_noise"]
 
 
+def _widgets(spec):
+    """The inputs that take a slot in a saved workflow's widget values. Sockets do not."""
+    return [name for name, entry in spec.items()
+            if (isinstance(entry[0], list) or entry[0] in ("INT", "FLOAT", "STRING", "BOOLEAN"))
+            and not (len(entry) > 1 and entry[1].get("forceInput"))]
+
+
 def test_the_window_inputs_come_last():
     """
-    ComfyUI maps saved widget values by position, so a new input anywhere but the
+    ComfyUI maps saved widget values by position, so a new widget anywhere but the
     tail re-reads every stored value in every saved workflow. Walk appends its own
     widgets to `required`, which the frontend orders ahead of all of `optional`, so
-    the tail of Direct's optional block is the last slot on both nodes.
+    the tail of Direct's optional block is the last slot on both nodes. A socket
+    holds no widget value, so those may follow.
     """
     from snk.shader_noise_walk import ShaderNoiseWalk
 
-    optional = list(DirectShaderNoiseKSampler.INPUT_TYPES()["optional"])
-    assert optional[-4:] == WINDOW_INPUTS
-    assert list(ShaderNoiseWalk.INPUT_TYPES()["optional"]) == optional
+    optional = DirectShaderNoiseKSampler.INPUT_TYPES()["optional"]
+    assert _widgets(optional)[-4:] == WINDOW_INPUTS
+    assert list(ShaderNoiseWalk.INPUT_TYPES()["optional"]) == list(optional)
+
+
+def test_temporal_rate_is_a_socket_and_reaches_the_frame_clock():
+    from snk import direct_shader_ksampler
+
+    spec = DirectShaderNoiseKSampler.INPUT_TYPES()["optional"]["temporal_rate"]
+    assert spec[1]["forceInput"] and spec[1]["default"] == 1.0
+
+    with mock.patch.object(direct_shader_ksampler.standard_pipeline, "run") as run:
+        run.return_value = {"samples": torch.zeros(1, 4, 16, 16)}
+        run_node()
+        run_node(temporal_rate=4.0)
+    assert [call.kwargs["shader_params"]["time_rate"] for call in run.call_args_list] == [1.0, 4.0]
 
 
 def test_the_window_defaults_sample_the_whole_schedule(sampler_calls):

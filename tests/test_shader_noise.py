@@ -12,6 +12,7 @@ import re
 import pytest
 import torch
 
+from helpers import SHADER_TYPES
 from snk.core.constants import CHANNEL_BASIS
 from snk.core.shader_noise import (
     UnsupportedLatentError, effective_channel_rank, generate, latent_layout,
@@ -103,8 +104,38 @@ def test_temporal_coherence_holds_the_seed():
     assert not torch.allclose(without, with_tc)
 
 
-@pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise", "temporal_coherent",
-                                         "gaussian", "fractal", "perlin", "heterogeneous_fbm", "interference", "projection_3d", "cellular", "waves"])
+def test_temporal_coherence_holds_the_seed_it_is_given():
+    """
+    A second stream, and each basis draw of a travel mode, is drawn at a seed of its
+    own. Under coherence every one of them used to come back as the node seed's field.
+    """
+    params = {**PARAMS, "use_temporal_coherence": True}
+    first = generate((1, 16, 4, 8, 8), params, "domain_warp", 8888, CPU, temporal_coherence=True)
+    other = generate((1, 16, 4, 8, 8), params, "domain_warp", 8888 + 104729, CPU, temporal_coherence=True)
+    assert not torch.equal(first, other)
+
+
+def test_time_rate_sets_how_far_a_held_field_evolves_across_a_clip():
+    """
+    Time runs 0 to 1 over a clip whatever its length, which leaves a held field near
+    frozen: neighbouring frames of a 17-frame clip correlate 0.84 to 1.00 by type.
+    The rate is the dial between that, one field for every frame, and a faster one.
+    """
+    params = {**PARAMS, "use_temporal_coherence": True}
+
+    def clip(**extra):
+        return generate((1, 16, 6, 16, 16), {**params, **extra}, "domain_warp", 8888, CPU, temporal_coherence=True)
+
+    def neighbours(noise):
+        return torch.corrcoef(torch.stack([noise[:, :, :-1].flatten(), noise[:, :, 1:].flatten()]))[0, 1].item()
+
+    stock, frozen, fast = clip(), clip(time_rate=0.0), clip(time_rate=4.0)
+    assert torch.equal(clip(time_rate=1.0), stock)
+    assert all(torch.equal(frozen[:, :, 0], frozen[:, :, frame]) for frame in range(1, 6))
+    assert neighbours(fast) < neighbours(stock) - 0.1
+
+
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_every_registered_generator_is_usable(shader_type):
     noise = generate((1, 4, 16, 16), {**PARAMS, "shader_type": shader_type}, shader_type, 8888, CPU)
     assert tuple(noise.shape) == (1, 4, 16, 16)
@@ -124,12 +155,8 @@ def test_unknown_shader_type_raises_a_clear_error():
 
 # --- channel width --------------------------------------------------------------------
 
-ALL_SHADERS = ["domain_warp", "temporal_coherent", "curl_noise", "tensor_field", "spectral",
-               "gaussian", "fractal", "perlin", "heterogeneous_fbm", "interference", "projection_3d", "cellular", "waves"]
-
-
 @pytest.mark.parametrize("shape", [(1, 4, 48, 48), (1, 16, 32, 32), (1, 24, 5, 16, 16)])
-@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_generators_span_their_channel_axis(shape, shader_type):
     """
     Every channel carries a field of its own. domain_warp used to copy one field
@@ -148,7 +175,7 @@ def test_a_latent_wider_than_the_basis_still_spans_the_basis(shader_type):
     assert rank > CHANNEL_BASIS * 0.8, f"{shader_type}: rank {rank:.2f}"
 
 
-@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_channel_zero_is_the_one_channel_draw(shader_type):
     """
     The travel-mode basis is built from one-channel draws. Filling the other
@@ -178,7 +205,7 @@ def test_filling_channels_leaves_the_global_rng_alone():
 # --- travel-mode remixing -------------------------------------------------------------
 
 @pytest.mark.parametrize("shape", [(1, 4, 48, 48), (1, 16, 32, 32), (1, 24, 5, 16, 16), (1, 128, 16, 16)])
-@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_decorrelation_never_narrows_the_noise(shape, shader_type):
     """
     Asking for the widest basis must never leave the noise spanning fewer
@@ -192,7 +219,7 @@ def test_decorrelation_never_narrows_the_noise(shape, shader_type):
     assert effective_channel_rank(fixed) >= effective_channel_rank(stock) - 1e-6
 
 
-@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_widening_leaves_an_already_wide_draw_alone(shader_type):
     """
     The generators draw wider than a remix could make them, so walk hands their
@@ -217,7 +244,7 @@ def test_widening_still_rescues_a_narrow_draw():
     assert effective_channel_rank(widened) > 10
 
 
-@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_a_narrow_basis_narrows_a_wide_draw(shader_type):
     """
     drift asks for four directions out of a draw spanning twenty-odd. The widening
@@ -238,7 +265,7 @@ def test_decorrelation_is_off_by_default_and_reproducible():
                        generate(shape, PARAMS, "domain_warp", 1, CPU, decorrelate=True))
 
 
-@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 @pytest.mark.parametrize("shape", [(1, 24, 5, 16, 16), (1, 4, 32, 32), (1, 128, 3, 8, 8)])
 def test_a_collapse_does_not_render_the_draw_it_discards(shape, shader_type, monkeypatch):
     """
@@ -266,7 +293,7 @@ def test_a_collapse_does_not_render_the_draw_it_discards(shape, shader_type, mon
     assert set(calls) == {1}, f"a collapse rendered a {max(calls)}-channel draw it cannot use"
 
 
-@pytest.mark.parametrize("shader_type", ["domain_warp", "curl_noise", "temporal_coherent", "gaussian", "fractal", "perlin", "heterogeneous_fbm", "interference", "projection_3d", "cellular", "waves"])
+@pytest.mark.parametrize("shader_type", [t for t in SHADER_TYPES if t != "tensor_field"])
 def test_the_hash_generators_do_not_reseed_the_global_rng(shader_type, monkeypatch):
     """
     These three are pure coordinate hashes of their seed argument, so the
@@ -283,7 +310,7 @@ def test_the_hash_generators_do_not_reseed_the_global_rng(shader_type, monkeypat
     generate((1, 24, 5, 16, 16), PARAMS, shader_type, 8888, CPU)
 
 
-@pytest.mark.parametrize("shader_type", ALL_SHADERS)
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_the_draw_hands_back_an_ordinary_tensor(shader_type):
     """
     The draw runs under inference mode, which is worth about a tenth of it. An

@@ -58,6 +58,13 @@ import comfy.model_base  # noqa: E402
 import comfy.model_sampling  # noqa: E402
 import comfy.sample  # noqa: E402
 
+from snk.direct_shader_ksampler import DirectShaderNoiseKSampler  # noqa: E402
+
+# Every type the Direct node offers. The per-type tests read this, so a new type is
+# covered by all of them without a list to remember in four files; the hand-kept
+# ones had already drifted, with spectral missing from four of six.
+SHADER_TYPES = list(DirectShaderNoiseKSampler.INPUT_TYPES()["required"]["shader_type"][0])
+
 
 class _EpsSampling(comfy.model_sampling.ModelSamplingDiscrete, comfy.model_sampling.EPS):
     pass

@@ -28,6 +28,7 @@ WALKABLE = {
     "octaves": False,
     "shape_mask_strength": False,
     "color_intensity": False,
+    "temporal_rate": False,
     "seed": True,
 }
 

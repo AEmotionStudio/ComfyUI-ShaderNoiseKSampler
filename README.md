@@ -32,6 +32,8 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that blends stan
 
 ## 🚀 Recent Updates
 
+- **Symmetry, and Two Fixes - 10/11/26**: A fourteenth shader type, `kaleido`, folds its field about the centre of the frame, and from a strength of about 0.3 the picture comes back symmetric: a subject centred on a mirrored scene. `octaves` is the order of the fold. `drift` with `use_temporal_coherence` on no longer collapses into `jump`, and the `gaussian` control no longer leaves one channel of the latent untouched, so both now do what their tooltips say; earlier `gaussian` renders are not reproduced. A new `temporal_rate` socket sets how fast a pattern held by `use_temporal_coherence` evolves across a clip, which until now ran at one fixed pace that leaves most types nearly frozen. One thing worth knowing came out of the measuring: the same settings push a larger picture harder (on Krea 2, more than twice as far at 1024x1024 as at 512x512), so lower `shader_strength` when you size up.
+
 - **Every Shader Type, Split Runs and Custom Sampling - 9/22/26**: Thirteen shader types, up from four: `spectral` plus the eight the Shader Matrix documented but never shipped (`gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular`, `waves`). The live display previews all thirteen. `start_at_step`, `end_at_step`, `add_noise` and `return_with_leftover_noise` let one run be [split](#splitting-a-run) around a latent upscale, and the new `Shader Noise Source` node hands shader noise to [custom sampling](#custom-sampling). Every new input defaults to a no-op, so saved workflows sample what they did before.
 
 - **Shader Blending Upgrade - 9/12/26**: The shader now blends into every channel of the latent instead of stamping one pattern across it, and the first step away from `shader_strength` 0 is only as large as the shader makes it. New `preset`, `travel_mode`, `stage_progression` and `shade_non_spatial` inputs, `normalize_strength` on by default, a [`Shader Noise Walk`](#walking-a-parameter) node that ramps one parameter across a batch, and tooltips that describe what each strength does. Saved workflows render differently at any strength above 0; see the [Changelog](CHANGELOG.md).
@@ -101,7 +103,7 @@ This README provides an overview, but the Shader Matrix is your ultimate guide f
 -   **🔬 Multi-Stage Shader Application**:
     -   **Sequential Stages**: Apply shader noise over segments of the diffusion process.
     -   **Injection Stages**: Apply shader noise at specific, discrete steps.
--   **🎨 Thirteen Shader Noise Types**: the twelve archetypes the Shader Matrix documents -- `domain_warp`, `tensor_field`, `curl_noise`, `spectral`, `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular` and `waves` -- plus `temporal_coherent`, built for video. Each is a distinct lens on the latent neighbourhood, and each supports shape masks, colour schemes and transforms.
+-   **🎨 Fourteen Shader Noise Types**: the twelve archetypes the Shader Matrix documents -- `domain_warp`, `tensor_field`, `curl_noise`, `spectral`, `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular` and `waves` -- plus `temporal_coherent`, built for video, and `kaleido`, a field folded about the centre of the frame for symmetric compositions. Each is a distinct lens on the latent neighbourhood, and each supports shape masks, colour schemes and transforms.
 -   **🎭 Sophisticated Blending & Transformations**:
     -   **Blend Modes**: Combine shader noise with base noise using Normal, Multiply, Add, Overlay, Screen, Soft Light, Hard Light or Difference.
     -   **Noise Transformations**: Apply mathematical operations (Absolute, Sin, Square Root, etc.) to shader noise before blending.
@@ -255,7 +257,7 @@ the runs as one batched latent for a single VAE decode or a comparer. The model
 loads once, so a walk costs about `walk_steps` times one run.
 
 It can ramp `shader_strength`, `phase_shift`, `noise_scale`, `warp_strength`,
-`octaves`, `shape_mask_strength`, `color_intensity` or `seed`. Start with
+`octaves`, `shape_mask_strength`, `color_intensity`, `temporal_rate` or `seed`. Start with
 `shader_strength` from 0.0, which gives a clean reference frame; `phase_shift`
 holds the distance and turns the pattern instead; walking `seed` is ordinary
 seed-hopping, for comparison. A preset still applies, except to the parameter
@@ -342,10 +344,11 @@ Unlike random seed exploration, the ShaderNoiseKSampler provides a methodical wa
 | **`travel_mode`**            | How the shader moves you: `walk` explores around the seed, `drift` narrows the move, `jump` lets the shader set the destination. | `walk`            |
 | **`noise_transform`**        | Math operation on shader noise (e.g., `none`, `absolute`, `sin`).                                          | `none`            |
 | **`use_temporal_coherence`** | For consistent noise in animations or exploration.                                                         | `false`           |
+| **`temporal_rate`**          | A socket, no widget. How far a held pattern evolves across a clip under `use_temporal_coherence`: 0 holds one pattern, 1 is its own pace, higher shares less between frames. | `1.0` (unconnected) |
 | **`shade_non_spatial`**      | Also paint streams with no picture in them: H3's and LTXAV's audio, and sequence latents, which are otherwise refused. | `false`           |
 | **`fast_high_channel_noise`** | A faster, simplified draw for latents with more than 16 channels, such as LTXV.                           | `false`           |
 | **`sampling_mode`**          | `standard` samples one schedule split into stage segments, and honours `denoise` and `custom_sigmas`. `legacy` keeps the pre-2.0.0 pipeline and is selected automatically for older workflows, but no longer reproduces every earlier seed exactly (see Known Issues). | `standard`        |
-| **`shader_type`**            | The base pattern: one of the thirteen types, `domain_warp` by default. The node's tooltip describes each one's character and what its knobs do. | `domain_warp`     |
+| **`shader_type`**            | The base pattern: one of the fourteen types, `domain_warp` by default. The node's tooltip describes each one's character and what its knobs do. | `domain_warp`     |
 | **`noise_scale`**            | The "Zoom Control" - determines how "zoomed in" or "zoomed out" you are in latent space.                  | `1.0`             |
 | **`octaves`**                | The "Detail Slider" - controls the level of detail and complexity in your noise pattern.                  | `1`               |
 | **`warp_strength`**          | The "Non-Linear Navigator" - creates non-linear paths through latent space.                                | `0.5`             |
@@ -400,7 +403,7 @@ those models as a plain KSampler.
 
 The true depth of `ShaderNoiseKSampler` lies in its components. The "Shader Matrix" covers these extensively.
 
--   **Shader Noise Types**: Start with `Domain Warp` for intricate, flowing distortions, `Tensor Field` for structured and directional patterns, and `Curl Noise` for smooth, fluid dynamics. Each offers a **unique visual lens** 🔭 for navigating latent space. The other ten -- `spectral`, `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular`, `waves` and `temporal_coherent` -- are all included; the Shader Matrix documents every one of them, and the `shader_type` tooltip says what each knob does to each.
+-   **Shader Noise Types**: Start with `Domain Warp` for intricate, flowing distortions, `Tensor Field` for structured and directional patterns, and `Curl Noise` for smooth, fluid dynamics. Each offers a **unique visual lens** 🔭 for navigating latent space. The other eleven -- `spectral`, `gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular`, `waves`, `temporal_coherent` and `kaleido` -- are all included, and the `shader_type` tooltip says what each knob does to each. The Shader Matrix documents every one but the last two.
 
 **Domain Warp**
 

@@ -6,6 +6,7 @@ structure, none of the pattern knobs may reach it, and it must still keep the
 contract the other generators keep: a field per channel, channel 0 unchanged by
 how many were asked for, and one field evolving under temporal coherence.
 """
+import comfy.sample
 import pytest
 import torch
 
@@ -29,6 +30,20 @@ def test_the_field_is_white():
     noise = generate((1, 24, 22, 38), PARAMS, "gaussian", 8888, CPU)
     assert abs(_neighbour_correlation(noise)) < 0.05
     assert noise.abs().max() <= 1.0
+
+
+def test_the_control_is_not_the_samplers_own_noise():
+    """
+    prepare_noise seeds its generator with the node's seed, and channel 0 here did the
+    same, so the two opened with the same numbers: the control mixed the base noise's
+    first channel into itself and left 1/C of the latent unmoved.
+    """
+    shape = (1, 4, 64, 64)
+    base = comfy.sample.prepare_noise(torch.zeros(shape), 8888)
+    noise = generate(shape, PARAMS, "gaussian", 8888, CPU)
+    for channel in range(shape[1]):
+        pair = torch.stack([base[0, channel].flatten(), noise[0, channel].flatten()])
+        assert abs(torch.corrcoef(pair)[0, 1].item()) < 0.1
 
 
 @pytest.mark.parametrize("knob", [dict(scale=0.3), dict(scale=3.0), dict(octaves=8.0),

@@ -28,6 +28,11 @@ from ..utils.shape_masks import apply_shape_mask
 
 # Channel seed stride, shared with shaders/base.py so the conventions agree.
 _CHANNEL_SEED_STRIDE = 6151
+# Keeps a draw off the sampler's own stream. comfy.sample.prepare_noise seeds its
+# generator with the node's seed, and so did channel 0 here, so the two opened with
+# the same numbers: the control mixed the base noise's first channel into itself
+# (cosine 0.996) and left 1/C of the latent where it was, a quarter of it on SD 1.5.
+_SEED_OFFSET = 15485863
 
 
 @shader_generator("gaussian", metadata={
@@ -58,7 +63,7 @@ class GaussianNoiseGenerator(BaseNoiseGenerator):
         fields = []
         for channel in range(target_channels):
             channel_generator = torch.Generator(device="cpu").manual_seed(
-                int(current_seed) + _CHANNEL_SEED_STRIDE * channel)
+                int(current_seed) + _SEED_OFFSET + _CHANNEL_SEED_STRIDE * channel)
             first = torch.randn(batch_size, 1, height, width, generator=channel_generator)
             second = torch.randn(batch_size, 1, height, width, generator=channel_generator)
             fields.append(first * math.cos(angle) + second * math.sin(angle))

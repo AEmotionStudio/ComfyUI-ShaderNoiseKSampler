@@ -4,7 +4,7 @@ Presets and travel modes: the two controls meant to be usable without tooltips.
 import pytest
 import torch
 
-from helpers import FakeModel
+from helpers import SHADER_TYPES, FakeModel
 from snk.core import presets, shader_noise
 from snk.core.presets import PRESETS, TRAVEL_MODES, apply_preset, basis_for, is_collapse
 
@@ -32,8 +32,25 @@ def test_the_modes_are_ordered_by_how_wide_they_leave_the_noise(shape):
         assert ranks["jump"] < ranks["drift"] == ranks["walk"], ranks
 
 
-@pytest.mark.parametrize("shader_type", ["domain_warp", "tensor_field", "curl_noise",
-                                         "temporal_coherent", "gaussian", "fractal", "perlin", "heterogeneous_fbm", "interference", "projection_3d", "cellular", "waves"])
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
+def test_drift_stays_between_jump_and_walk_under_temporal_coherence(shader_type):
+    """
+    Under coherence a generator holds params' base_seed in place of the seed it is
+    handed. The node writes its own seed there, so drift's four basis draws were one
+    field and it came back at rank 1.00, the same as jump, for every type.
+    """
+    params = {**PARAMS, "base_seed": 8888, "use_temporal_coherence": True}
+    ranks = {}
+    for mode in ("jump", "drift", "walk"):
+        noise = shader_noise.generate((1, 24, 5, 16, 16), params, shader_type, 8888, CPU,
+                                      temporal_coherence=True, decorrelate=True, basis=basis_for(mode))
+        ranks[mode] = shader_noise.effective_channel_rank(noise)
+
+    assert ranks["jump"] == pytest.approx(1.0, abs=0.01)
+    assert ranks["jump"] + 1.0 < ranks["drift"] < ranks["walk"], ranks
+
+
+@pytest.mark.parametrize("shader_type", SHADER_TYPES)
 def test_jump_collapses_every_generator_not_just_the_narrow_ones(shader_type):
     """
     jump has to mean the same thing whatever shader is chosen, otherwise

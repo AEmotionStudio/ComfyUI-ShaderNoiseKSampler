@@ -1,7 +1,7 @@
 """
 Measure how the shader blends into a model's output, from runs recorded by drive.py.
 
-    python verification/blend/analyze.py MANIFEST [MANIFEST ...] [--sheets DIR] [--json FILE]
+    python verification/blend/analyze.py MANIFEST [MANIFEST ...] [--sheets DIR] [--json FILE] [--bands]
 
 Distances are read in towns: the mean distance between two seeds' strength-0 results.
 
@@ -12,6 +12,8 @@ Distances are read in towns: the mean distance between two seeds' strength-0 res
   street    distance between runs that differ only in phase_shift or noise_scale
   overlap   correlation between a latent change and the shader field that caused it;
             "chance" is the largest such correlation with another seed's field
+  bands     with --bands, that overlap split by spatial frequency: which scales of the
+            field reach the result, and where the change and the field keep their energy
 
 Latent distances use the saved latent (the video stream, for H3). Image distances use
 the decoded image, or a video's middle frame: mean absolute RGB difference at 64x64.
@@ -39,6 +41,9 @@ from safetensors.torch import load_file  # noqa: E402
 from snk.core import shader_noise  # noqa: E402
 
 BASE, VARIANTS = common.BASE, common.VARIANTS
+# Radial bands of spatial frequency, in cycles per latent cell. Nyquist is 0.5 along an
+# axis and 0.71 on the diagonal.
+BANDS = ((0.0, 0.05), (0.05, 0.15), (0.15, 0.30), (0.30, 0.75))
 
 
 def corr(x, y):
@@ -50,6 +55,13 @@ def corr(x, y):
 
 def pool(x):
     return F.avg_pool2d(x, 4) if x.ndim == 4 else F.avg_pool3d(x, (1, 2, 2))
+
+
+def band(x, low, high):
+    """The part of `x` whose spatial frequency lies in [low, high), frame by frame."""
+    height, width = x.shape[-2:]
+    radius = (torch.fft.fftfreq(height).view(-1, 1) ** 2 + torch.fft.fftfreq(width).view(1, -1) ** 2).sqrt()
+    return torch.fft.ifft2(torch.fft.fft2(x) * ((radius >= low) & (radius < high))).real
 
 
 class Runs:
@@ -160,6 +172,7 @@ def main():
     ap.add_argument("manifests", nargs="+")
     ap.add_argument("--sheets", help="directory for contact sheets")
     ap.add_argument("--json", help="write the tables to this file")
+    ap.add_argument("--bands", action="store_true", help="split the overlap by spatial frequency")
     args = ap.parse_args()
 
     runs = Runs(args.manifests)
@@ -167,7 +180,7 @@ def main():
     if len(seeds) < 2:
         raise SystemExit("need at least two seeds: distances are read against other seeds")
     report = {"model": model, "seeds": seeds, "shaders": shaders, "drive": [], "road": [], "streets": [],
-              "noise_scale": []}
+              "noise_scale": [], "bands": []}
 
     for first, second in runs.duplicates:
         a, b = runs.latent(None, first), runs.latent(None, second)
@@ -278,6 +291,34 @@ def main():
                 report["noise_scale"].append(row)
                 print(f" {shader:18s} {s:5.2f}      {scale:4.1f}    |       {row['imprint']:+.3f}         | {row['chance']:.3f}  |"
                       f"    {row['home_image']:.2f}    |     {nearest}/{len(seeds)}")
+
+    if args.bands:
+        labels = [f"{low:g}-{high:g}" for low, high in BANDS]
+        print("\n bands, cycles per latent cell: overlap own (chance) | share of energy, change then field")
+        print(" shader             travel  strength | " + " | ".join(f"{label:^14s}" for label in labels)
+              + " | " + "  ".join(f"{label:>9s}" for label in labels))
+        for shader, travel, s in drive:
+            keys = {k: key_for(k, s, travel, shader) for k in seeds}
+            if not all(runs.has(key) for key in keys.values()):
+                continue
+            own, chance = [[] for _ in BANDS], [[] for _ in BANDS]
+            moved, pushed = [[] for _ in BANDS], [[] for _ in BANDS]
+            for k in seeds:
+                delta, field = runs.latent(keys[k]) - L0[k], runs.field(keys[k])
+                for i, (low, high) in enumerate(BANDS):
+                    part = band(delta, low, high)
+                    own[i].append(corr(part, band(field, low, high)))
+                    chance[i] += [abs(corr(part, band(runs.field(keys[j]), low, high))) for j in seeds if j != k]
+                    moved[i].append(float(part.pow(2).sum() / delta.pow(2).sum()))
+                    pushed[i].append(float(band(field, low, high).pow(2).sum() / field.pow(2).sum()))
+            row = dict(shader=shader, travel=travel, strength=s, bands=labels,
+                       overlap=[float(np.mean(o)) for o in own], chance=[float(np.max(c)) for c in chance],
+                       change_energy=[float(np.mean(m)) for m in moved],
+                       field_energy=[float(np.mean(f)) for f in pushed])
+            report["bands"].append(row)
+            print(f" {shader:18s} {travel:6s}  {s:<6g}  | "
+                  + " | ".join(f"{o:+.3f} ({c:.3f})" for o, c in zip(row["overlap"], row["chance"])) + " | "
+                  + "  ".join(f"{m:4.2f}/{f:4.2f}" for m, f in zip(row["change_energy"], row["field_energy"])))
 
     if args.json:
         Path(args.json).write_text(json.dumps(report, indent=1))
