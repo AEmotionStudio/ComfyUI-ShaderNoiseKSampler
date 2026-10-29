@@ -1,6 +1,6 @@
 # ComfyUI-ShaderNoiseKSampler
 
-![Version](https://img.shields.io/badge/version-2.2.1-blue.svg)
+![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
@@ -32,7 +32,7 @@ ComfyUI-ShaderNoiseKSampler is an advanced custom KSampler node that blends stan
 
 ## 🚀 Recent Updates
 
-- **Symmetry, and Two Fixes - 10/11/26**: A fourteenth shader type, `kaleido`, folds its field about the centre of the frame, and from a strength of about 0.3 the picture comes back symmetric: a subject centred on a mirrored scene. `octaves` is the order of the fold. `drift` with `use_temporal_coherence` on no longer collapses into `jump`, and the `gaussian` control no longer leaves one channel of the latent untouched, so both now do what their tooltips say; earlier `gaussian` renders are not reproduced. A new `temporal_rate` socket sets how fast a pattern held by `use_temporal_coherence` evolves across a clip, which until now ran at one fixed pace that leaves most types nearly frozen. One thing worth knowing came out of the measuring: the same settings push a larger picture harder (on Krea 2, more than twice as far at 1024x1024 as at 512x512), so lower `shader_strength` when you size up.
+- **Symmetry, and Two Fixes - 10/29/26**: A fourteenth shader type, `kaleido`, folds its field about the centre of the frame, and from a strength of about 0.3 the picture comes back symmetric: a subject centred on a mirrored scene. `octaves` is the order of the fold. `drift` with `use_temporal_coherence` on no longer collapses into `jump`, and the `gaussian` control no longer leaves one channel of the latent untouched, so both now do what their tooltips say; earlier `gaussian` renders are not reproduced. A new `temporal_rate` socket sets how fast a pattern held by `use_temporal_coherence` evolves across a clip, which until now ran at one fixed pace that leaves most types nearly frozen. One thing worth knowing came out of the measuring: the same settings push a larger picture harder (on Krea 2, more than twice as far at 1024x1024 as at 512x512), so lower `shader_strength` when you size up.
 
 - **Every Shader Type, Split Runs and Custom Sampling - 9/22/26**: Thirteen shader types, up from four: `spectral` plus the eight the Shader Matrix documented but never shipped (`gaussian`, `fractal`, `perlin`, `heterogeneous_fbm`, `interference`, `projection_3d`, `cellular`, `waves`). The live display previews all thirteen. `start_at_step`, `end_at_step`, `add_noise` and `return_with_leftover_noise` let one run be [split](#splitting-a-run) around a latent upscale, and the new `Shader Noise Source` node hands shader noise to [custom sampling](#custom-sampling). Every new input defaults to a no-op, so saved workflows sample what they did before.
 

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.3.0] - 2026-10-29
 
 Changes what `gaussian` draws at every seed, and what `drift` draws when
 `use_temporal_coherence` is on. Nothing else a saved workflow produces moves.
